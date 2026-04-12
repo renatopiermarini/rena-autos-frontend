@@ -9,6 +9,7 @@ const NAV = [
   { href: '/stock',     label: 'Stock'    },
   { href: '/clientes',  label: 'Clientes' },
   { href: '/finanzas',  label: 'Finanzas' },
+  { href: '/tareas',    label: 'Tareas'   },
 ]
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
