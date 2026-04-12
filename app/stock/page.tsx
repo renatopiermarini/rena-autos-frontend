@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { getVehicles, getTareas } from '@/lib/kapso'
 
 const ESTADO_COLOR: Record<string, string> = {

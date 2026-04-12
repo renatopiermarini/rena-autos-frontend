@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { getBalances, getTareas, getVehicles, getPrestamos } from '@/lib/kapso'
 
 function estadoColor(estado: string) {

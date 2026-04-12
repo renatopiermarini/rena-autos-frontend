@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { getBalances, getMovimientos, getPrestamos, getClientes } from '@/lib/kapso'
 
 const TIPO_COLOR: Record<string, string> = {
