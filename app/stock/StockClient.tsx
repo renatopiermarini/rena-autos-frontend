@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 
 const ESTADO_COLOR: Record<string, string> = {
   en_stock:           'bg-green-100 text-green-800',
@@ -149,9 +149,8 @@ export default function StockClient({
                 const pendientes = tareasAuto(v.id)
                 const isOpen = expanded.has(v.id)
                 return (
-                  <>
+                  <Fragment key={v.id}>
                     <tr
-                      key={v.id}
                       onClick={() => toggle(v.id)}
                       className={`cursor-pointer border-b border-gray-100 transition-colors ${isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                     >
@@ -187,8 +186,8 @@ export default function StockClient({
                       <td className="py-3 pr-1 text-center"><Check ok={!!v.fotos_ok} /></td>
                       <td className="py-3 text-center"><Check ok={!!v.publicado} /></td>
                     </tr>
-                    {isOpen && <VehicleDetail key={`${v.id}-detail`} v={v} clientes={clientes} />}
-                  </>
+                    {isOpen && <VehicleDetail v={v} clientes={clientes} />}
+                  </Fragment>
                 )
               })}
               {activos.length === 0 && (
@@ -209,9 +208,8 @@ export default function StockClient({
                 {vendidos.map(v => {
                   const isOpen = expanded.has(v.id)
                   return (
-                    <>
+                    <Fragment key={v.id}>
                       <tr
-                        key={v.id}
                         onClick={() => toggle(v.id)}
                         className={`cursor-pointer transition-colors ${isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                       >
@@ -229,8 +227,8 @@ export default function StockClient({
                           {fmtFecha(v.fecha_venta)}
                         </td>
                       </tr>
-                      {isOpen && <VehicleDetail key={`${v.id}-detail`} v={v} clientes={clientes} />}
-                    </>
+                      {isOpen && <VehicleDetail v={v} clientes={clientes} />}
+                    </Fragment>
                   )
                 })}
               </tbody>
