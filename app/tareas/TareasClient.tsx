@@ -1,5 +1,6 @@
 'use client'
 import { useState, Fragment } from 'react'
+import { useRouter } from 'next/navigation'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -75,10 +76,31 @@ function AsignadoBadge({ nombre, size = 'sm' }: { nombre: string; size?: 'sm' | 
 // ── TareaRow ──────────────────────────────────────────────────────────────────
 
 function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) => string | null }) {
-  const auto  = autoNombre(t.vehicle_id)
-  const left  = PRIORIDAD_LEFT[t.prioridad] ?? PRIORIDAD_LEFT['baja']
-  const dot   = PRIORIDAD_DOT[t.prioridad]  ?? PRIORIDAD_DOT['baja']
+  const router  = useRouter()
+  const [completing, setCompleting] = useState(false)
+
+  const auto   = autoNombre(t.vehicle_id)
+  const left   = PRIORIDAD_LEFT[t.prioridad] ?? PRIORIDAD_LEFT['baja']
+  const dot    = PRIORIDAD_DOT[t.prioridad]  ?? PRIORIDAD_DOT['baja']
   const estado = t.estado !== 'completada' ? ESTADO_BADGE[t.estado] : null
+  const isPendiente = t.estado !== 'completada'
+
+  async function completar(e: React.MouseEvent) {
+    e.stopPropagation()
+    setCompleting(true)
+    const res = await fetch(`/api/db/tareas?id=${t.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        estado: 'completada',
+        completado_por: 'rena',
+        fecha_completado: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }),
+    })
+    setCompleting(false)
+    if (res.ok) router.refresh()
+  }
 
   return (
     <div className={`flex items-start justify-between px-4 py-3 ${left}`}>
@@ -101,11 +123,21 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
           {auto && <span className="text-xs text-gray-400 truncate">{auto}</span>}
         </div>
       </div>
-      {/* Right: asignado + fecha */}
+      {/* Right: asignado + fecha + completar */}
       <div className="flex items-center gap-2 ml-4 shrink-0">
         {t.asignado && <AsignadoBadge nombre={t.asignado} />}
         {t.fecha_limite && (
           <span className="text-xs text-gray-400 tabular-nums">{fmtFecha(t.fecha_limite)}</span>
+        )}
+        {isPendiente && (
+          <button
+            onClick={completar}
+            disabled={completing}
+            title="Marcar como completada"
+            className="text-gray-300 hover:text-green-600 transition-colors text-base disabled:opacity-50"
+          >
+            {completing ? '…' : '✓'}
+          </button>
         )}
       </div>
     </div>
@@ -496,10 +528,139 @@ function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) 
   )
 }
 
+// ── Nueva Tarea form ──────────────────────────────────────────────────────────
+
+const inputCls = 'w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-gray-400'
+const labelCls = 'block text-xs text-gray-400 mb-1'
+
+function NuevaTareaForm({ vehicles, onClose }: { vehicles: any[]; onClose: () => void }) {
+  const router = useRouter()
+  const [saving, setSaving] = useState(false)
+  const [error,  setError]  = useState('')
+  const [form, setForm] = useState({
+    titulo:       '',
+    descripcion:  '',
+    tipo:         'otro',
+    prioridad:    'media',
+    asignado:     'rena',
+    vehicle_id:   '',
+    fecha_limite: '',
+  })
+
+  function set(field: string) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+      setForm(f => ({ ...f, [field]: e.target.value }))
+  }
+
+  async function save() {
+    if (!form.titulo.trim()) { setError('El título es requerido.'); return }
+    setSaving(true)
+    setError('')
+    const payload: Record<string, any> = {
+      titulo:      form.titulo.trim(),
+      tipo:        form.tipo,
+      prioridad:   form.prioridad,
+      asignado:    form.asignado || null,
+      estado:      'pendiente',
+      created_at:  new Date().toISOString(),
+      updated_at:  new Date().toISOString(),
+    }
+    if (form.descripcion.trim()) payload.descripcion  = form.descripcion.trim()
+    if (form.vehicle_id)         payload.vehicle_id   = Number(form.vehicle_id)
+    if (form.fecha_limite)       payload.fecha_limite = form.fecha_limite
+    const res = await fetch('/api/db/tareas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    setSaving(false)
+    if (res.ok) { onClose(); router.refresh() }
+    else setError('Error al guardar. Intentá de nuevo.')
+  }
+
+  return (
+    <div className="border border-gray-200 rounded p-4 bg-gray-50 space-y-4">
+      <p className="text-sm font-medium text-gray-700">Nueva tarea</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+        <div className="col-span-2 sm:col-span-3">
+          <label className={labelCls}>Título *</label>
+          <input type="text" value={form.titulo} onChange={set('titulo')} className={inputCls} placeholder="Ej: Lavar el Audi A3" />
+        </div>
+        <div>
+          <label className={labelCls}>Tipo</label>
+          <select value={form.tipo} onChange={set('tipo')} className={inputCls}>
+            <option value="lavado">Lavado</option>
+            <option value="fotos">Fotos</option>
+            <option value="publicacion">Publicación</option>
+            <option value="tramite">Trámite</option>
+            <option value="seguimiento">Seguimiento</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Prioridad</label>
+          <select value={form.prioridad} onChange={set('prioridad')} className={inputCls}>
+            <option value="urgente">Urgente</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baja">Baja</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Asignado</label>
+          <select value={form.asignado} onChange={set('asignado')} className={inputCls}>
+            <option value="rena">Rena</option>
+            <option value="fran">Fran</option>
+            <option value="">Sin asignar</option>
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Auto (opcional)</label>
+          <select value={form.vehicle_id} onChange={set('vehicle_id')} className={inputCls}>
+            <option value="">—</option>
+            {vehicles
+              .filter(v => v.estado !== 'vendido')
+              .map(v => (
+                <option key={v.id} value={v.id}>
+                  {v.marca} {v.modelo} {v.año}
+                </option>
+              ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Fecha límite (opcional)</label>
+          <input type="date" value={form.fecha_limite} onChange={set('fecha_limite')} className={inputCls} />
+        </div>
+        <div className="col-span-2 sm:col-span-3">
+          <label className={labelCls}>Descripción (opcional)</label>
+          <textarea value={form.descripcion} onChange={set('descripcion')} rows={2} className={`${inputCls} resize-none`} />
+        </div>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50 transition-colors"
+        >
+          {saving ? 'Guardando…' : 'Guardar'}
+        </button>
+        <button
+          onClick={onClose}
+          className="px-4 py-1.5 border border-gray-200 text-sm rounded hover:bg-gray-100 transition-colors"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function TareasClient({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
-  const [view, setView] = useState<'lista' | 'calendario'>('lista')
+  const [view,        setView]        = useState<'lista' | 'calendario'>('lista')
+  const [showNueva,   setShowNueva]   = useState(false)
 
   const pendientes  = tareas.filter(t => t.estado === 'pendiente' || t.estado === 'en_curso')
   const completadas = tareas.filter(t => t.estado === 'completada')
@@ -511,17 +672,31 @@ export default function TareasClient({ tareas, vehicles }: { tareas: any[]; vehi
           <h1 className="text-xl font-semibold">Tareas</h1>
           <span className="text-sm text-gray-400">{pendientes.length} pendientes · {completadas.length} completadas</span>
         </div>
-        <div className="flex border border-gray-200 rounded overflow-hidden">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setView('lista')}
-            className={`px-3 py-1.5 text-xs transition-colors ${view === 'lista' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-          >Lista</button>
-          <button
-            onClick={() => setView('calendario')}
-            className={`px-3 py-1.5 text-xs transition-colors border-l border-gray-200 ${view === 'calendario' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-          >Calendario</button>
+            onClick={() => setShowNueva(v => !v)}
+            className={`text-xs px-3 py-1.5 rounded border transition-colors ${
+              showNueva ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-500 hover:border-gray-400'
+            }`}
+          >
+            + Nueva tarea
+          </button>
+          <div className="flex border border-gray-200 rounded overflow-hidden">
+            <button
+              onClick={() => setView('lista')}
+              className={`px-3 py-1.5 text-xs transition-colors ${view === 'lista' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+            >Lista</button>
+            <button
+              onClick={() => setView('calendario')}
+              className={`px-3 py-1.5 text-xs transition-colors border-l border-gray-200 ${view === 'calendario' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+            >Calendario</button>
+          </div>
         </div>
       </div>
+
+      {showNueva && (
+        <NuevaTareaForm vehicles={vehicles} onClose={() => setShowNueva(false)} />
+      )}
 
       {view === 'lista'
         ? <ListView tareas={tareas} vehicles={vehicles} />

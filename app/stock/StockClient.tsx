@@ -1,5 +1,6 @@
 'use client'
 import { useState, Fragment } from 'react'
+import { useRouter } from 'next/navigation'
 
 const ESTADO_COLOR: Record<string, string> = {
   en_stock:           'bg-green-100 text-green-800',
@@ -13,9 +14,43 @@ const ESTADO_COLOR: Record<string, string> = {
   potencial:          'bg-gray-100 text-gray-500',
 }
 
-function Check({ ok }: { ok: boolean }) {
-  return <span className={ok ? 'text-green-600' : 'text-gray-300'}>✓</span>
+const ESTADOS = [
+  'potencial', 'a_ingresar', 'confirmado', 'en_stock',
+  'en_reparacion', 'va_a_pensarlo', 'necesita_follow_up',
+  'reservado', 'vendido',
+]
+
+// ── ToggleCheck ───────────────────────────────────────────────────────────────
+
+function ToggleCheck({ vehicleId, field, value }: { vehicleId: number; field: string; value: boolean }) {
+  const [val, setVal]     = useState(value)
+  const [error, setError] = useState(false)
+
+  async function toggle(e: React.MouseEvent) {
+    e.stopPropagation()
+    const next = !val
+    setVal(next)
+    setError(false)
+    const res = await fetch(`/api/db/vehicles?id=${vehicleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: next ? 1 : 0, updated_at: new Date().toISOString() }),
+    })
+    if (!res.ok) { setVal(!next); setError(true) }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      title={error ? 'Error al guardar' : val ? 'Marcar como pendiente' : 'Marcar como listo'}
+      className={`text-base transition-colors ${val ? 'text-green-600 hover:text-green-800' : 'text-gray-300 hover:text-gray-500'}`}
+    >
+      {error ? '⚠' : '✓'}
+    </button>
+  )
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function diasEnStock(fecha: string) {
   if (!fecha) return '—'
@@ -48,13 +83,147 @@ function Field({ label, value }: { label: string; value: any }) {
   )
 }
 
-function VehicleDetail({ v, clientes }: { v: any; clientes: any[] }) {
-  const cliente = clientes.find((c: any) => c.id === v.cliente_id)
-  const comprador = clientes.find((c: any) => c.id === v.comprador_id)
+// ── Input helpers ─────────────────────────────────────────────────────────────
 
+const inputCls = 'w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-gray-400'
+const labelCls = 'block text-xs text-gray-400 mb-1'
+
+function FInput({ label, value, onChange, type = 'text', placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string
+}) {
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={inputCls}
+      />
+    </div>
+  )
+}
+
+function FSelect({ label, value, onChange, options }: {
+  label: string; value: string; onChange: (v: string) => void; options: string[]
+}) {
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <select value={value} onChange={e => onChange(e.target.value)} className={inputCls}>
+        <option value="">—</option>
+        {options.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+      </select>
+    </div>
+  )
+}
+
+// ── VehicleDetail ─────────────────────────────────────────────────────────────
+
+function VehicleDetail({ v, clientes }: { v: any; clientes: any[] }) {
+  const router   = useRouter()
+  const [editing, setEditing] = useState(false)
+  const [saving,  setSaving]  = useState(false)
+  const [error,   setError]   = useState('')
+
+  const [form, setForm] = useState({
+    estado:                v.estado              ?? '',
+    km:                    String(v.km           ?? ''),
+    color:                 v.color               ?? '',
+    dominio:               v.dominio             ?? '',
+    numero_motor:          v.numero_motor        ?? '',
+    numero_chasis:         v.numero_chasis       ?? '',
+    precio_compra:         String(v.precio_compra         ?? ''),
+    precio_venta_objetivo: String(v.precio_venta_objetivo ?? ''),
+    precio_publicado:      String(v.precio_publicado      ?? ''),
+    precio_venta_final:    String(v.precio_venta_final    ?? ''),
+    fecha_ingreso:         v.fecha_ingreso ? v.fecha_ingreso.slice(0, 10) : '',
+    fecha_venta:           v.fecha_venta   ? v.fecha_venta.slice(0, 10)   : '',
+    notas:                 v.notas               ?? '',
+  })
+
+  function set(field: string) {
+    return (val: string) => setForm(f => ({ ...f, [field]: val }))
+  }
+
+  async function save() {
+    setSaving(true)
+    setError('')
+    const payload: Record<string, any> = { updated_at: new Date().toISOString() }
+    for (const [k, val] of Object.entries(form)) {
+      if (val === '') { payload[k] = null; continue }
+      if (['km', 'precio_compra', 'precio_venta_objetivo', 'precio_publicado', 'precio_venta_final'].includes(k)) {
+        payload[k] = Number(val)
+      } else {
+        payload[k] = val
+      }
+    }
+    const res = await fetch(`/api/db/vehicles?id=${v.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    setSaving(false)
+    if (res.ok) { setEditing(false); router.refresh() }
+    else setError('Error al guardar. Intentá de nuevo.')
+  }
+
+  const cliente  = clientes.find((c: any) => c.id === v.cliente_id)
+  const comprador = clientes.find((c: any) => c.id === v.comprador_id)
   const margen = v.precio_venta_final && v.costo_total
     ? Number(v.precio_venta_final) - Number(v.costo_total)
     : null
+
+  if (editing) {
+    return (
+      <tr>
+        <td colSpan={9} className="px-4 pb-5 pt-3 bg-gray-50 border-b border-gray-200">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+            <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+              <FSelect label="Estado" value={form.estado} onChange={set('estado')} options={ESTADOS} />
+            </div>
+            <FInput label="KM"            value={form.km}            onChange={set('km')}            type="number" />
+            <FInput label="Color"         value={form.color}         onChange={set('color')} />
+            <FInput label="Dominio"       value={form.dominio}       onChange={set('dominio')} />
+            <FInput label="N° motor"      value={form.numero_motor}  onChange={set('numero_motor')} />
+            <FInput label="N° chasis"     value={form.numero_chasis} onChange={set('numero_chasis')} />
+            <FInput label="Precio compra"         value={form.precio_compra}         onChange={set('precio_compra')}         type="number" />
+            <FInput label="Precio objetivo"       value={form.precio_venta_objetivo} onChange={set('precio_venta_objetivo')} type="number" />
+            <FInput label="Precio publicado"      value={form.precio_publicado}      onChange={set('precio_publicado')}      type="number" />
+            <FInput label="Precio venta final"    value={form.precio_venta_final}    onChange={set('precio_venta_final')}    type="number" />
+            <FInput label="Fecha ingreso" value={form.fecha_ingreso} onChange={set('fecha_ingreso')} type="date" />
+            <FInput label="Fecha venta"   value={form.fecha_venta}   onChange={set('fecha_venta')}   type="date" />
+            <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+              <label className={labelCls}>Notas</label>
+              <textarea
+                value={form.notas}
+                onChange={e => set('notas')(e.target.value)}
+                rows={2}
+                className={`${inputCls} resize-none`}
+              />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+            <button
+              onClick={() => { setEditing(false); setError('') }}
+              className="px-4 py-1.5 border border-gray-200 text-sm rounded hover:bg-gray-100 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </td>
+      </tr>
+    )
+  }
 
   return (
     <tr>
@@ -89,10 +258,18 @@ function VehicleDetail({ v, clientes }: { v: any; clientes: any[] }) {
             </div>
           )}
         </div>
+        <button
+          onClick={e => { e.stopPropagation(); setEditing(true) }}
+          className="mt-4 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-400 px-3 py-1 rounded transition-colors"
+        >
+          Editar
+        </button>
       </td>
     </tr>
   )
 }
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function StockClient({
   vehicles,
@@ -182,9 +359,15 @@ export default function StockClient({
                           : '—'}
                       </td>
                       <td className="py-3 pr-4 text-gray-400">{diasEnStock(v.fecha_ingreso)}</td>
-                      <td className="py-3 pr-1 text-center"><Check ok={!!v.lavado} /></td>
-                      <td className="py-3 pr-1 text-center"><Check ok={!!v.fotos_ok} /></td>
-                      <td className="py-3 text-center"><Check ok={!!v.publicado} /></td>
+                      <td className="py-3 pr-1 text-center">
+                        <ToggleCheck vehicleId={v.id} field="lavado"   value={!!v.lavado} />
+                      </td>
+                      <td className="py-3 pr-1 text-center">
+                        <ToggleCheck vehicleId={v.id} field="fotos_ok" value={!!v.fotos_ok} />
+                      </td>
+                      <td className="py-3 text-center">
+                        <ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} />
+                      </td>
                     </tr>
                     {isOpen && <VehicleDetail v={v} clientes={clientes} />}
                   </Fragment>

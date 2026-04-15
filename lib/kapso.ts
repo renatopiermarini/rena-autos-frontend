@@ -16,3 +16,24 @@ export async function getTareas()          { return get('tareas') }
 export async function getPrestamos()       { return get('prestamos') }
 export async function getMovimientos()     { return get('movimientos_contabilidad') }
 export async function getTransferencias()  { return get('transferencias') }
+
+// ── Client-side mutations (call the /api/db proxy) ────────────────────────────
+
+export async function patchRecord(table: string, id: number, data: object): Promise<boolean> {
+  const res = await fetch(`/api/db/${table}?id=${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  return res.ok
+}
+
+export async function postRecord(table: string, data: object): Promise<{ ok: boolean; data?: any }> {
+  const res = await fetch(`/api/db/${table}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  const json = await res.json().catch(() => ({}))
+  return { ok: res.ok, data: json }
+}
