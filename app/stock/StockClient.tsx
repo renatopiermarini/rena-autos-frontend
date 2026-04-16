@@ -332,7 +332,7 @@ function VehicleTable({
                   <td className="py-3 pr-4 text-gray-500">{v.dominio || '—'}</td>
                   <td className="py-3 pr-4">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${ESTADO_COLOR[v.estado] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {v.estado?.replace(/_/g, ' ')}
+                      {v.estado === 'confirmado' ? 'Consignación' : v.estado?.replace(/_/g, ' ')}
                     </span>
                   </td>
                   <td className="py-3 pr-4 text-gray-500">{v.km ? fmtN(v.km) : '—'}</td>
@@ -388,7 +388,7 @@ const ESTADO_ORDER = [
 const ESTADO_LABEL: Record<string, string> = {
   potencial:          'Potencial',
   a_ingresar:         'A ingresar',
-  confirmado:         'Confirmado',
+  confirmado:         'Consignación',
   en_stock:           'En stock',
   en_reparacion:      'En reparación',
   va_a_pensarlo:      'Va a pensarlo',
