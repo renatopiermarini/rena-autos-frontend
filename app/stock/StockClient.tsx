@@ -269,7 +269,132 @@ function VehicleDetail({ v, clientes }: { v: any; clientes: any[] }) {
   )
 }
 
+// ── VehicleTable ──────────────────────────────────────────────────────────────
+
+function VehicleTable({
+  vehicles,
+  tareas,
+  clientes,
+  expanded,
+  onToggle,
+}: {
+  vehicles: any[]
+  tareas: any[]
+  clientes: any[]
+  expanded: Set<number>
+  onToggle: (id: number) => void
+}) {
+  function tareasAuto(vid: number) {
+    return tareas.filter(t => t.vehicle_id === vid && t.estado !== 'completada')
+  }
+
+  if (vehicles.length === 0) {
+    return <p className="py-6 text-center text-sm text-gray-400">Sin vehículos.</p>
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-200 text-left">
+            <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Auto</th>
+            <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Patente</th>
+            <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Estado</th>
+            <th className="pb-2 font-medium text-gray-500 text-xs pr-4">KM</th>
+            <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Precio</th>
+            <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Días</th>
+            <th className="pb-2 font-medium text-gray-500 text-xs pr-1 text-center">Lav</th>
+            <th className="pb-2 font-medium text-gray-500 text-xs pr-1 text-center">Fotos</th>
+            <th className="pb-2 font-medium text-gray-500 text-xs text-center">Pub</th>
+          </tr>
+        </thead>
+        <tbody>
+          {vehicles.map(v => {
+            const pendientes = tareasAuto(v.id)
+            const isOpen = expanded.has(v.id)
+            return (
+              <Fragment key={v.id}>
+                <tr
+                  onClick={() => onToggle(v.id)}
+                  className={`cursor-pointer border-b border-gray-100 transition-colors ${isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                >
+                  <td className="py-3 pr-4">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+                      <span className="font-medium">{v.marca} {v.modelo}</span>
+                      <span className="text-gray-400">{v.año}</span>
+                      {v.color && <span className="text-xs text-gray-400">· {v.color}</span>}
+                      {pendientes.length > 0 && (
+                        <span className="text-xs text-orange-500">{pendientes.length} tarea{pendientes.length > 1 ? 's' : ''}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-3 pr-4 text-gray-500">{v.dominio || '—'}</td>
+                  <td className="py-3 pr-4">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${ESTADO_COLOR[v.estado] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {v.estado?.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4 text-gray-500">{v.km ? fmtN(v.km) : '—'}</td>
+                  <td className="py-3 pr-4">
+                    {v.precio_publicado
+                      ? `$${Number(v.precio_publicado).toLocaleString('es-AR')}`
+                      : v.precio_venta_objetivo
+                      ? <span className="text-gray-400">${Number(v.precio_venta_objetivo).toLocaleString('es-AR')}</span>
+                      : '—'}
+                  </td>
+                  <td className="py-3 pr-4 text-gray-400">{diasEnStock(v.fecha_ingreso)}</td>
+                  <td className="py-3 pr-1 text-center">
+                    <ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado} />
+                  </td>
+                  <td className="py-3 pr-1 text-center">
+                    <ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok} />
+                  </td>
+                  <td className="py-3 text-center">
+                    <ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} />
+                  </td>
+                </tr>
+                {isOpen && <VehicleDetail v={v} clientes={clientes} />}
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
+
+type TipoFilter  = 'todos' | 'propio' | 'consignacion'
+type GroupMode   = 'ninguno' | 'tipo' | 'estado'
+
+const TIPO_FILTER_LABELS: { key: TipoFilter; label: string }[] = [
+  { key: 'todos',        label: 'Todos'        },
+  { key: 'propio',       label: 'Propios'      },
+  { key: 'consignacion', label: 'Consignación' },
+]
+
+const GROUP_LABELS: { key: GroupMode; label: string }[] = [
+  { key: 'ninguno',      label: 'Sin agrupar'  },
+  { key: 'tipo',         label: 'Por tipo'     },
+  { key: 'estado',       label: 'Por estado'   },
+]
+
+const ESTADO_ORDER = [
+  'potencial', 'a_ingresar', 'confirmado', 'en_stock',
+  'en_reparacion', 'va_a_pensarlo', 'necesita_follow_up', 'reservado',
+]
+const ESTADO_LABEL: Record<string, string> = {
+  potencial:          'Potencial',
+  a_ingresar:         'A ingresar',
+  confirmado:         'Confirmado',
+  en_stock:           'En stock',
+  en_reparacion:      'En reparación',
+  va_a_pensarlo:      'Va a pensarlo',
+  necesita_follow_up: 'Necesita follow-up',
+  reservado:          'Reservado',
+}
 
 export default function StockClient({
   vehicles,
@@ -280,10 +405,17 @@ export default function StockClient({
   tareas: any[]
   clientes: any[]
 }) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [expanded,   setExpanded]   = useState<Set<number>>(new Set())
+  const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
+  const [groupMode,  setGroupMode]  = useState<GroupMode>('ninguno')
 
   const activos  = vehicles.filter(v => v.estado !== 'vendido')
   const vendidos = vehicles.filter(v => v.estado === 'vendido')
+
+  const filtered = activos.filter(v => {
+    if (tipoFilter === 'todos') return true
+    return v.tipo_operacion === tipoFilter
+  })
 
   function toggle(id: number) {
     setExpanded(prev => {
@@ -293,98 +425,112 @@ export default function StockClient({
     })
   }
 
-  function tareasAuto(vid: number) {
-    return tareas.filter(t => t.vehicle_id === vid && t.estado !== 'completada')
+  // Build groups for groupMode
+  function getGroups(): { label: string; vehicles: any[] }[] {
+    if (groupMode === 'tipo') {
+      const propios = filtered.filter(v => v.tipo_operacion === 'propio')
+      const consig  = filtered.filter(v => v.tipo_operacion === 'consignacion')
+      const otros   = filtered.filter(v => !v.tipo_operacion || (v.tipo_operacion !== 'propio' && v.tipo_operacion !== 'consignacion'))
+      return [
+        propios.length  > 0 ? { label: `Propios (${propios.length})`,       vehicles: propios } : null,
+        consig.length   > 0 ? { label: `Consignación (${consig.length})`,   vehicles: consig  } : null,
+        otros.length    > 0 ? { label: `Otros (${otros.length})`,           vehicles: otros   } : null,
+      ].filter(Boolean) as { label: string; vehicles: any[] }[]
+    }
+    if (groupMode === 'estado') {
+      return ESTADO_ORDER
+        .map(estado => {
+          const vs = filtered.filter(v => v.estado === estado)
+          return vs.length > 0
+            ? { label: `${ESTADO_LABEL[estado] ?? estado} (${vs.length})`, vehicles: vs }
+            : null
+        })
+        .filter(Boolean) as { label: string; vehicles: any[] }[]
+    }
+    return [{ label: '', vehicles: filtered }]
   }
 
+  const groups = getGroups()
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Stock</h1>
         <span className="text-sm text-gray-400">{activos.length} activos · {vendidos.length} vendidos</span>
       </div>
 
-      {/* Tabla activos */}
-      <section>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-left">
-                <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Auto</th>
-                <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Patente</th>
-                <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Estado</th>
-                <th className="pb-2 font-medium text-gray-500 text-xs pr-4">KM</th>
-                <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Precio</th>
-                <th className="pb-2 font-medium text-gray-500 text-xs pr-4">Días</th>
-                <th className="pb-2 font-medium text-gray-500 text-xs pr-1 text-center">Lav</th>
-                <th className="pb-2 font-medium text-gray-500 text-xs pr-1 text-center">Fotos</th>
-                <th className="pb-2 font-medium text-gray-500 text-xs text-center">Pub</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activos.map(v => {
-                const pendientes = tareasAuto(v.id)
-                const isOpen = expanded.has(v.id)
-                return (
-                  <Fragment key={v.id}>
-                    <tr
-                      onClick={() => toggle(v.id)}
-                      className={`cursor-pointer border-b border-gray-100 transition-colors ${isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
-                    >
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
-                          <span className="font-medium">{v.marca} {v.modelo}</span>
-                          <span className="text-gray-400">{v.año}</span>
-                          {v.color && <span className="text-xs text-gray-400">· {v.color}</span>}
-                          {pendientes.length > 0 && (
-                            <span className="text-xs text-orange-500">{pendientes.length} tarea{pendientes.length > 1 ? 's' : ''}</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4 text-gray-500">{v.dominio || '—'}</td>
-                      <td className="py-3 pr-4">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${ESTADO_COLOR[v.estado] ?? 'bg-gray-100 text-gray-600'}`}>
-                          {v.estado?.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4 text-gray-500">
-                        {v.km ? fmtN(v.km) : '—'}
-                      </td>
-                      <td className="py-3 pr-4">
-                        {v.precio_publicado
-                          ? `$${Number(v.precio_publicado).toLocaleString('es-AR')}`
-                          : v.precio_venta_objetivo
-                          ? <span className="text-gray-400">${Number(v.precio_venta_objetivo).toLocaleString('es-AR')}</span>
-                          : '—'}
-                      </td>
-                      <td className="py-3 pr-4 text-gray-400">{diasEnStock(v.fecha_ingreso)}</td>
-                      <td className="py-3 pr-1 text-center">
-                        <ToggleCheck vehicleId={v.id} field="lavado"   value={!!v.lavado} />
-                      </td>
-                      <td className="py-3 pr-1 text-center">
-                        <ToggleCheck vehicleId={v.id} field="fotos_ok" value={!!v.fotos_ok} />
-                      </td>
-                      <td className="py-3 text-center">
-                        <ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} />
-                      </td>
-                    </tr>
-                    {isOpen && <VehicleDetail v={v} clientes={clientes} />}
-                  </Fragment>
-                )
-              })}
-              {activos.length === 0 && (
-                <tr><td colSpan={9} className="py-8 text-center text-gray-400">Sin autos activos.</td></tr>
-              )}
-            </tbody>
-          </table>
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-gray-400 mr-0.5">Tipo:</span>
+          {TIPO_FILTER_LABELS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setTipoFilter(key)}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                tipoFilter === key
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'border-gray-200 text-gray-500 hover:border-gray-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      </section>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-gray-400 mr-0.5">Agrupar:</span>
+          {GROUP_LABELS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setGroupMode(key)}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                groupMode === key
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'border-gray-200 text-gray-500 hover:border-gray-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Active vehicles */}
+      {groupMode === 'ninguno' ? (
+        <section>
+          <VehicleTable
+            vehicles={filtered}
+            tareas={tareas}
+            clientes={clientes}
+            expanded={expanded}
+            onToggle={toggle}
+          />
+        </section>
+      ) : (
+        <div className="space-y-8">
+          {groups.map(group => (
+            <section key={group.label}>
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">{group.label}</p>
+              <VehicleTable
+                vehicles={group.vehicles}
+                tareas={tareas}
+                clientes={clientes}
+                expanded={expanded}
+                onToggle={toggle}
+              />
+            </section>
+          ))}
+          {filtered.length === 0 && (
+            <p className="py-6 text-center text-sm text-gray-400">Sin vehículos para este filtro.</p>
+          )}
+        </div>
+      )}
 
       {/* Vendidos */}
       {vendidos.length > 0 && (
         <section>
-          <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Vendidos</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Vendidos ({vendidos.length})</p>
           <div className="border border-gray-200 rounded overflow-hidden">
             <table className="w-full text-sm">
               <tbody className="divide-y divide-gray-100">
@@ -401,6 +547,9 @@ export default function StockClient({
                             <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
                             <span className="text-gray-600">{v.marca} {v.modelo} {v.año}</span>
                             {v.color && <span className="text-xs text-gray-400">· {v.color}</span>}
+                            {v.tipo_operacion && (
+                              <span className="text-xs text-gray-400">· {v.tipo_operacion}</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right text-gray-500">
