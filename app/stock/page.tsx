@@ -1,4 +1,3 @@
-export const dynamic = 'force-dynamic'
 import { getVehicles, getTareas, getClientes } from '@/lib/kapso'
 import StockClient from './StockClient'
 
