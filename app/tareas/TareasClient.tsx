@@ -126,8 +126,8 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
       {/* Right: asignado + fecha + completar */}
       <div className="flex items-center gap-2 ml-4 shrink-0">
         {t.asignado && <AsignadoBadge nombre={t.asignado} />}
-        {t.fecha_limite && (
-          <span className="text-xs text-gray-400 tabular-nums">{fmtFecha(t.fecha_limite)}</span>
+        {t.fecha_vencimiento && (
+          <span className="text-xs text-gray-400 tabular-nums">{fmtFecha(t.fecha_vencimiento)}</span>
         )}
         {isPendiente && (
           <button
@@ -178,8 +178,8 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
 
   // vence antes
   const byVence = () => ({
-    conFecha: activas.filter(t => t.fecha_limite).sort((a, b) => a.fecha_limite.localeCompare(b.fecha_limite)),
-    sinFecha: activas.filter(t => !t.fecha_limite).sort((a, b) => (PRIORIDAD_RANK[a.prioridad] ?? 3) - (PRIORIDAD_RANK[b.prioridad] ?? 3)),
+    conFecha: activas.filter(t => t.fecha_vencimiento).sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento)),
+    sinFecha: activas.filter(t => !t.fecha_vencimiento).sort((a, b) => (PRIORIDAD_RANK[a.prioridad] ?? 3) - (PRIORIDAD_RANK[b.prioridad] ?? 3)),
   })
 
   // por auto
@@ -398,8 +398,8 @@ function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) 
   const tasksByDay: Record<string, any[]> = {}
   const sinFecha: any[] = []
   for (const t of activas) {
-    if (!t.fecha_limite) { sinFecha.push(t); continue }
-    const key = t.fecha_limite.slice(0, 10)
+    if (!t.fecha_vencimiento) { sinFecha.push(t); continue }
+    const key = t.fecha_vencimiento.slice(0, 10)
     if (!tasksByDay[key]) tasksByDay[key] = []
     tasksByDay[key].push(t)
   }
@@ -544,7 +544,7 @@ function NuevaTareaForm({ vehicles, onClose }: { vehicles: any[]; onClose: () =>
     prioridad:    'media',
     asignado:     'rena',
     vehicle_id:   '',
-    fecha_limite: '',
+    fecha_vencimiento: '',
   })
 
   function set(field: string) {
@@ -567,7 +567,7 @@ function NuevaTareaForm({ vehicles, onClose }: { vehicles: any[]; onClose: () =>
     }
     if (form.descripcion.trim()) payload.descripcion  = form.descripcion.trim()
     if (form.vehicle_id)         payload.vehicle_id   = Number(form.vehicle_id)
-    if (form.fecha_limite)       payload.fecha_limite = form.fecha_limite
+    if (form.fecha_vencimiento)       payload.fecha_vencimiento = form.fecha_vencimiento
     const res = await fetch('/api/db/tareas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -629,7 +629,7 @@ function NuevaTareaForm({ vehicles, onClose }: { vehicles: any[]; onClose: () =>
         </div>
         <div>
           <label className={labelCls}>Fecha límite (opcional)</label>
-          <input type="date" value={form.fecha_limite} onChange={set('fecha_limite')} className={inputCls} />
+          <input type="date" value={form.fecha_vencimiento} onChange={set('fecha_vencimiento')} className={inputCls} />
         </div>
         <div className="col-span-2 sm:col-span-3">
           <label className={labelCls}>Descripción (opcional)</label>
