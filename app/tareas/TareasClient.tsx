@@ -48,6 +48,13 @@ function fmtFecha(iso: string) {
   if (!iso) return ''
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
 }
+function fmtHora(iso: string) {
+  if (!iso || !iso.includes('T')) return ''
+  const [, time] = iso.split('T')
+  if (!time) return ''
+  const [h, m] = time.split(':')
+  return `${h}:${m}`
+}
 function fmtFechaLarga(isoDay: string) {
   return new Date(isoDay + 'T12:00:00').toLocaleDateString('es-AR', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -127,7 +134,9 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
       <div className="flex items-center gap-2 ml-4 shrink-0">
         {t.asignado && <AsignadoBadge nombre={t.asignado} />}
         {t.fecha_vencimiento && (
-          <span className="text-xs text-gray-400 tabular-nums">{fmtFecha(t.fecha_vencimiento)}</span>
+          <span className="text-xs text-gray-400 tabular-nums">
+            {fmtFecha(t.fecha_vencimiento)}{fmtHora(t.fecha_vencimiento) && ` ${fmtHora(t.fecha_vencimiento)}`}
+          </span>
         )}
         {isPendiente && (
           <button
@@ -368,8 +377,10 @@ function TaskCard({ t }: { t: any }) {
     ? 'bg-blue-600 text-white'
     : 'bg-white/60 text-gray-500'
 
+  const hora = fmtHora(t.fecha_vencimiento)
   return (
     <div className={`${style} rounded px-1.5 py-0.5 text-xs leading-snug flex items-center gap-1`} title={t.titulo}>
+      {hora && <span className="font-semibold shrink-0">{hora}</span>}
       <span className="truncate flex-1">{t.titulo}</span>
       {t.asignado && (
         <span className={`${initStyle} rounded-full w-3.5 h-3.5 flex items-center justify-center text-[9px] font-bold shrink-0`}>
