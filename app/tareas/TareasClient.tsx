@@ -415,7 +415,14 @@ function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) 
     tasksByDay[key].push(t)
   }
   for (const key of Object.keys(tasksByDay)) {
-    tasksByDay[key].sort((a, b) => (PRIORIDAD_RANK[a.prioridad] ?? 3) - (PRIORIDAD_RANK[b.prioridad] ?? 3))
+    tasksByDay[key].sort((a, b) => {
+      const ha = fmtHora(a.fecha_vencimiento)
+      const hb = fmtHora(b.fecha_vencimiento)
+      if (ha && hb) return ha.localeCompare(hb)
+      if (ha) return -1
+      if (hb) return 1
+      return (PRIORIDAD_RANK[a.prioridad] ?? 3) - (PRIORIDAD_RANK[b.prioridad] ?? 3)
+    })
   }
 
   const firstDay    = new Date(year, month, 1).getDay()
