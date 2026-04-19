@@ -1,4 +1,4 @@
-import { getBalances, getTareas, getVehicles, getPrestamos } from '@/lib/kapso'
+import { getBalances, getTareas, getVehicles, getPrestamos, getOfertas, getVisitas } from '@/lib/kapso'
 
 function estadoColor(estado: string) {
   const map: Record<string, string> = {
@@ -13,15 +13,25 @@ function estadoColor(estado: string) {
 }
 
 export default async function Inicio() {
-  const [balances, tareas, vehicles, prestamos] = await Promise.all([
-    getBalances(), getTareas(), getVehicles(), getPrestamos(),
+  const [balances, tareas, vehicles, prestamos, ofertas, visitas] = await Promise.all([
+    getBalances(), getTareas(), getVehicles(), getPrestamos(), getOfertas(), getVisitas(),
   ])
 
   const activos = vehicles.filter((v: any) => v.estado !== 'vendido')
   const urgentes = tareas.filter((t: any) => t.prioridad === 'alta' && t.estado !== 'completada')
   const prestamosActivos = prestamos.filter((p: any) => p.estado === 'activo')
+  const ofertasPendientes = ofertas.filter((o: any) => o.estado === 'pendiente')
 
   const hoy = new Date()
+  const horizon48h = new Date(hoy.getTime() + 48 * 60 * 60 * 1000)
+  const visitasProximas = visitas
+    .filter((v: any) => {
+      if (!v.fecha) return false
+      const d = new Date(v.fecha)
+      return d >= hoy && d <= horizon48h
+    })
+    .sort((a: any, b: any) => a.fecha.localeCompare(b.fecha))
+
   const alertas: string[] = []
 
   const cash = balances.find((b: any) => b.cuenta === 'cash')
@@ -33,6 +43,26 @@ export default async function Inicio() {
     if (dias < 0) alertas.push(`Préstamo vencido hace ${Math.abs(dias)} días`)
     else if (dias <= 30) alertas.push(`Préstamo vence en ${dias} días`)
   })
+
+  if (ofertasPendientes.length > 0) {
+    alertas.push(`${ofertasPendientes.length} oferta${ofertasPendientes.length === 1 ? '' : 's'} pendiente${ofertasPendientes.length === 1 ? '' : 's'} de respuesta`)
+  }
+  if (visitasProximas.length > 0) {
+    alertas.push(`${visitasProximas.length} visita${visitasProximas.length === 1 ? '' : 's'} en las próximas 48h`)
+  }
+
+  function autoLabel(id: number) {
+    const v = vehicles.find((v: any) => v.id === id)
+    if (!v) return '—'
+    const base = `${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim()
+    return v.dominio ? `${base} (${v.dominio})` : base
+  }
+
+  function fmtVisitaDt(iso: string) {
+    const d = new Date(iso)
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+      + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+  }
 
   return (
     <div className="space-y-8">
@@ -58,6 +88,47 @@ export default async function Inicio() {
           ))}
         </div>
       </section>
+
+      {/* Ofertas pendientes */}
+      {ofertasPendientes.length > 0 && (
+        <section>
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">
+            Ofertas pendientes ({ofertasPendientes.length})
+          </p>
+          <div className="divide-y divide-gray-100 border border-gray-200 rounded">
+            {ofertasPendientes.slice(0, 5).map((o: any) => (
+              <div key={o.id} className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm">{autoLabel(o.vehicle_id)}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-500">USD {Number(o.monto_ofrecido).toLocaleString('es-AR')}</span>
+                  {o.email_enviado ? (
+                    <span className="text-xs text-green-600">✉ enviado</span>
+                  ) : (
+                    <span className="text-xs text-gray-400">✉ pendiente</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Visitas próximas */}
+      {visitasProximas.length > 0 && (
+        <section>
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">
+            Visitas próximas 48h ({visitasProximas.length})
+          </p>
+          <div className="divide-y divide-gray-100 border border-gray-200 rounded">
+            {visitasProximas.map((v: any) => (
+              <div key={v.id} className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm">{autoLabel(v.vehicle_id)}</span>
+                <span className="text-xs text-gray-400 tabular-nums">{fmtVisitaDt(v.fecha)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Stock resumen */}
       <section>

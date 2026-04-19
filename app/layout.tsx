@@ -5,10 +5,12 @@ import './globals.css'
 export const metadata: Metadata = { title: 'Renato Piermarini Autos' }
 
 const NAV = [
-  { href: '/',          label: 'Inicio'   },
-  { href: '/stock',     label: 'Stock'    },
-  { href: '/clientes',  label: 'Clientes' },
-  { href: '/finanzas',  label: 'Finanzas' },
+  { href: '/',               label: 'Inicio'        },
+  { href: '/stock',          label: 'Stock'         },
+  { href: '/interesados',    label: 'Interesados'   },
+  { href: '/ofertas',        label: 'Ofertas'       },
+  { href: '/clientes',       label: 'Clientes'      },
+  { href: '/finanzas',       label: 'Finanzas'      },
   { href: '/tareas',         label: 'Tareas'        },
   { href: '/transferencias', label: 'Transferencias' },
   { href: '/setup',          label: 'Setup'          },
