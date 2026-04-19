@@ -27,6 +27,7 @@ export default async function Inicio() {
   const visitasProximas = visitas
     .filter((v: any) => {
       if (!v.fecha) return false
+      if (v.resultado && v.resultado !== 'pendiente') return false
       const d = new Date(v.fecha)
       return d >= hoy && d <= horizon48h
     })
