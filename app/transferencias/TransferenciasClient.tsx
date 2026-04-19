@@ -81,7 +81,7 @@ function TransferenciaEdit({
       horario: horario,
       notas: notas,
     }
-    await patchRecord('transferencias', t.id, patchData)
+    await patchRecord('transferencias', t.vehicle_id, patchData, 'vehicle_id')
     if (vehicleId && monto !== '' && !Number.isNaN(Number(monto))) {
       await patchRecord('vehicles', Number(vehicleId), { precio_venta_final: Number(monto) })
     }
@@ -176,7 +176,16 @@ function TransferenciaEdit({
           {ESTADOS.map(est => (
             <button
               key={est}
-              onClick={async () => { await patchRecord('transferencias', t.id, { estado: est }); onDone() }}
+              onClick={async () => {
+                await patchRecord('transferencias', t.vehicle_id, { estado: est }, 'vehicle_id')
+                if (est === 'completada' && t.vehicle_id) {
+                  await patchRecord('vehicles', t.vehicle_id, {
+                    estado: 'vendido',
+                    fecha_venta: new Date().toISOString().slice(0, 10),
+                  })
+                }
+                onDone()
+              }}
               className={`text-xs px-2 py-1 rounded ${t.estado === est
                 ? 'bg-gray-900 text-white'
                 : 'text-gray-500 hover:bg-gray-200'}`}
@@ -189,7 +198,7 @@ function TransferenciaEdit({
           <button
             onClick={async () => {
               if (confirm('Eliminar esta transferencia?')) {
-                await deleteRecord('transferencias', t.id)
+                await deleteRecord('transferencias', t.vehicle_id, 'vehicle_id')
                 onDone()
               }
             }}
@@ -430,14 +439,15 @@ export default function TransferenciasClient({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {mostrar.map(t => {
-              const isOpen = expanded.has(t.id)
+              const rowKey = t.id ?? t.vehicle_id
+              const isOpen = expanded.has(rowKey)
               const vehicle = vehicles.find(v => v.id === t.vehicle_id)
               const monto = montoDe(vehicle)
               const vendedor = vendedorDe(vehicle, clientes)
               return (
-                <Fragment key={t.id}>
+                <Fragment key={rowKey}>
                   <tr
-                    onClick={() => toggle(t.id)}
+                    onClick={() => toggle(rowKey)}
                     className={`cursor-pointer transition-colors ${isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                   >
                     <td className="px-4 py-3">

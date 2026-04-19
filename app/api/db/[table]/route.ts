@@ -5,7 +5,7 @@ const BASE    = process.env.KAPSO_DB_URL!
 const KEY     = process.env.KAPSO_API_KEY!
 const HEADERS = { 'X-API-Key': KEY, 'Content-Type': 'application/json' }
 
-const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas'])
+const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'transferencias'])
 
 function bustCache() {
   // Invalidate Data Cache for every page so router.refresh() gets fresh data.
@@ -37,8 +37,8 @@ export async function PATCH(
   const { table } = await params
   if (!ALLOWED.has(table)) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
 
-  const id  = request.nextUrl.searchParams.get('id')
-  const url = id ? `${BASE}/${table}?id=${id}` : `${BASE}/${table}`
+  const qs  = request.nextUrl.searchParams.toString()
+  const url = qs ? `${BASE}/${table}?${qs}` : `${BASE}/${table}`
   const body = await request.json()
   const res = await fetch(url, {
     method: 'PATCH',
@@ -57,9 +57,9 @@ export async function DELETE(
   const { table } = await params
   if (!ALLOWED.has(table)) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
 
-  const id = request.nextUrl.searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-  const res = await fetch(`${BASE}/${table}?id=${id}`, {
+  const qs = request.nextUrl.searchParams.toString()
+  if (!qs) return NextResponse.json({ error: 'filter required (id or vehicle_id)' }, { status: 400 })
+  const res = await fetch(`${BASE}/${table}?${qs}`, {
     method: 'DELETE',
     headers: HEADERS,
   })

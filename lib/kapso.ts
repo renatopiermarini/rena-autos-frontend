@@ -21,8 +21,13 @@ export async function getVisitas()         { return get('visitas', 15) }
 
 // ── Client-side mutations (call the /api/db proxy) ────────────────────────────
 
-export async function patchRecord(table: string, id: number, data: object): Promise<boolean> {
-  const res = await fetch(`/api/db/${table}?id=${id}`, {
+export async function patchRecord(
+  table: string,
+  id: number,
+  data: object,
+  keyName: string = 'id',
+): Promise<boolean> {
+  const res = await fetch(`/api/db/${table}?${keyName}=${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -40,7 +45,11 @@ export async function postRecord(table: string, data: object): Promise<{ ok: boo
   return { ok: res.ok, data: json }
 }
 
-export async function deleteRecord(table: string, id: number): Promise<boolean> {
-  const res = await fetch(`/api/db/${table}?id=${id}`, { method: 'DELETE' })
+export async function deleteRecord(
+  table: string,
+  id: number,
+  keyName: string = 'id',
+): Promise<boolean> {
+  const res = await fetch(`/api/db/${table}?${keyName}=${id}`, { method: 'DELETE' })
   return res.ok
 }
