@@ -366,14 +366,13 @@ function VehicleTable({
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-type TipoFilter  = 'todos' | 'propio' | 'consignacion' | 'potenciales'
+type TipoFilter  = 'todos' | 'propio' | 'consignacion'
 type GroupMode   = 'ninguno' | 'tipo' | 'estado'
 
 const TIPO_FILTER_LABELS: { key: TipoFilter; label: string }[] = [
   { key: 'todos',        label: 'Todos'        },
   { key: 'propio',       label: 'Propios'      },
   { key: 'consignacion', label: 'Consignación' },
-  { key: 'potenciales',  label: 'Potenciales'  },
 ]
 
 const GROUP_LABELS: { key: GroupMode; label: string }[] = [
@@ -414,12 +413,10 @@ export default function StockClient({
   const potenciales = vehicles.filter(v => v.estado === 'potencial')
   const vendidos    = vehicles.filter(v => v.estado === 'vendido')
 
-  const filtered = tipoFilter === 'potenciales'
-    ? potenciales
-    : activos.filter(v => {
-        if (tipoFilter === 'todos') return true
-        return v.tipo_operacion === tipoFilter
-      })
+  const filtered = activos.filter(v => {
+    if (tipoFilter === 'todos') return true
+    return v.tipo_operacion === tipoFilter
+  })
 
   function toggle(id: number) {
     setExpanded(prev => {
@@ -484,56 +481,25 @@ export default function StockClient({
             </button>
           ))}
         </div>
-        {tipoFilter !== 'potenciales' && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs text-gray-400 mr-0.5">Agrupar:</span>
-            {GROUP_LABELS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setGroupMode(key)}
-                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                  groupMode === key
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'border-gray-200 text-gray-500 hover:border-gray-400'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-gray-400 mr-0.5">Agrupar:</span>
+          {GROUP_LABELS.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setGroupMode(key)}
+              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                groupMode === key
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'border-gray-200 text-gray-500 hover:border-gray-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Potenciales — siempre agrupados por tipo_operacion */}
-      {tipoFilter === 'potenciales' ? (
-        <div className="space-y-8">
-          {(() => {
-            const propios = potenciales.filter(v => v.tipo_operacion === 'propio')
-            const consig  = potenciales.filter(v => v.tipo_operacion === 'consignacion')
-            const otros   = potenciales.filter(v => v.tipo_operacion !== 'propio' && v.tipo_operacion !== 'consignacion')
-            const bloques = [
-              { label: `Propios (${propios.length})`,     vehicles: propios },
-              { label: `Consignación (${consig.length})`, vehicles: consig  },
-              ...(otros.length > 0 ? [{ label: `Sin tipo (${otros.length})`, vehicles: otros }] : []),
-            ]
-            return bloques.map(g => (
-              <section key={g.label}>
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">{g.label}</p>
-                <VehicleTable
-                  vehicles={g.vehicles}
-                  tareas={tareas}
-                  clientes={clientes}
-                  expanded={expanded}
-                  onToggle={toggle}
-                />
-              </section>
-            ))
-          })()}
-          {potenciales.length === 0 && (
-            <p className="py-6 text-center text-sm text-gray-400">Sin potenciales.</p>
-          )}
-        </div>
-      ) : groupMode === 'ninguno' ? (
+      {groupMode === 'ninguno' ? (
         <section>
           <VehicleTable
             vehicles={filtered}
@@ -561,6 +527,51 @@ export default function StockClient({
             <p className="py-6 text-center text-sm text-gray-400">Sin vehículos para este filtro.</p>
           )}
         </div>
+      )}
+
+      {/* Potenciales */}
+      {potenciales.length > 0 && (
+        <section>
+          <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Potenciales ({potenciales.length})</p>
+          <div className="border border-gray-200 rounded overflow-hidden">
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-gray-100">
+                {potenciales.map(v => {
+                  const isOpen = expanded.has(v.id)
+                  const tipo = v.tipo_operacion
+                  const badgeCls = tipo === 'propio'
+                    ? 'bg-blue-100 text-blue-700'
+                    : tipo === 'consignacion'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-gray-100 text-gray-500'
+                  const badgeLabel = tipo === 'propio' ? 'propio' : tipo === 'consignacion' ? 'consignación' : 'sin tipo'
+                  return (
+                    <Fragment key={v.id}>
+                      <tr
+                        onClick={() => toggle(v.id)}
+                        className={`cursor-pointer transition-colors ${isOpen ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-400 text-xs">{isOpen ? '▲' : '▼'}</span>
+                            <span className="text-gray-600">{v.marca} {v.modelo} {v.año}</span>
+                            {v.color && <span className="text-xs text-gray-400">· {v.color}</span>}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${badgeCls}`}>
+                            {badgeLabel}
+                          </span>
+                        </td>
+                      </tr>
+                      {isOpen && <VehicleDetail v={v} clientes={clientes} />}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
 
       {/* Vendidos */}
