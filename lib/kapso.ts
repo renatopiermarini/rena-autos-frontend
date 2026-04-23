@@ -53,3 +53,70 @@ export async function deleteRecord(
   const res = await fetch(`/api/db/${table}?${keyName}=${id}`, { method: 'DELETE' })
   return res.ok
 }
+
+// ── Derived finance helpers (pure) ────────────────────────────────────────────
+
+export type VehicleFinancials = {
+  precio_compra: number
+  gastos_por_categoria: Record<string, number>
+  gastos_total: number
+  costo_total: number
+  precio_publicado: number | null
+  margen_esperado: number | null
+  prestamos_asociados: any[]
+}
+
+export function computeVehicleFinancials(
+  vehicleId: number,
+  vehicles: any[],
+  movimientos: any[],
+  prestamos: any[],
+): VehicleFinancials {
+  const v = vehicles.find(x => x.id === vehicleId) ?? {}
+  const precio_compra = Number(v.precio_compra ?? 0)
+  const precio_publicado = v.precio_publicado != null ? Number(v.precio_publicado) : null
+
+  const gastos_por_categoria: Record<string, number> = {}
+  let gastos_total = 0
+  for (const m of movimientos) {
+    if (m.vehicle_id !== vehicleId) continue
+    if (m.tipo !== 'egreso') continue
+    const cat = m.categoria || 'sin_categoria'
+    const monto = Number(m.monto ?? 0)
+    gastos_por_categoria[cat] = (gastos_por_categoria[cat] ?? 0) + monto
+    gastos_total += monto
+  }
+
+  const costo_total = precio_compra + gastos_total
+  const margen_esperado = precio_publicado != null ? precio_publicado - costo_total : null
+  const prestamos_asociados = prestamos.filter(p => p.vehicle_id === vehicleId)
+
+  return {
+    precio_compra,
+    gastos_por_categoria,
+    gastos_total,
+    costo_total,
+    precio_publicado,
+    margen_esperado,
+    prestamos_asociados,
+  }
+}
+
+export type PrestamoStatus = {
+  saldo_pendiente: number
+  dias_vencimiento: number | null
+  vencido: boolean
+  proximo: boolean
+}
+
+export function computePrestamoStatus(prestamo: any, today: Date = new Date()): PrestamoStatus {
+  const saldo_pendiente = Number(prestamo.monto_a_devolver ?? 0) - Number(prestamo.monto_pagado ?? 0)
+  let dias_vencimiento: number | null = null
+  if (prestamo.fecha_vencimiento) {
+    const v = new Date(prestamo.fecha_vencimiento)
+    dias_vencimiento = Math.ceil((v.getTime() - today.getTime()) / 86400000)
+  }
+  const vencido = dias_vencimiento != null && dias_vencimiento < 0
+  const proximo = dias_vencimiento != null && dias_vencimiento >= 0 && dias_vencimiento <= 30
+  return { saldo_pendiente, dias_vencimiento, vencido, proximo }
+}

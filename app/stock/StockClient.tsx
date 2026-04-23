@@ -1,6 +1,19 @@
 'use client'
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
+import { computeVehicleFinancials, computePrestamoStatus } from '@/lib/kapso'
+
+const CAT_LABEL_FIN: Record<string, string> = {
+  vehicle_purchase: 'Compra',
+  vehicle_expense:  'Gasto auto',
+  commission:       'Comisión',
+  general_expense:  'Gasto general',
+  marketing:        'Marketing',
+  loan:             'Préstamo',
+  refund:           'Reembolso',
+  down_payment:     'Seña',
+  sin_categoria:    'Sin categoría',
+}
 
 const ESTADO_COLOR: Record<string, string> = {
   en_stock:           'bg-green-100 text-green-800',
@@ -121,7 +134,13 @@ function FSelect({ label, value, onChange, options }: {
 
 // ── VehicleDetail ─────────────────────────────────────────────────────────────
 
-function VehicleDetail({ v, clientes }: { v: any; clientes: any[] }) {
+function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos }: {
+  v: any
+  clientes: any[]
+  vehicles: any[]
+  movimientos: any[]
+  prestamos: any[]
+}) {
   const router   = useRouter()
   const [editing, setEditing] = useState(false)
   const [saving,  setSaving]  = useState(false)
@@ -174,6 +193,8 @@ function VehicleDetail({ v, clientes }: { v: any; clientes: any[] }) {
   const margen = v.precio_venta_final && v.costo_total
     ? Number(v.precio_venta_final) - Number(v.costo_total)
     : null
+  const fin = computeVehicleFinancials(v.id, vehicles, movimientos, prestamos)
+  const catEntries = Object.entries(fin.gastos_por_categoria).sort((a, b) => b[1] - a[1])
 
   if (editing) {
     return (
@@ -258,6 +279,69 @@ function VehicleDetail({ v, clientes }: { v: any; clientes: any[] }) {
             </div>
           )}
         </div>
+
+        {(fin.gastos_total > 0 || fin.prestamos_asociados.length > 0) && (
+          <div className="mt-4 border-t border-gray-200 pt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {fin.gastos_total > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">
+                  Gastos del auto · {fmt(fin.gastos_total)}
+                </p>
+                <div className="space-y-1">
+                  {catEntries.map(([cat, monto]) => (
+                    <div key={cat} className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">{CAT_LABEL_FIN[cat] ?? cat}</span>
+                      <span className="text-gray-500">{fmt(monto)}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-sm pt-1 border-t border-gray-200">
+                    <span className="text-gray-500">Precio compra</span>
+                    <span className="text-gray-600">{fmt(fin.precio_compra)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm font-medium">
+                    <span>Costo total</span>
+                    <span>{fmt(fin.costo_total)}</span>
+                  </div>
+                  {fin.margen_esperado != null && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Margen esperado</span>
+                      <span className={fin.margen_esperado >= 0 ? 'text-green-700' : 'text-red-600'}>
+                        {(fin.margen_esperado >= 0 ? '+' : '') + fmt(fin.margen_esperado)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {fin.prestamos_asociados.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">
+                  Préstamos financiando este auto
+                </p>
+                <div className="space-y-1.5">
+                  {fin.prestamos_asociados.map((p: any) => {
+                    const st = computePrestamoStatus(p)
+                    const acr = clientes.find((c: any) => c.id === p.acreedor_id)?.nombre ?? '?'
+                    return (
+                      <div key={p.id} className="text-sm flex items-center justify-between">
+                        <span className="text-gray-700">{acr}</span>
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="text-gray-500">saldo {fmt(st.saldo_pendiente)}</span>
+                          <span className={st.vencido ? 'text-red-600' : st.proximo ? 'text-amber-600' : 'text-gray-400'}>
+                            {st.dias_vencimiento == null ? '—'
+                              : st.vencido ? `vencido ${Math.abs(st.dias_vencimiento)}d`
+                              : `${st.dias_vencimiento}d`}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           onClick={e => { e.stopPropagation(); setEditing(true) }}
           className="mt-4 text-xs text-gray-400 hover:text-gray-700 border border-gray-200 hover:border-gray-400 px-3 py-1 rounded transition-colors"
@@ -275,12 +359,16 @@ function VehicleTable({
   vehicles,
   tareas,
   clientes,
+  movimientos,
+  prestamos,
   expanded,
   onToggle,
 }: {
   vehicles: any[]
   tareas: any[]
   clientes: any[]
+  movimientos: any[]
+  prestamos: any[]
   expanded: Set<number>
   onToggle: (id: number) => void
 }) {
@@ -354,7 +442,7 @@ function VehicleTable({
                     <ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} />
                   </td>
                 </tr>
-                {isOpen && <VehicleDetail v={v} clientes={clientes} />}
+                {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} />}
               </Fragment>
             )
           })}
@@ -400,10 +488,14 @@ export default function StockClient({
   vehicles,
   tareas,
   clientes,
+  movimientos = [],
+  prestamos = [],
 }: {
   vehicles: any[]
   tareas: any[]
   clientes: any[]
+  movimientos?: any[]
+  prestamos?: any[]
 }) {
   const [expanded,   setExpanded]   = useState<Set<number>>(new Set())
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
@@ -505,6 +597,8 @@ export default function StockClient({
             vehicles={filtered}
             tareas={tareas}
             clientes={clientes}
+            movimientos={movimientos}
+            prestamos={prestamos}
             expanded={expanded}
             onToggle={toggle}
           />
@@ -518,6 +612,8 @@ export default function StockClient({
                 vehicles={group.vehicles}
                 tareas={tareas}
                 clientes={clientes}
+                movimientos={movimientos}
+                prestamos={prestamos}
                 expanded={expanded}
                 onToggle={toggle}
               />
@@ -564,7 +660,7 @@ export default function StockClient({
                           </span>
                         </td>
                       </tr>
-                      {isOpen && <VehicleDetail v={v} clientes={clientes} />}
+                      {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} />}
                     </Fragment>
                   )
                 })}
@@ -606,7 +702,7 @@ export default function StockClient({
                           {fmtFecha(v.fecha_venta)}
                         </td>
                       </tr>
-                      {isOpen && <VehicleDetail v={v} clientes={clientes} />}
+                      {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} />}
                     </Fragment>
                   )
                 })}
