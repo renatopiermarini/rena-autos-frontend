@@ -366,13 +366,14 @@ function VehicleTable({
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-type TipoFilter  = 'todos' | 'propio' | 'consignacion'
+type TipoFilter  = 'todos' | 'propio' | 'consignacion' | 'potenciales'
 type GroupMode   = 'ninguno' | 'tipo' | 'estado'
 
 const TIPO_FILTER_LABELS: { key: TipoFilter; label: string }[] = [
   { key: 'todos',        label: 'Todos'        },
   { key: 'propio',       label: 'Propios'      },
   { key: 'consignacion', label: 'Consignación' },
+  { key: 'potenciales',  label: 'Potenciales'  },
 ]
 
 const GROUP_LABELS: { key: GroupMode; label: string }[] = [
@@ -382,7 +383,7 @@ const GROUP_LABELS: { key: GroupMode; label: string }[] = [
 ]
 
 const ESTADO_ORDER = [
-  'potencial', 'a_ingresar', 'confirmado', 'en_stock',
+  'a_ingresar', 'confirmado', 'en_stock',
   'en_reparacion', 'va_a_pensarlo', 'necesita_follow_up', 'reservado',
 ]
 const ESTADO_LABEL: Record<string, string> = {
@@ -409,13 +410,16 @@ export default function StockClient({
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
   const [groupMode,  setGroupMode]  = useState<GroupMode>('ninguno')
 
-  const activos  = vehicles.filter(v => v.estado !== 'vendido')
-  const vendidos = vehicles.filter(v => v.estado === 'vendido')
+  const activos     = vehicles.filter(v => v.estado !== 'vendido' && v.estado !== 'potencial')
+  const potenciales = vehicles.filter(v => v.estado === 'potencial')
+  const vendidos    = vehicles.filter(v => v.estado === 'vendido')
 
-  const filtered = activos.filter(v => {
-    if (tipoFilter === 'todos') return true
-    return v.tipo_operacion === tipoFilter
-  })
+  const filtered = tipoFilter === 'potenciales'
+    ? potenciales
+    : activos.filter(v => {
+        if (tipoFilter === 'todos') return true
+        return v.tipo_operacion === tipoFilter
+      })
 
   function toggle(id: number) {
     setExpanded(prev => {
@@ -457,7 +461,9 @@ export default function StockClient({
       {/* Header */}
       <div className="flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Stock</h1>
-        <span className="text-sm text-gray-400">{activos.length} activos · {vendidos.length} vendidos</span>
+        <span className="text-sm text-gray-400">
+          {activos.length} activos · {potenciales.length} potenciales · {vendidos.length} vendidos
+        </span>
       </div>
 
       {/* Filters */}
@@ -478,26 +484,56 @@ export default function StockClient({
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs text-gray-400 mr-0.5">Agrupar:</span>
-          {GROUP_LABELS.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setGroupMode(key)}
-              className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-                groupMode === key
-                  ? 'bg-gray-900 text-white border-gray-900'
-                  : 'border-gray-200 text-gray-500 hover:border-gray-400'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {tipoFilter !== 'potenciales' && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs text-gray-400 mr-0.5">Agrupar:</span>
+            {GROUP_LABELS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setGroupMode(key)}
+                className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                  groupMode === key
+                    ? 'bg-gray-900 text-white border-gray-900'
+                    : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Active vehicles */}
-      {groupMode === 'ninguno' ? (
+      {/* Potenciales — siempre agrupados por tipo_operacion */}
+      {tipoFilter === 'potenciales' ? (
+        <div className="space-y-8">
+          {(() => {
+            const propios = potenciales.filter(v => v.tipo_operacion === 'propio')
+            const consig  = potenciales.filter(v => v.tipo_operacion === 'consignacion')
+            const otros   = potenciales.filter(v => v.tipo_operacion !== 'propio' && v.tipo_operacion !== 'consignacion')
+            const bloques = [
+              { label: `Propios (${propios.length})`,     vehicles: propios },
+              { label: `Consignación (${consig.length})`, vehicles: consig  },
+              ...(otros.length > 0 ? [{ label: `Sin tipo (${otros.length})`, vehicles: otros }] : []),
+            ]
+            return bloques.map(g => (
+              <section key={g.label}>
+                <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">{g.label}</p>
+                <VehicleTable
+                  vehicles={g.vehicles}
+                  tareas={tareas}
+                  clientes={clientes}
+                  expanded={expanded}
+                  onToggle={toggle}
+                />
+              </section>
+            ))
+          })()}
+          {potenciales.length === 0 && (
+            <p className="py-6 text-center text-sm text-gray-400">Sin potenciales.</p>
+          )}
+        </div>
+      ) : groupMode === 'ninguno' ? (
         <section>
           <VehicleTable
             vehicles={filtered}
