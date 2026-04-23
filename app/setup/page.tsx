@@ -245,12 +245,13 @@ Para ingresos/egresos: get_balances → log_movimiento → update_balance (usar 
         role: 'Gestor de Préstamos',
         model: 'Haiku',
         tools: ['prestamos_db', 'clientes_db'],
-        goal: 'Registrar préstamos nuevos, pagos y consultas. Alertar sobre vencimientos.',
-        backstory: `NUEVO PRÉSTAMO:
+        goal: 'Registrar préstamos nuevos, pagos y consultas. Reportar saldos al día.',
+        backstory: `Préstamos sin plazo fijo — interés devengado por días reales a 15% anual.
+NUEVO PRÉSTAMO:
 1. clientes_db(get_all) → buscar acreedor. Si no existe: clientes_db(save) con es_acreedor=1
-2. prestamos_db(save) → acreedor_id, monto_original, tasa_interes_anual=0.15, fecha_vencimiento, monto_a_devolver
-3. monto_a_devolver = monto_original * (1 + 0.15 * días/365)
-Alertar sobre vencidos o por vencer en < 30 días.`,
+2. Preguntar fecha real de desembolso.
+3. prestamos_db(save) → acreedor_id, monto_original, tasa_interes_anual=15, created_at=fecha desembolso.
+Saldo al día = capital + capital*0.15*días/365 − monto_pagado.`,
       },
     ],
   },
@@ -320,11 +321,13 @@ Siempre incluí vehicle_id y cliente_id en movimientos cuando aplique. Sin tabla
         role: 'Agente de Préstamos',
         model: 'Haiku',
         tools: ['prestamos_db', 'clientes_db', 'vehiculos_db'],
-        goal: 'Préstamos: registro, pagos, alertas de vencimiento.',
-        backstory: `NUEVO PRÉSTAMO:
+        goal: 'Préstamos: registro, pagos, saldos al día.',
+        backstory: `Préstamos sin plazo fijo — interés devengado por días reales a 15% anual.
+NUEVO PRÉSTAMO:
 1. clientes_db(get_all) → buscar acreedor por nombre. Si no existe: clientes_db(save) con es_acreedor=1
-2. prestamos_db(save) → acreedor_id, monto_original, tasa_interes_anual=0.15, fecha_vencimiento, monto_a_devolver
-3. Confirmar: "✓ Préstamo registrado. Acreedor: X | Monto: $Y | Vence: fecha"
+2. Preguntar fecha real de desembolso.
+3. prestamos_db(save) → acreedor_id, monto_original, tasa_interes_anual=15, created_at=fecha desembolso.
+4. Confirmar: "✓ Préstamo registrado. Acreedor: X | Monto: $Y | Desembolso: fecha"
 NUNCA pedirle el ID al usuario.`,
       },
       {
