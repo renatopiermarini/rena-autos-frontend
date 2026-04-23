@@ -302,7 +302,12 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos }: {
                     <span>Costo total</span>
                     <span>{fmt(fin.costo_total)}</span>
                   </div>
-                  {fin.margen_esperado != null && (
+                  {fin.es_consignacion ? (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Margen esperado</span>
+                      <span className="text-gray-400 text-xs">consignación — comisión se carga manual</span>
+                    </div>
+                  ) : fin.margen_esperado != null && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500">Margen esperado</span>
                       <span className={fin.margen_esperado >= 0 ? 'text-green-700' : 'text-red-600'}>

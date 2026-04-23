@@ -365,10 +365,12 @@ function PorVehiculoTab({
                     {f.precio_publicado != null ? fmt(f.precio_publicado) : '—'}
                   </td>
                   <td className={`px-4 py-3 text-right font-medium ${
-                    f.margen_esperado == null ? 'text-gray-400'
+                    f.es_consignacion ? 'text-gray-400 text-xs'
+                    : f.margen_esperado == null ? 'text-gray-400'
                     : f.margen_esperado >= 0 ? 'text-green-700' : 'text-red-600'
                   }`}>
-                    {f.margen_esperado == null ? '—'
+                    {f.es_consignacion ? 'consignación'
+                      : f.margen_esperado == null ? '—'
                       : (f.margen_esperado >= 0 ? '+' : '') + fmt(f.margen_esperado)}
                   </td>
                   <td className="px-4 py-3 text-xs">

@@ -64,6 +64,7 @@ export type VehicleFinancials = {
   precio_publicado: number | null
   margen_esperado: number | null
   prestamos_asociados: any[]
+  es_consignacion: boolean
 }
 
 export function computeVehicleFinancials(
@@ -73,6 +74,7 @@ export function computeVehicleFinancials(
   prestamos: any[],
 ): VehicleFinancials {
   const v = vehicles.find(x => x.id === vehicleId) ?? {}
+  const es_consignacion = v.tipo_operacion === 'consignacion'
   const precio_compra = Number(v.precio_compra ?? 0)
   const precio_publicado = v.precio_publicado != null ? Number(v.precio_publicado) : null
 
@@ -88,7 +90,9 @@ export function computeVehicleFinancials(
   }
 
   const costo_total = precio_compra + gastos_total
-  const margen_esperado = precio_publicado != null ? precio_publicado - costo_total : null
+  const margen_esperado = es_consignacion
+    ? null
+    : precio_publicado != null ? precio_publicado - costo_total : null
   const prestamos_asociados = prestamos.filter(p => p.vehicle_id === vehicleId)
 
   return {
@@ -99,6 +103,7 @@ export function computeVehicleFinancials(
     precio_publicado,
     margen_esperado,
     prestamos_asociados,
+    es_consignacion,
   }
 }
 
