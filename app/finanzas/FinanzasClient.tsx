@@ -64,8 +64,8 @@ export default function FinanzasClient({
     [vehicles],
   )
 
-  const prestamosActivos = prestamos.filter((p: any) => p.estado === 'activo')
-  const prestamosVencidos = prestamosActivos.filter((p: any) => computePrestamoStatus(p, today).vencido)
+  const prestamosPendientes = prestamos.filter((p: any) => p.estado !== 'pagado')
+  const prestamosVencidos = prestamosPendientes.filter((p: any) => computePrestamoStatus(p, today).vencido)
 
   return (
     <div className="space-y-6">
@@ -211,26 +211,26 @@ function ResumenTab({
 function PrestamosTab({
   prestamos, clientesById, vehiclesById, today,
 }: { prestamos: any[]; clientesById: any; vehiclesById: any; today: Date }) {
-  const activos = prestamos.filter((p: any) => p.estado === 'activo')
+  const pendientes = prestamos.filter((p: any) => p.estado !== 'pagado')
   const pagados = prestamos.filter((p: any) => p.estado === 'pagado')
 
-  const deudaTotal = activos.reduce((s, p) => s + computePrestamoStatus(p, today).saldo_pendiente, 0)
-  const acreedoresUnicos = new Set(activos.map((p: any) => p.acreedor_id)).size
+  const deudaTotal = pendientes.reduce((s, p) => s + computePrestamoStatus(p, today).saldo_pendiente, 0)
+  const acreedoresUnicos = new Set(pendientes.map((p: any) => p.acreedor_id)).size
 
   return (
     <div className="space-y-8">
       <section className="border border-gray-200 rounded p-4 bg-gray-50">
-        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Deuda total</p>
+        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Deuda si pagás hoy</p>
         <p className="text-2xl font-semibold">{fmt(deudaTotal)}</p>
         <p className="text-xs text-gray-400 mt-1">
-          {activos.length} préstamo{activos.length === 1 ? '' : 's'} activo{activos.length === 1 ? '' : 's'} · {acreedoresUnicos} acreedor{acreedoresUnicos === 1 ? '' : 'es'}
+          {pendientes.length} préstamo{pendientes.length === 1 ? '' : 's'} pendiente{pendientes.length === 1 ? '' : 's'} · {acreedoresUnicos} acreedor{acreedoresUnicos === 1 ? '' : 'es'} · capital + interés devengado al día
         </p>
       </section>
 
       <section>
-        <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Activos ({activos.length})</p>
+        <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Pendientes ({pendientes.length})</p>
         <PrestamosTable
-          prestamos={activos}
+          prestamos={pendientes}
           clientesById={clientesById}
           vehiclesById={vehiclesById}
           today={today}
@@ -264,10 +264,12 @@ function PrestamosTable({
         <thead className="bg-gray-50">
           <tr className="text-left">
             <th className="px-4 py-2 font-medium text-gray-500 text-xs">Acreedor</th>
-            <th className="px-4 py-2 font-medium text-gray-500 text-xs">Capital</th>
-            <th className="px-4 py-2 font-medium text-gray-500 text-xs">A devolver</th>
-            <th className="px-4 py-2 font-medium text-gray-500 text-xs">Pagado</th>
-            <th className="px-4 py-2 font-medium text-gray-500 text-xs">Saldo</th>
+            <th className="px-4 py-2 font-medium text-gray-500 text-xs text-right">Capital</th>
+            <th className="px-4 py-2 font-medium text-gray-500 text-xs text-right">Tasa</th>
+            <th className="px-4 py-2 font-medium text-gray-500 text-xs text-right">Días</th>
+            <th className="px-4 py-2 font-medium text-gray-500 text-xs text-right">Interés acum.</th>
+            <th className="px-4 py-2 font-medium text-gray-500 text-xs text-right">Pagado</th>
+            <th className="px-4 py-2 font-medium text-gray-500 text-xs text-right" title="Capital + interés devengado hasta hoy − pagado">Saldo hoy</th>
             <th className="px-4 py-2 font-medium text-gray-500 text-xs">Vencimiento</th>
             <th className="px-4 py-2 font-medium text-gray-500 text-xs">Destino</th>
           </tr>
@@ -287,10 +289,12 @@ function PrestamosTable({
             return (
               <tr key={p.id}>
                 <td className="px-4 py-3 font-medium">{acr}</td>
-                <td className="px-4 py-3 text-gray-600">{fmt(p.monto_original)}</td>
-                <td className="px-4 py-3 text-gray-600">{fmt(p.monto_a_devolver)}</td>
-                <td className="px-4 py-3 text-gray-500">{fmt(p.monto_pagado ?? 0)}</td>
-                <td className="px-4 py-3 font-medium">{fmt(st.saldo_pendiente)}</td>
+                <td className="px-4 py-3 text-right text-gray-600">{fmt(st.capital)}</td>
+                <td className="px-4 py-3 text-right text-gray-500 text-xs">{st.tasa_anual_pct}%/año</td>
+                <td className="px-4 py-3 text-right text-gray-500 text-xs">{st.dias_transcurridos}d</td>
+                <td className="px-4 py-3 text-right text-gray-600">{fmt(st.interes_acumulado)}</td>
+                <td className="px-4 py-3 text-right text-gray-500">{fmt(p.monto_pagado ?? 0)}</td>
+                <td className="px-4 py-3 text-right font-medium">{fmt(st.saldo_pendiente)}</td>
                 <td className={`px-4 py-3 text-xs ${vencClass}`}>{vencLabel}</td>
                 <td className="px-4 py-3">
                   {veh ? (
@@ -441,7 +445,7 @@ function VehicleFinancialDetail({
                   <div key={p.id} className="flex items-center justify-between px-3 py-2">
                     <span className="text-sm">{acr}</span>
                     <div className="flex items-center gap-3 text-xs">
-                      <span className="text-gray-500">{fmt(p.monto_original)} → {fmt(p.monto_a_devolver)}</span>
+                      <span className="text-gray-500">saldo {fmt(st.saldo_pendiente)} ({st.dias_transcurridos}d · {st.tasa_anual_pct}%)</span>
                       <span className={st.vencido ? 'text-red-600' : st.proximo ? 'text-amber-600' : 'text-gray-400'}>
                         {st.dias_vencimiento == null ? '—'
                           : st.vencido ? `vencido ${Math.abs(st.dias_vencimiento)}d`

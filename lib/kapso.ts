@@ -103,20 +103,48 @@ export function computeVehicleFinancials(
 }
 
 export type PrestamoStatus = {
+  capital: number
+  tasa_anual_pct: number
+  dias_transcurridos: number
+  interes_acumulado: number
   saldo_pendiente: number
+  monto_a_devolver_vto: number
   dias_vencimiento: number | null
   vencido: boolean
   proximo: boolean
 }
 
 export function computePrestamoStatus(prestamo: any, today: Date = new Date()): PrestamoStatus {
-  const saldo_pendiente = Number(prestamo.monto_a_devolver ?? 0) - Number(prestamo.monto_pagado ?? 0)
+  const capital = Number(prestamo.monto_original ?? 0)
+  const tasaRaw = Number(prestamo.tasa_interes_anual ?? 0)
+  const tasa_anual_pct = tasaRaw > 1 ? tasaRaw : tasaRaw * 100
+  const tasa_anual = tasa_anual_pct / 100
+
+  const inicioStr = prestamo.fecha_inicio || prestamo.created_at
+  const inicio = inicioStr ? new Date(inicioStr) : today
+  const dias_transcurridos = Math.max(0, Math.floor((today.getTime() - inicio.getTime()) / 86400000))
+  const interes_acumulado = capital * tasa_anual * (dias_transcurridos / 365)
+
+  const pagado = Number(prestamo.monto_pagado ?? 0)
+  const saldo_pendiente = Math.max(0, capital + interes_acumulado - pagado)
+
   let dias_vencimiento: number | null = null
   if (prestamo.fecha_vencimiento) {
     const v = new Date(prestamo.fecha_vencimiento)
     dias_vencimiento = Math.ceil((v.getTime() - today.getTime()) / 86400000)
   }
-  const vencido = dias_vencimiento != null && dias_vencimiento < 0
+  const vencido = prestamo.estado === 'vencido' || (dias_vencimiento != null && dias_vencimiento < 0)
   const proximo = dias_vencimiento != null && dias_vencimiento >= 0 && dias_vencimiento <= 30
-  return { saldo_pendiente, dias_vencimiento, vencido, proximo }
+
+  return {
+    capital,
+    tasa_anual_pct,
+    dias_transcurridos,
+    interes_acumulado: Math.round(interes_acumulado * 100) / 100,
+    saldo_pendiente: Math.round(saldo_pendiente * 100) / 100,
+    monto_a_devolver_vto: Number(prestamo.monto_a_devolver ?? 0),
+    dias_vencimiento,
+    vencido,
+    proximo,
+  }
 }
