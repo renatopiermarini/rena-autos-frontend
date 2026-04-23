@@ -17,7 +17,7 @@ export default async function Inicio() {
     getBalances(), getTareas(), getVehicles(), getPrestamos(), getOfertas(), getVisitas(),
   ])
 
-  const activos = vehicles.filter((v: any) => v.estado !== 'vendido')
+  const activos = vehicles.filter((v: any) => v.estado !== 'vendido' && v.estado !== 'potencial')
   const urgentes = tareas.filter((t: any) => t.prioridad === 'alta' && t.estado !== 'completada')
   const prestamosActivos = prestamos.filter((p: any) => p.estado === 'activo')
   const ofertasPendientes = ofertas.filter((o: any) => o.estado === 'pendiente')
