@@ -2,26 +2,34 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { toast } from 'sonner'
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react'
 
-const ESTADO_COLOR: Record<string, string> = {
-  activo:     'bg-green-100 text-green-700',
-  contactado: 'bg-blue-100 text-blue-700',
-  reservo:    'bg-yellow-100 text-yellow-700',
-  compro:     'bg-gray-100 text-gray-500',
-  perdido:    'bg-red-100 text-red-500',
+const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+  activo: 'default',
+  contactado: 'secondary',
+  reservo: 'secondary',
+  compro: 'outline',
+  perdido: 'destructive',
 }
 
 const ESTADOS = ['activo', 'contactado', 'reservo', 'compro', 'perdido'] as const
 
-const inputCls = 'w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-gray-400'
-const labelCls = 'block text-xs text-gray-400 mb-1'
+const nativeSelectCls =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function Field({ label, value }: { label: string; value: any }) {
   if (!value && value !== 0) return null
   return (
     <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-sm text-gray-700">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm">{value}</p>
     </div>
   )
 }
@@ -34,21 +42,21 @@ function InteresadoRow({
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    nombre:       i.nombre       ?? '',
-    telefono:     i.telefono     ?? '',
-    email:        i.email        ?? '',
-    instagram:    i.instagram    ?? '',
-    fuente:       i.fuente       ?? 'otro',
-    vehicle_id:   i.vehicle_id   ? String(i.vehicle_id) : '',
-    marca_buscada:  i.marca_buscada  ?? '',
+    nombre: i.nombre ?? '',
+    telefono: i.telefono ?? '',
+    email: i.email ?? '',
+    instagram: i.instagram ?? '',
+    fuente: i.fuente ?? 'otro',
+    vehicle_id: i.vehicle_id ? String(i.vehicle_id) : '',
+    marca_buscada: i.marca_buscada ?? '',
     modelo_buscado: i.modelo_buscado ?? '',
-    año_min:      i.año_min      ?? '',
-    año_max:      i.año_max      ?? '',
-    km_max:       i.km_max       ?? '',
-    presupuesto:  i.presupuesto  ?? '',
-    forma_pago:   i.forma_pago   ?? 'contado',
-    estado:       i.estado       ?? 'activo',
-    notas:        i.notas        ?? '',
+    año_min: i.año_min ?? '',
+    año_max: i.año_max ?? '',
+    km_max: i.km_max ?? '',
+    presupuesto: i.presupuesto ?? '',
+    forma_pago: i.forma_pago ?? 'contado',
+    estado: i.estado ?? 'activo',
+    notas: i.notas ?? '',
   })
 
   async function setEstadoQuick(estado: string) {
@@ -58,7 +66,7 @@ function InteresadoRow({
       updated_at: new Date().toISOString(),
     })
     setSaving(false)
-    if (ok) router.refresh()
+    if (ok) { toast.success(`Estado: ${estado}`); router.refresh() }
   }
 
   async function save() {
@@ -73,7 +81,7 @@ function InteresadoRow({
     }
     const ok = await patchRecord('interesados', i.id, payload)
     setSaving(false)
-    if (ok) { setEditing(false); router.refresh() }
+    if (ok) { setEditing(false); toast.success('Guardado'); router.refresh() }
   }
 
   async function borrar() {
@@ -81,58 +89,57 @@ function InteresadoRow({
     setSaving(true)
     const ok = await deleteRecord('interesados', i.id)
     setSaving(false)
-    if (ok) router.refresh()
+    if (ok) { toast.success('Borrado'); router.refresh() }
   }
 
   const ofertasDeEste = ofertas.filter(o => o.interesado_id === i.id)
-  const badge = ESTADO_COLOR[i.estado] ?? 'bg-gray-100 text-gray-500'
 
   return (
-    <div className="border-b border-gray-100 last:border-0">
+    <div className="border-b border-border last:border-0">
       <div
         onClick={() => !editing && setOpen(v => !v)}
-        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-gray-300 text-xs shrink-0">{open ? '▲' : '▼'}</span>
+          {open ? <ChevronUpIcon className="size-3 text-muted-foreground shrink-0" /> : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" />}
           <span className="text-sm font-medium">{i.nombre}</span>
           {i.vehicle_id && (
-            <span className="text-xs text-gray-400">— {vehicleLabel(i.vehicle_id)}</span>
+            <span className="text-xs text-muted-foreground">— {vehicleLabel(i.vehicle_id)}</span>
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          {i.presupuesto && <span className="text-xs text-gray-500">USD {Number(i.presupuesto).toLocaleString('es-AR')}</span>}
-          {i.telefono && <span className="text-xs text-gray-400">{i.telefono}</span>}
-          <span className={`text-xs px-2 py-0.5 rounded-full ${badge}`}>{i.estado}</span>
+          {i.presupuesto && <span className="text-xs text-muted-foreground tabular-nums">USD {Number(i.presupuesto).toLocaleString('es-AR')}</span>}
+          {i.telefono && <span className="text-xs text-muted-foreground">{i.telefono}</span>}
+          <Badge variant={ESTADO_VARIANT[i.estado] ?? 'outline'}>{i.estado}</Badge>
         </div>
       </div>
 
       {open && !editing && (
-        <div className="px-10 py-4 bg-gray-50 space-y-4">
+        <div className="px-10 py-4 bg-muted/30 space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-3">
-            <Field label="Email"         value={i.email} />
-            <Field label="Instagram"     value={i.instagram} />
-            <Field label="Fuente"        value={i.fuente} />
+            <Field label="Email" value={i.email} />
+            <Field label="Instagram" value={i.instagram} />
+            <Field label="Fuente" value={i.fuente} />
             <Field label="Auto de interés" value={i.vehicle_id ? vehicleLabel(i.vehicle_id) : null} />
-            <Field label="Busca"         value={[i.marca_buscada, i.modelo_buscado].filter(Boolean).join(' ') || null} />
-            <Field label="Año mín."      value={i.año_min} />
-            <Field label="Año máx."      value={i.año_max} />
-            <Field label="KM máx."       value={i.km_max ? Number(i.km_max).toLocaleString('es-AR') : null} />
-            <Field label="Presupuesto"   value={i.presupuesto ? `USD ${Number(i.presupuesto).toLocaleString('es-AR')}` : null} />
+            <Field label="Busca" value={[i.marca_buscada, i.modelo_buscado].filter(Boolean).join(' ') || null} />
+            <Field label="Año mín." value={i.año_min} />
+            <Field label="Año máx." value={i.año_max} />
+            <Field label="KM máx." value={i.km_max ? Number(i.km_max).toLocaleString('es-AR') : null} />
+            <Field label="Presupuesto" value={i.presupuesto ? `USD ${Number(i.presupuesto).toLocaleString('es-AR')}` : null} />
             <Field label="Forma de pago" value={i.forma_pago} />
             <Field label="Último contacto" value={i.fecha_ultimo_contacto ? new Date(i.fecha_ultimo_contacto).toLocaleDateString('es-AR') : null} />
-            {i.notas && <div className="col-span-full"><p className="text-xs text-gray-400">Notas</p><p className="text-sm text-gray-700">{i.notas}</p></div>}
+            {i.notas && <div className="col-span-full"><p className="text-xs text-muted-foreground">Notas</p><p className="text-sm">{i.notas}</p></div>}
           </div>
 
           {ofertasDeEste.length > 0 && (
             <div>
-              <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Ofertas ({ofertasDeEste.length})</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Ofertas ({ofertasDeEste.length})</p>
               <div className="space-y-1">
                 {ofertasDeEste.map(o => (
                   <div key={o.id} className="text-sm flex items-center gap-3">
                     <span>{vehicleLabel(o.vehicle_id)}</span>
-                    <span className="text-gray-500">USD {Number(o.monto_ofrecido).toLocaleString('es-AR')}</span>
-                    <span className="text-xs text-gray-400">{o.estado}</span>
+                    <span className="text-muted-foreground tabular-nums">USD {Number(o.monto_ofrecido).toLocaleString('es-AR')}</span>
+                    <Badge variant="outline">{o.estado}</Badge>
                   </div>
                 ))}
               </div>
@@ -140,46 +147,26 @@ function InteresadoRow({
           )}
 
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 mr-1">Estado rápido:</span>
+            <span className="text-xs text-muted-foreground mr-1">Estado rápido:</span>
             {ESTADOS.map(e => (
-              <button
+              <Button
                 key={e}
+                size="xs"
+                variant={i.estado === e ? 'default' : 'outline'}
                 onClick={() => setEstadoQuick(e)}
                 disabled={saving || i.estado === e}
-                className={`text-xs px-3 py-1 rounded border transition-colors ${
-                  i.estado === e
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                } disabled:opacity-50`}
               >
                 {e}
-              </button>
+              </Button>
             ))}
-            <button
-              onClick={() => setEditing(true)}
-              className="ml-auto text-xs text-gray-500 hover:text-gray-900 border border-gray-200 hover:border-gray-400 px-3 py-1 rounded"
-            >
-              Editar
-            </button>
-            <button
-              onClick={borrar}
-              disabled={saving}
-              className="text-xs text-gray-400 hover:text-red-600 border border-gray-200 hover:border-red-300 px-3 py-1 rounded disabled:opacity-50"
-            >
-              Borrar
-            </button>
+            <Button size="xs" variant="outline" onClick={() => setEditing(true)} className="ml-auto">Editar</Button>
+            <Button size="xs" variant="destructive" onClick={borrar} disabled={saving}>Borrar</Button>
           </div>
         </div>
       )}
 
       {open && editing && (
-        <EditForm
-          form={form}
-          setForm={setForm}
-          saving={saving}
-          onSave={save}
-          onCancel={() => setEditing(false)}
-        />
+        <EditForm form={form} setForm={setForm} saving={saving} onSave={save} onCancel={() => setEditing(false)} />
       )}
     </div>
   )
@@ -195,50 +182,51 @@ function EditForm({
     return (e: any) => setForm({ ...form, [field]: e.target.value })
   }
   return (
-    <div className="px-10 py-4 bg-gray-50 space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
-        <div><label className={labelCls}>Nombre</label><input type="text" value={form.nombre} onChange={set('nombre')} className={inputCls} /></div>
-        <div><label className={labelCls}>Teléfono</label><input type="text" value={form.telefono} onChange={set('telefono')} className={inputCls} /></div>
-        <div><label className={labelCls}>Email</label><input type="email" value={form.email} onChange={set('email')} className={inputCls} /></div>
-        <div><label className={labelCls}>Instagram</label><input type="text" value={form.instagram} onChange={set('instagram')} className={inputCls} /></div>
-        <div>
-          <label className={labelCls}>Fuente</label>
-          <select value={form.fuente} onChange={set('fuente')} className={inputCls}>
-            <option value="whatsapp">whatsapp</option><option value="instagram">instagram</option>
-            <option value="mercadolibre">mercadolibre</option><option value="referido">referido</option>
+    <div className="px-10 py-4 bg-muted/30 space-y-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+        <div className="space-y-1.5"><Label>Nombre</Label><Input value={form.nombre} onChange={set('nombre')} /></div>
+        <div className="space-y-1.5"><Label>Teléfono</Label><Input value={form.telefono} onChange={set('telefono')} /></div>
+        <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.email} onChange={set('email')} /></div>
+        <div className="space-y-1.5"><Label>Instagram</Label><Input value={form.instagram} onChange={set('instagram')} /></div>
+        <div className="space-y-1.5">
+          <Label>Fuente</Label>
+          <select value={form.fuente} onChange={set('fuente')} className={nativeSelectCls}>
+            <option value="whatsapp">whatsapp</option>
+            <option value="instagram">instagram</option>
+            <option value="mercadolibre">mercadolibre</option>
+            <option value="referido">referido</option>
             <option value="otro">otro</option>
           </select>
         </div>
-        <div>
-          <label className={labelCls}>Estado</label>
-          <select value={form.estado} onChange={set('estado')} className={inputCls}>
+        <div className="space-y-1.5">
+          <Label>Estado</Label>
+          <select value={form.estado} onChange={set('estado')} className={nativeSelectCls}>
             {ESTADOS.map(e => <option key={e} value={e}>{e}</option>)}
           </select>
         </div>
-        <div><label className={labelCls}>Marca buscada</label><input type="text" value={form.marca_buscada} onChange={set('marca_buscada')} className={inputCls} /></div>
-        <div><label className={labelCls}>Modelo buscado</label><input type="text" value={form.modelo_buscado} onChange={set('modelo_buscado')} className={inputCls} /></div>
-        <div><label className={labelCls}>Presupuesto USD</label><input type="number" value={form.presupuesto} onChange={set('presupuesto')} className={inputCls} /></div>
-        <div><label className={labelCls}>Año mín.</label><input type="number" value={form.año_min} onChange={set('año_min')} className={inputCls} /></div>
-        <div><label className={labelCls}>Año máx.</label><input type="number" value={form.año_max} onChange={set('año_max')} className={inputCls} /></div>
-        <div><label className={labelCls}>KM máx.</label><input type="number" value={form.km_max} onChange={set('km_max')} className={inputCls} /></div>
-        <div>
-          <label className={labelCls}>Forma de pago</label>
-          <select value={form.forma_pago} onChange={set('forma_pago')} className={inputCls}>
-            <option value="contado">contado</option><option value="financiado">financiado</option>
-            <option value="permuta">permuta</option><option value="mixto">mixto</option>
+        <div className="space-y-1.5"><Label>Marca buscada</Label><Input value={form.marca_buscada} onChange={set('marca_buscada')} /></div>
+        <div className="space-y-1.5"><Label>Modelo buscado</Label><Input value={form.modelo_buscado} onChange={set('modelo_buscado')} /></div>
+        <div className="space-y-1.5"><Label>Presupuesto USD</Label><Input type="number" value={form.presupuesto} onChange={set('presupuesto')} /></div>
+        <div className="space-y-1.5"><Label>Año mín.</Label><Input type="number" value={form.año_min} onChange={set('año_min')} /></div>
+        <div className="space-y-1.5"><Label>Año máx.</Label><Input type="number" value={form.año_max} onChange={set('año_max')} /></div>
+        <div className="space-y-1.5"><Label>KM máx.</Label><Input type="number" value={form.km_max} onChange={set('km_max')} /></div>
+        <div className="space-y-1.5">
+          <Label>Forma de pago</Label>
+          <select value={form.forma_pago} onChange={set('forma_pago')} className={nativeSelectCls}>
+            <option value="contado">contado</option>
+            <option value="financiado">financiado</option>
+            <option value="permuta">permuta</option>
+            <option value="mixto">mixto</option>
           </select>
         </div>
-        <div className="col-span-2 sm:col-span-3"><label className={labelCls}>Notas</label><textarea value={form.notas} onChange={set('notas')} rows={2} className={`${inputCls} resize-none`} /></div>
+        <div className="col-span-2 sm:col-span-3 lg:col-span-4 space-y-1.5">
+          <Label>Notas</Label>
+          <Textarea value={form.notas} onChange={set('notas')} rows={2} />
+        </div>
       </div>
       <div className="flex gap-2">
-        <button onClick={onSave} disabled={saving}
-          className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50">
-          {saving ? 'Guardando…' : 'Guardar'}
-        </button>
-        <button onClick={onCancel}
-          className="px-4 py-1.5 border border-gray-200 text-sm rounded hover:bg-gray-100">
-          Cancelar
-        </button>
+        <Button onClick={onSave} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
+        <Button variant="outline" onClick={onCancel}>Cancelar</Button>
       </div>
     </div>
   )
@@ -254,16 +242,14 @@ function NuevoInteresadoForm({
     presupuesto: '', forma_pago: 'contado',
   })
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
 
   function set(field: string) {
     return (e: any) => setForm(f => ({ ...f, [field]: e.target.value }))
   }
 
   async function save() {
-    if (!form.nombre.trim()) { setError('El nombre es requerido.'); return }
+    if (!form.nombre.trim()) { toast.error('El nombre es requerido'); return }
     setSaving(true)
-    setError('')
     const payload: any = {
       nombre: form.nombre.trim(),
       telefono: form.telefono || null,
@@ -280,58 +266,57 @@ function NuevoInteresadoForm({
     if (form.presupuesto) payload.presupuesto = Number(form.presupuesto)
     const r = await postRecord('interesados', payload)
     setSaving(false)
-    if (r.ok) { onClose(); router.refresh() }
-    else setError('Error al guardar.')
+    if (r.ok) { toast.success('Interesado creado'); onClose(); router.refresh() }
+    else toast.error('Error al guardar')
   }
 
   return (
-    <div className="border border-gray-200 rounded p-4 bg-gray-50 space-y-4">
-      <p className="text-sm font-medium text-gray-700">Nuevo interesado</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
-        <div><label className={labelCls}>Nombre *</label><input type="text" value={form.nombre} onChange={set('nombre')} className={inputCls} /></div>
-        <div><label className={labelCls}>Teléfono</label><input type="text" value={form.telefono} onChange={set('telefono')} className={inputCls} /></div>
-        <div><label className={labelCls}>Email</label><input type="email" value={form.email} onChange={set('email')} className={inputCls} /></div>
-        <div><label className={labelCls}>Instagram</label><input type="text" value={form.instagram} onChange={set('instagram')} className={inputCls} /></div>
-        <div>
-          <label className={labelCls}>Fuente</label>
-          <select value={form.fuente} onChange={set('fuente')} className={inputCls}>
-            <option value="whatsapp">whatsapp</option><option value="instagram">instagram</option>
-            <option value="mercadolibre">mercadolibre</option><option value="referido">referido</option>
-            <option value="otro">otro</option>
-          </select>
+    <Card size="sm" className="bg-muted/30">
+      <CardContent className="space-y-4">
+        <p className="text-sm font-medium">Nuevo interesado</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-3">
+          <div className="space-y-1.5"><Label>Nombre *</Label><Input value={form.nombre} onChange={set('nombre')} /></div>
+          <div className="space-y-1.5"><Label>Teléfono</Label><Input value={form.telefono} onChange={set('telefono')} /></div>
+          <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.email} onChange={set('email')} /></div>
+          <div className="space-y-1.5"><Label>Instagram</Label><Input value={form.instagram} onChange={set('instagram')} /></div>
+          <div className="space-y-1.5">
+            <Label>Fuente</Label>
+            <select value={form.fuente} onChange={set('fuente')} className={nativeSelectCls}>
+              <option value="whatsapp">whatsapp</option>
+              <option value="instagram">instagram</option>
+              <option value="mercadolibre">mercadolibre</option>
+              <option value="referido">referido</option>
+              <option value="otro">otro</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Auto de interés</Label>
+            <select value={form.vehicle_id} onChange={set('vehicle_id')} className={nativeSelectCls}>
+              <option value="">— Sin auto específico</option>
+              {vehicles.filter(v => v.estado !== 'vendido').map(v => (
+                <option key={v.id} value={v.id}>{v.marca} {v.modelo} {v.año}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5"><Label>Marca buscada</Label><Input value={form.marca_buscada} onChange={set('marca_buscada')} /></div>
+          <div className="space-y-1.5"><Label>Modelo buscado</Label><Input value={form.modelo_buscado} onChange={set('modelo_buscado')} /></div>
+          <div className="space-y-1.5"><Label>Presupuesto USD</Label><Input type="number" value={form.presupuesto} onChange={set('presupuesto')} /></div>
+          <div className="space-y-1.5">
+            <Label>Forma de pago</Label>
+            <select value={form.forma_pago} onChange={set('forma_pago')} className={nativeSelectCls}>
+              <option value="contado">contado</option>
+              <option value="financiado">financiado</option>
+              <option value="permuta">permuta</option>
+              <option value="mixto">mixto</option>
+            </select>
+          </div>
         </div>
-        <div>
-          <label className={labelCls}>Auto de interés</label>
-          <select value={form.vehicle_id} onChange={set('vehicle_id')} className={inputCls}>
-            <option value="">— Sin auto específico</option>
-            {vehicles.filter(v => v.estado !== 'vendido').map(v => (
-              <option key={v.id} value={v.id}>{v.marca} {v.modelo} {v.año}</option>
-            ))}
-          </select>
+        <div className="flex gap-2">
+          <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
         </div>
-        <div><label className={labelCls}>Marca buscada</label><input type="text" value={form.marca_buscada} onChange={set('marca_buscada')} className={inputCls} /></div>
-        <div><label className={labelCls}>Modelo buscado</label><input type="text" value={form.modelo_buscado} onChange={set('modelo_buscado')} className={inputCls} /></div>
-        <div><label className={labelCls}>Presupuesto USD</label><input type="number" value={form.presupuesto} onChange={set('presupuesto')} className={inputCls} /></div>
-        <div>
-          <label className={labelCls}>Forma de pago</label>
-          <select value={form.forma_pago} onChange={set('forma_pago')} className={inputCls}>
-            <option value="contado">contado</option><option value="financiado">financiado</option>
-            <option value="permuta">permuta</option><option value="mixto">mixto</option>
-          </select>
-        </div>
-      </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <div className="flex gap-2">
-        <button onClick={save} disabled={saving}
-          className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50">
-          {saving ? 'Guardando…' : 'Guardar'}
-        </button>
-        <button onClick={onClose}
-          className="px-4 py-1.5 border border-gray-200 text-sm rounded hover:bg-gray-100">
-          Cancelar
-        </button>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -350,7 +335,6 @@ export default function InteresadosClient({
 
   const filtrados = filter === 'todos' ? interesados : interesados.filter(i => i.estado === filter)
   const sorted = [...filtrados].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
-
   const activos = interesados.filter(i => i.estado === 'activo').length
 
   return (
@@ -358,16 +342,11 @@ export default function InteresadosClient({
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">Interesados</h1>
-          <span className="text-sm text-gray-400">{interesados.length} totales · {activos} activos</span>
+          <span className="text-sm text-muted-foreground">{interesados.length} totales · {activos} activos</span>
         </div>
-        <button
-          onClick={() => setShowNuevo(v => !v)}
-          className={`text-xs px-3 py-1.5 rounded border transition-colors ${
-            showNuevo ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-500 hover:border-gray-400'
-          }`}
-        >
-          + Nuevo interesado
-        </button>
+        <Button size="sm" variant={showNuevo ? 'default' : 'outline'} onClick={() => setShowNuevo(v => !v)}>
+          <PlusIcon /> Nuevo interesado
+        </Button>
       </div>
 
       {showNuevo && (
@@ -375,30 +354,29 @@ export default function InteresadosClient({
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-gray-400 mr-1">Filtrar:</span>
+        <span className="text-xs text-muted-foreground mr-1">Filtrar:</span>
         {(['todos', ...ESTADOS] as const).map(k => (
-          <button
+          <Button
             key={k}
+            size="xs"
+            variant={filter === k ? 'default' : 'outline'}
             onClick={() => setFilter(k)}
-            className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-              filter === k
-                ? 'bg-gray-900 text-white border-gray-900'
-                : 'border-gray-200 text-gray-500 hover:border-gray-400'
-            }`}
           >
             {k}
-          </button>
+          </Button>
         ))}
       </div>
 
-      <div className="border border-gray-200 rounded">
-        {sorted.map(i => (
-          <InteresadoRow key={i.id} i={i} vehicleLabel={vehicleLabel} ofertas={ofertas} />
-        ))}
-        {sorted.length === 0 && (
-          <p className="px-4 py-6 text-sm text-gray-400 text-center">Sin interesados.</p>
-        )}
-      </div>
+      <Card size="sm">
+        <CardContent className="p-0">
+          {sorted.map(i => (
+            <InteresadoRow key={i.id} i={i} vehicleLabel={vehicleLabel} ofertas={ofertas} />
+          ))}
+          {sorted.length === 0 && (
+            <p className="px-4 py-6 text-sm text-muted-foreground text-center">Sin interesados.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
