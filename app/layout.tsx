@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" className={cn('font-sans', geist.variable)}>
       <body className="bg-background text-foreground min-h-screen antialiased">
         <MainNav />
-        <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1600px] px-8 py-6">{children}</main>
         <Toaster position="top-right" richColors />
       </body>
     </html>

@@ -171,7 +171,7 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
   }
 
   return (
-    <div className="grid grid-cols-[280px_1fr] gap-6">
+    <div className="grid grid-cols-[320px_1fr] gap-6">
       <aside className="space-y-3">
         <Button onClick={startCreate} className="w-full">
           <PlusIcon /> Nueva entrada
@@ -203,7 +203,7 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
           ))}
         </div>
 
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+        <div className="space-y-4 max-h-[calc(100vh-18rem)] overflow-y-auto pr-1">
           {TIPOS.map(tipo => {
             const items = grouped[tipo]
             if (!items.length) return null

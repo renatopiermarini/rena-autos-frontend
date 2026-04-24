@@ -24,7 +24,7 @@ export function MainNav() {
 
   return (
     <header className="border-b border-border sticky top-0 z-30 bg-background/90 backdrop-blur-sm">
-      <div className="max-w-6xl mx-auto px-6 py-3 flex items-center gap-8">
+      <div className="mx-auto w-full max-w-[1600px] px-8 py-3 flex items-center gap-8">
         <Link href="/" className="font-semibold text-sm tracking-tight shrink-0">
           Renato Piermarini Autos
         </Link>

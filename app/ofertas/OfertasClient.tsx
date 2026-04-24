@@ -2,16 +2,23 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { toast } from 'sonner'
+import { ChevronDownIcon, ChevronUpIcon, MailIcon, PlusIcon } from 'lucide-react'
 
-const ESTADO_BADGE: Record<string, string> = {
-  pendiente:  'bg-yellow-100 text-yellow-700',
-  aceptada:   'bg-green-100 text-green-700',
-  rechazada:  'bg-red-100 text-red-700',
-  contraoferta: 'bg-blue-100 text-blue-700',
+const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+  pendiente: 'secondary',
+  aceptada: 'default',
+  rechazada: 'destructive',
+  contraoferta: 'outline',
 }
 
-const inputCls = 'w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-gray-400'
-const labelCls = 'block text-xs text-gray-400 mb-1'
+const nativeSelectCls =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function fmtMoney(n: any) {
   if (n == null || n === '') return '—'
@@ -37,7 +44,7 @@ function OfertaRow({
     if (estado === 'aceptada') payload.monto_aceptado = o.monto_ofrecido
     const ok = await patchRecord('ofertas', o.id, payload)
     setSaving('')
-    if (ok) router.refresh()
+    if (ok) { toast.success(`Oferta ${estado}`); router.refresh() }
   }
 
   async function saveRespuesta() {
@@ -48,7 +55,7 @@ function OfertaRow({
       updated_at: new Date().toISOString(),
     })
     setSaving('')
-    if (ok) router.refresh()
+    if (ok) { toast.success('Respuesta guardada'); router.refresh() }
   }
 
   async function borrar() {
@@ -56,90 +63,80 @@ function OfertaRow({
     setSaving('delete')
     const ok = await deleteRecord('ofertas', o.id)
     setSaving('')
-    if (ok) router.refresh()
+    if (ok) { toast.success('Oferta borrada'); router.refresh() }
   }
 
   const estado = o.estado ?? 'pendiente'
-  const badge = ESTADO_BADGE[estado] ?? 'bg-gray-100 text-gray-600'
 
   return (
-    <div className="border-b border-gray-100 last:border-0">
+    <div className="border-b border-border last:border-0">
       <div
         onClick={() => setOpen(v => !v)}
-        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+        className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-gray-300 text-xs shrink-0">{open ? '▲' : '▼'}</span>
+          {open ? <ChevronUpIcon className="size-3 text-muted-foreground shrink-0" /> : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" />}
           <span className="text-sm font-medium truncate">{vehicleLabel(o.vehicle_id)}</span>
-          <span className="text-sm text-gray-500 whitespace-nowrap">— {fmtMoney(o.monto_ofrecido)}</span>
+          <span className="text-sm text-muted-foreground whitespace-nowrap">— {fmtMoney(o.monto_ofrecido)}</span>
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          {o.email_enviado ? (
-            <span className="text-xs text-green-600" title="Mail enviado al propietario">✉ enviado</span>
-          ) : (
-            <span className="text-xs text-gray-400" title="Mail no enviado">✉ pendiente</span>
-          )}
-          <span className="text-xs text-gray-400">{interesadoLabel(o.interesado_id)}</span>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${badge}`}>{estado}</span>
-          <span className="text-xs text-gray-400 tabular-nums">{fmtDate(o.created_at)}</span>
+          <span className={`inline-flex items-center gap-1 text-xs ${o.email_enviado ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+            <MailIcon className="size-3" /> {o.email_enviado ? 'enviado' : 'pendiente'}
+          </span>
+          <span className="text-xs text-muted-foreground">{interesadoLabel(o.interesado_id)}</span>
+          <Badge variant={ESTADO_VARIANT[estado] ?? 'outline'}>{estado}</Badge>
+          <span className="text-xs text-muted-foreground tabular-nums">{fmtDate(o.created_at)}</span>
         </div>
       </div>
 
       {open && (
-        <div className="px-10 py-4 bg-gray-50 space-y-4">
+        <div className="px-10 py-4 bg-muted/30 space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2">
-            <div><p className="text-xs text-gray-400">Vehículo</p><p className="text-sm">{vehicleLabel(o.vehicle_id)}</p></div>
-            <div><p className="text-xs text-gray-400">Interesado</p><p className="text-sm">{interesadoLabel(o.interesado_id)}</p></div>
-            <div><p className="text-xs text-gray-400">Monto ofrecido</p><p className="text-sm">{fmtMoney(o.monto_ofrecido)}</p></div>
-            {o.monto_aceptado && <div><p className="text-xs text-gray-400">Monto aceptado</p><p className="text-sm">{fmtMoney(o.monto_aceptado)}</p></div>}
-            <div><p className="text-xs text-gray-400">Creada</p><p className="text-sm">{fmtDate(o.created_at)}</p></div>
-            {o.fecha_respuesta && <div><p className="text-xs text-gray-400">Fecha respuesta</p><p className="text-sm">{fmtDate(o.fecha_respuesta)}</p></div>}
-            {o.notas && <div className="col-span-full"><p className="text-xs text-gray-400">Notas</p><p className="text-sm">{o.notas}</p></div>}
+            <div><p className="text-xs text-muted-foreground">Vehículo</p><p className="text-sm">{vehicleLabel(o.vehicle_id)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Interesado</p><p className="text-sm">{interesadoLabel(o.interesado_id)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Monto ofrecido</p><p className="text-sm">{fmtMoney(o.monto_ofrecido)}</p></div>
+            {o.monto_aceptado && <div><p className="text-xs text-muted-foreground">Monto aceptado</p><p className="text-sm">{fmtMoney(o.monto_aceptado)}</p></div>}
+            <div><p className="text-xs text-muted-foreground">Creada</p><p className="text-sm">{fmtDate(o.created_at)}</p></div>
+            {o.fecha_respuesta && <div><p className="text-xs text-muted-foreground">Respuesta</p><p className="text-sm">{fmtDate(o.fecha_respuesta)}</p></div>}
+            {o.notas && <div className="col-span-full"><p className="text-xs text-muted-foreground">Notas</p><p className="text-sm">{o.notas}</p></div>}
           </div>
 
-          <div>
-            <label className={labelCls}>Respuesta del propietario</label>
+          <div className="space-y-1.5">
+            <Label>Respuesta del propietario</Label>
             <div className="flex gap-2">
-              <input
-                type="text"
+              <Input
                 value={respuesta}
                 onChange={e => setRespuesta(e.target.value)}
                 placeholder="Ej: Acepta, Rechaza, Contraoferta USD 35000..."
-                className={inputCls}
               />
-              <button
-                onClick={saveRespuesta}
-                disabled={saving === 'respuesta'}
-                className="px-3 py-1.5 bg-gray-900 text-white text-xs rounded hover:bg-gray-700 disabled:opacity-50 whitespace-nowrap"
-              >
+              <Button size="sm" onClick={saveRespuesta} disabled={saving === 'respuesta'}>
                 {saving === 'respuesta' ? '…' : 'Guardar'}
-              </button>
+              </Button>
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-400 mr-1">Estado:</span>
+            <span className="text-xs text-muted-foreground mr-1">Estado:</span>
             {(['pendiente','aceptada','rechazada','contraoferta'] as const).map(e => (
-              <button
+              <Button
                 key={e}
+                size="xs"
+                variant={estado === e ? 'default' : 'outline'}
                 onClick={() => setEstado(e)}
                 disabled={saving === e || estado === e}
-                className={`text-xs px-3 py-1 rounded border transition-colors ${
-                  estado === e
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                } disabled:opacity-50`}
               >
                 {saving === e ? '…' : e}
-              </button>
+              </Button>
             ))}
-            <button
+            <Button
+              size="xs"
+              variant="destructive"
               onClick={borrar}
               disabled={saving === 'delete'}
-              className="ml-auto text-xs text-gray-400 hover:text-red-600 px-3 py-1 rounded border border-gray-200 hover:border-red-300 disabled:opacity-50"
+              className="ml-auto"
             >
               Borrar
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -155,15 +152,13 @@ function NuevaOfertaForm({
     vehicle_id: '', interesado_id: '', monto_ofrecido: '', notas: '',
   })
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
 
   async function save() {
     if (!form.vehicle_id || !form.monto_ofrecido) {
-      setError('Vehículo y monto son obligatorios.')
+      toast.error('Vehículo y monto son obligatorios')
       return
     }
     setSaving(true)
-    setError('')
     const payload: any = {
       vehicle_id: Number(form.vehicle_id),
       monto_ofrecido: Number(form.monto_ofrecido),
@@ -175,67 +170,73 @@ function NuevaOfertaForm({
     if (form.interesado_id) payload.interesado_id = Number(form.interesado_id)
     const r = await postRecord('ofertas', payload)
     setSaving(false)
-    if (r.ok) { onClose(); router.refresh() }
-    else setError('Error al guardar.')
+    if (r.ok) { toast.success('Oferta creada'); onClose(); router.refresh() }
+    else toast.error('Error al guardar')
   }
 
   return (
-    <div className="border border-gray-200 rounded p-4 bg-gray-50 space-y-4">
-      <p className="text-sm font-medium text-gray-700">Nueva oferta</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
-        <div className="col-span-2">
-          <label className={labelCls}>Vehículo *</label>
-          <select value={form.vehicle_id} onChange={e => setForm(f => ({ ...f, vehicle_id: e.target.value }))} className={inputCls}>
-            <option value="">—</option>
-            {vehicles.filter(v => v.estado !== 'vendido').map(v => (
-              <option key={v.id} value={v.id}>{v.marca} {v.modelo} {v.año} {v.dominio ? `(${v.dominio})` : ''}</option>
-            ))}
-          </select>
+    <Card size="sm" className="bg-muted/30">
+      <CardContent className="space-y-4">
+        <p className="text-sm font-medium">Nueva oferta</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
+          <div className="col-span-2 space-y-1.5">
+            <Label>Vehículo *</Label>
+            <select
+              value={form.vehicle_id}
+              onChange={e => setForm(f => ({ ...f, vehicle_id: e.target.value }))}
+              className={nativeSelectCls}
+            >
+              <option value="">—</option>
+              {vehicles.filter(v => v.estado !== 'vendido').map(v => (
+                <option key={v.id} value={v.id}>
+                  {v.marca} {v.modelo} {v.año} {v.dominio ? `(${v.dominio})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Interesado</Label>
+            <select
+              value={form.interesado_id}
+              onChange={e => setForm(f => ({ ...f, interesado_id: e.target.value }))}
+              className={nativeSelectCls}
+            >
+              <option value="">— Sin identificar</option>
+              {interesados.map(i => (
+                <option key={i.id} value={i.id}>
+                  {i.nombre} {i.telefono ? `(${i.telefono})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-2 space-y-1.5">
+            <Label>Monto ofrecido (USD) *</Label>
+            <Input
+              type="number"
+              value={form.monto_ofrecido}
+              onChange={e => setForm(f => ({ ...f, monto_ofrecido: e.target.value }))}
+              placeholder="34000"
+            />
+          </div>
+          <div className="col-span-2 sm:col-span-4 space-y-1.5">
+            <Label>Notas</Label>
+            <Input
+              value={form.notas}
+              onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
+            />
+          </div>
         </div>
-        <div className="col-span-2">
-          <label className={labelCls}>Interesado</label>
-          <select value={form.interesado_id} onChange={e => setForm(f => ({ ...f, interesado_id: e.target.value }))} className={inputCls}>
-            <option value="">— Sin identificar</option>
-            {interesados.map(i => (
-              <option key={i.id} value={i.id}>{i.nombre} {i.telefono ? `(${i.telefono})` : ''}</option>
-            ))}
-          </select>
+        <div className="flex gap-2">
+          <Button onClick={save} disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar'}
+          </Button>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
         </div>
-        <div className="col-span-2">
-          <label className={labelCls}>Monto ofrecido (USD) *</label>
-          <input
-            type="number"
-            value={form.monto_ofrecido}
-            onChange={e => setForm(f => ({ ...f, monto_ofrecido: e.target.value }))}
-            className={inputCls}
-            placeholder="34000"
-          />
-        </div>
-        <div className="col-span-2 sm:col-span-4">
-          <label className={labelCls}>Notas</label>
-          <input
-            type="text"
-            value={form.notas}
-            onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-            className={inputCls}
-          />
-        </div>
-      </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <div className="flex gap-2">
-        <button onClick={save} disabled={saving}
-          className="px-4 py-1.5 bg-gray-900 text-white text-sm rounded hover:bg-gray-700 disabled:opacity-50">
-          {saving ? 'Guardando…' : 'Guardar'}
-        </button>
-        <button onClick={onClose}
-          className="px-4 py-1.5 border border-gray-200 text-sm rounded hover:bg-gray-100">
-          Cancelar
-        </button>
-      </div>
-      <p className="text-xs text-gray-400">
-        Al guardar, el sistema manda automáticamente un mail al propietario del auto con el monto de la oferta.
-      </p>
-    </div>
+        <p className="text-xs text-muted-foreground">
+          Al guardar, el sistema manda un mail al propietario del auto con el monto de la oferta.
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -260,7 +261,6 @@ export default function OfertasClient({
 
   const filtradas = filter === 'todas' ? ofertas : ofertas.filter(o => o.estado === filter)
   const sorted = [...filtradas].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
-
   const pendientes = ofertas.filter(o => o.estado === 'pendiente').length
 
   return (
@@ -268,16 +268,13 @@ export default function OfertasClient({
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">Ofertas</h1>
-          <span className="text-sm text-gray-400">{ofertas.length} totales · {pendientes} pendientes</span>
+          <span className="text-sm text-muted-foreground">
+            {ofertas.length} totales · {pendientes} pendientes
+          </span>
         </div>
-        <button
-          onClick={() => setShowNueva(v => !v)}
-          className={`text-xs px-3 py-1.5 rounded border transition-colors ${
-            showNueva ? 'bg-gray-900 text-white border-gray-900' : 'border-gray-200 text-gray-500 hover:border-gray-400'
-          }`}
-        >
-          + Nueva oferta
-        </button>
+        <Button size="sm" variant={showNueva ? 'default' : 'outline'} onClick={() => setShowNueva(v => !v)}>
+          <PlusIcon /> Nueva oferta
+        </Button>
       </div>
 
       {showNueva && (
@@ -285,30 +282,29 @@ export default function OfertasClient({
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-gray-400 mr-1">Filtrar:</span>
+        <span className="text-xs text-muted-foreground mr-1">Filtrar:</span>
         {(['todas','pendiente','aceptada','rechazada'] as const).map(k => (
-          <button
+          <Button
             key={k}
+            size="xs"
+            variant={filter === k ? 'default' : 'outline'}
             onClick={() => setFilter(k)}
-            className={`text-xs px-3 py-1 rounded-full border transition-colors ${
-              filter === k
-                ? 'bg-gray-900 text-white border-gray-900'
-                : 'border-gray-200 text-gray-500 hover:border-gray-400'
-            }`}
           >
             {k}
-          </button>
+          </Button>
         ))}
       </div>
 
-      <div className="border border-gray-200 rounded">
-        {sorted.map(o => (
-          <OfertaRow key={o.id} o={o} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} />
-        ))}
-        {sorted.length === 0 && (
-          <p className="px-4 py-6 text-sm text-gray-400 text-center">Sin ofertas.</p>
-        )}
-      </div>
+      <Card size="sm">
+        <CardContent className="p-0">
+          {sorted.map(o => (
+            <OfertaRow key={o.id} o={o} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} />
+          ))}
+          {sorted.length === 0 && (
+            <p className="px-4 py-6 text-sm text-muted-foreground text-center">Sin ofertas.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

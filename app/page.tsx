@@ -65,12 +65,17 @@ export default async function Inicio() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Inicio</h1>
+    <div className="space-y-4">
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-xl font-semibold">Inicio</h1>
+        <p className="text-xs text-muted-foreground">
+          {activos.length} autos activos · {ofertasPendientes.length} ofertas · {urgentes.length} tareas urgentes
+        </p>
+      </div>
 
       {alertas.length > 0 && (
-        <Card className="border-destructive/30 bg-destructive/5">
-          <CardContent className="space-y-1.5">
+        <Card className="border-destructive/30 bg-destructive/5 py-3">
+          <CardContent className="space-y-1">
             <div className="flex items-center gap-2 text-destructive text-xs font-semibold uppercase tracking-wide mb-1">
               <AlertTriangleIcon className="size-4" /> Alertas
             </div>
@@ -81,77 +86,29 @@ export default async function Inicio() {
         </Card>
       )}
 
-      <section>
-        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Cuentas</p>
-        <div className="grid grid-cols-3 gap-3">
-          {balances.map((b: any) => (
-            <Card key={b.id} size="sm">
-              <CardContent>
-                <p className="text-xs text-muted-foreground capitalize mb-1">{b.cuenta}</p>
-                <p className="text-2xl font-light tabular-nums">
-                  ${Number(b.saldo ?? 0).toLocaleString('es-AR')}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      {ofertasPendientes.length > 0 && (
-        <section>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
-            Ofertas pendientes ({ofertasPendientes.length})
-          </p>
-          <Card size="sm">
-            <CardContent className="divide-y divide-border p-0">
-              {ofertasPendientes.slice(0, 5).map((o: any) => (
-                <div key={o.id} className="flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm">{autoLabel(o.vehicle_id)}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-muted-foreground tabular-nums">
-                      USD {Number(o.monto_ofrecido).toLocaleString('es-AR')}
-                    </span>
-                    <Badge variant={o.email_enviado ? 'default' : 'outline'}>
-                      {o.email_enviado ? 'enviado' : 'pendiente'}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
+      <div className="grid grid-cols-6 gap-3">
+        {balances.map((b: any) => (
+          <Card key={b.id} size="sm">
+            <CardContent>
+              <p className="text-xs text-muted-foreground capitalize mb-1">{b.cuenta}</p>
+              <p className="text-xl font-light tabular-nums">
+                ${Number(b.saldo ?? 0).toLocaleString('es-AR')}
+              </p>
             </CardContent>
           </Card>
-        </section>
-      )}
+        ))}
+      </div>
 
-      {visitasProximas.length > 0 && (
-        <section>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
-            Visitas próximas 48h ({visitasProximas.length})
-          </p>
-          <Card size="sm">
-            <CardContent className="divide-y divide-border p-0">
-              {visitasProximas.map((v: any) => (
-                <div key={v.id} className="flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm">{autoLabel(v.vehicle_id)}</span>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {fmtVisitaDt(v.fecha)}
-                  </span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </section>
-      )}
-
-      <section>
-        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
-          Stock ({activos.length} activos)
-        </p>
+      <div className="grid grid-cols-2 gap-4">
         <Card size="sm">
-          <CardContent className="divide-y divide-border p-0">
-            {activos.slice(0, 8).map((v: any) => (
-              <div key={v.id} className="flex items-center justify-between px-3 py-2.5">
+          <CardHeader className="border-b py-3">
+            <CardTitle className="text-sm">Stock activo ({activos.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y divide-border p-0 max-h-[420px] overflow-y-auto">
+            {activos.slice(0, 12).map((v: any) => (
+              <div key={v.id} className="flex items-center justify-between px-3 py-2">
                 <span className="text-sm">{v.marca} {v.modelo} {v.año}</span>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   {v.dominio && <span className="text-xs text-muted-foreground">{v.dominio}</span>}
                   <Badge variant={ESTADO_VARIANT[v.estado] ?? 'outline'}>
                     {v.estado?.replace(/_/g, ' ')}
@@ -164,16 +121,14 @@ export default async function Inicio() {
             )}
           </CardContent>
         </Card>
-      </section>
 
-      <section>
-        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
-          Tareas urgentes ({urgentes.length})
-        </p>
         <Card size="sm">
-          <CardContent className="divide-y divide-border p-0">
-            {urgentes.slice(0, 8).map((t: any) => (
-              <div key={t.id} className="flex items-center justify-between px-3 py-2.5">
+          <CardHeader className="border-b py-3">
+            <CardTitle className="text-sm">Tareas urgentes ({urgentes.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="divide-y divide-border p-0 max-h-[420px] overflow-y-auto">
+            {urgentes.slice(0, 12).map((t: any) => (
+              <div key={t.id} className="flex items-center justify-between px-3 py-2">
                 <span className="text-sm">{t.titulo}</span>
                 <span className="text-xs text-muted-foreground">{t.asignado}</span>
               </div>
@@ -183,7 +138,50 @@ export default async function Inicio() {
             )}
           </CardContent>
         </Card>
-      </section>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {ofertasPendientes.length > 0 && (
+          <Card size="sm">
+            <CardHeader className="border-b py-3">
+              <CardTitle className="text-sm">Ofertas pendientes ({ofertasPendientes.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="divide-y divide-border p-0">
+              {ofertasPendientes.slice(0, 6).map((o: any) => (
+                <div key={o.id} className="flex items-center justify-between px-3 py-2">
+                  <span className="text-sm truncate">{autoLabel(o.vehicle_id)}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm text-muted-foreground tabular-nums">
+                      USD {Number(o.monto_ofrecido).toLocaleString('es-AR')}
+                    </span>
+                    <Badge variant={o.email_enviado ? 'default' : 'outline'}>
+                      {o.email_enviado ? 'enviado' : 'pendiente'}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {visitasProximas.length > 0 && (
+          <Card size="sm">
+            <CardHeader className="border-b py-3">
+              <CardTitle className="text-sm">Visitas próximas 48h ({visitasProximas.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="divide-y divide-border p-0">
+              {visitasProximas.map((v: any) => (
+                <div key={v.id} className="flex items-center justify-between px-3 py-2">
+                  <span className="text-sm truncate">{autoLabel(v.vehicle_id)}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                    {fmtVisitaDt(v.fecha)}
+                  </span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   )
 }
