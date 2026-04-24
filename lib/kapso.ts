@@ -18,6 +18,7 @@ export async function getMovimientos()     { return get('movimientos_contabilida
 export async function getTransferencias()  { return get('transferencias', 15) }
 export async function getOfertas()         { return get('ofertas', 15) }
 export async function getVisitas()         { return get('visitas', 15) }
+export async function getKbEntries()       { return get('kb_entries', 15) }
 
 // ── Client-side mutations (call the /api/db proxy) ────────────────────────────
 
