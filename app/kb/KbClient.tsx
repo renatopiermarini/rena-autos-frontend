@@ -2,6 +2,19 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+import { PlusIcon, PencilIcon, Trash2Icon } from 'lucide-react'
 
 const TIPOS = ['proceso', 'faq', 'plantilla', 'leccion_aprendida'] as const
 type Tipo = typeof TIPOS[number]
@@ -13,15 +26,12 @@ const TIPO_LABEL: Record<Tipo, string> = {
   leccion_aprendida: 'Lecciones aprendidas',
 }
 
-const TIPO_COLOR: Record<Tipo, string> = {
-  proceso: 'bg-blue-100 text-blue-700',
-  faq: 'bg-green-100 text-green-700',
-  plantilla: 'bg-purple-100 text-purple-700',
-  leccion_aprendida: 'bg-yellow-100 text-yellow-700',
+const TIPO_VARIANT: Record<Tipo, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+  proceso: 'secondary',
+  faq: 'default',
+  plantilla: 'outline',
+  leccion_aprendida: 'destructive',
 }
-
-const inputCls = 'w-full border border-gray-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-gray-400'
-const labelCls = 'block text-xs text-gray-400 mb-1'
 
 type Entry = {
   id: number
@@ -70,15 +80,18 @@ function cleanPayload(f: FormState) {
   return payload
 }
 
+const nativeSelectCls =
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+
 export default function KbClient({ entries }: { entries: Entry[] }) {
   const router = useRouter()
   const [selectedId, setSelectedId] = useState<number | null>(entries[0]?.id ?? null)
   const [query, setQuery] = useState('')
   const [tipoFilter, setTipoFilter] = useState<Tipo | 'all'>('all')
-  const [editing, setEditing] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm())
 
   const selected = useMemo(
@@ -104,49 +117,41 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
   function startEdit() {
     if (!selected) return
     setForm(entryToForm(selected))
-    setEditing(true)
     setCreating(false)
-    setError('')
+    setFormOpen(true)
   }
 
   function startCreate() {
     setForm(emptyForm())
     setCreating(true)
-    setEditing(false)
-    setError('')
-  }
-
-  function cancel() {
-    setEditing(false)
-    setCreating(false)
-    setError('')
+    setFormOpen(true)
   }
 
   async function save() {
     if (!form.titulo || !form.contenido) {
-      setError('Título y contenido son obligatorios.')
+      toast.error('Título y contenido son obligatorios')
       return
     }
     setSaving(true)
-    setError('')
     const now = new Date().toISOString()
     try {
       if (creating) {
         const payload = { ...cleanPayload(form), created_at: now, updated_at: now }
         const res = await postRecord('kb_entries', payload)
         if (!res.ok) throw new Error('create_failed')
-        setCreating(false)
         const newId = res.data?.data?.id ?? res.data?.id
         if (newId) setSelectedId(newId)
-      } else if (editing && selected) {
+        toast.success('Entrada creada')
+      } else if (selected) {
         const payload = { ...cleanPayload(form), updated_at: now }
         const ok = await patchRecord('kb_entries', selected.id, payload)
         if (!ok) throw new Error('update_failed')
-        setEditing(false)
+        toast.success('Entrada actualizada')
       }
+      setFormOpen(false)
       router.refresh()
     } catch {
-      setError('Error al guardar. Intentá de nuevo.')
+      toast.error('Error al guardar')
     } finally {
       setSaving(false)
     }
@@ -154,43 +159,47 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
 
   async function remove() {
     if (!selected) return
-    if (!confirm(`¿Eliminar "${selected.titulo}"?`)) return
     const ok = await deleteRecord('kb_entries', selected.id)
     if (ok) {
+      toast.success('Entrada eliminada')
       setSelectedId(null)
+      setDeleteOpen(false)
       router.refresh()
+    } else {
+      toast.error('Error al eliminar')
     }
   }
 
-  const formOpen = editing || creating
-
   return (
     <div className="grid grid-cols-[280px_1fr] gap-6">
-      {/* Sidebar */}
       <aside className="space-y-3">
-        <button
-          onClick={startCreate}
-          className="w-full bg-gray-900 text-white text-sm rounded px-3 py-2 hover:bg-gray-700"
-        >
-          + Nueva entrada
-        </button>
+        <Button onClick={startCreate} className="w-full">
+          <PlusIcon /> Nueva entrada
+        </Button>
 
-        <input
-          type="text"
+        <Input
           placeholder="Buscar…"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          className={inputCls}
         />
 
         <div className="flex flex-wrap gap-1">
-          <FilterChip active={tipoFilter === 'all'} onClick={() => setTipoFilter('all')}>
+          <Button
+            size="xs"
+            variant={tipoFilter === 'all' ? 'default' : 'outline'}
+            onClick={() => setTipoFilter('all')}
+          >
             Todos
-          </FilterChip>
+          </Button>
           {TIPOS.map(t => (
-            <FilterChip key={t} active={tipoFilter === t} onClick={() => setTipoFilter(t)}>
+            <Button
+              key={t}
+              size="xs"
+              variant={tipoFilter === t ? 'default' : 'outline'}
+              onClick={() => setTipoFilter(t)}
+            >
               {TIPO_LABEL[t]}
-            </FilterChip>
+            </Button>
           ))}
         </div>
 
@@ -200,19 +209,20 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
             if (!items.length) return null
             return (
               <div key={tipo}>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 mb-1">
+                <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">
                   {TIPO_LABEL[tipo]}
                 </p>
-                <ul className="space-y-1">
+                <ul className="space-y-0.5">
                   {items.map(e => (
                     <li key={e.id}>
                       <button
-                        onClick={() => { setSelectedId(e.id); setEditing(false); setCreating(false) }}
-                        className={`w-full text-left px-2 py-1.5 rounded text-sm truncate ${
+                        onClick={() => setSelectedId(e.id)}
+                        className={cn(
+                          'w-full text-left px-2 py-1.5 rounded-md text-sm truncate transition-colors',
                           selectedId === e.id
-                            ? 'bg-gray-900 text-white'
-                            : 'text-gray-700 hover:bg-gray-100'
-                        }`}
+                            ? 'bg-primary text-primary-foreground'
+                            : 'text-foreground hover:bg-muted',
+                        )}
                       >
                         {e.titulo || '(sin título)'}
                       </button>
@@ -223,215 +233,155 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
             )
           })}
           {entries.length === 0 && (
-            <p className="text-sm text-gray-400">KB vacía. Creá tu primera entrada.</p>
+            <p className="text-sm text-muted-foreground">KB vacía. Creá tu primera entrada.</p>
           )}
         </div>
       </aside>
 
-      {/* Panel */}
       <section className="min-w-0">
-        {formOpen ? (
-          <EntryForm
-            form={form}
-            setForm={setForm}
-            saving={saving}
-            error={error}
-            onSave={save}
-            onCancel={cancel}
-            isNew={creating}
-          />
-        ) : selected ? (
-          <EntryView
-            entry={selected}
-            onEdit={startEdit}
-            onDelete={remove}
-          />
+        {selected ? (
+          <Card>
+            <CardHeader className="border-b">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={TIPO_VARIANT[selected.tipo]}>
+                      {TIPO_LABEL[selected.tipo]}
+                    </Badge>
+                    {selected.autor && (
+                      <span className="text-xs text-muted-foreground">por {selected.autor}</span>
+                    )}
+                  </div>
+                  <CardTitle className="text-lg">{selected.titulo}</CardTitle>
+                  {selected.resumen && (
+                    <p className="text-sm text-muted-foreground">{selected.resumen}</p>
+                  )}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button variant="outline" size="sm" onClick={startEdit}>
+                    <PencilIcon /> Editar
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+                    <Trash2Icon /> Eliminar
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              {selected.tags && (
+                <div className="flex flex-wrap gap-1">
+                  {selected.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => (
+                    <Badge key={t} variant="outline">{t}</Badge>
+                  ))}
+                </div>
+              )}
+              <pre className="whitespace-pre-wrap font-sans text-sm bg-muted/50 rounded-lg p-4 border border-border">
+{selected.contenido}
+              </pre>
+              {selected.updated_at && (
+                <>
+                  <Separator />
+                  <p className="text-xs text-muted-foreground">
+                    Actualizada: {new Date(selected.updated_at).toLocaleDateString('es-AR')}
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
         ) : (
-          <p className="text-sm text-gray-400">Elegí una entrada o creá una nueva.</p>
+          <Card>
+            <CardContent className="py-12 text-center text-sm text-muted-foreground">
+              Elegí una entrada o creá una nueva.
+            </CardContent>
+          </Card>
         )}
       </section>
-    </div>
-  )
-}
 
-function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`text-xs px-2 py-1 rounded-full border ${
-        active
-          ? 'bg-gray-900 text-white border-gray-900'
-          : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function EntryView({ entry, onEdit, onDelete }: { entry: Entry; onEdit: () => void; onDelete: () => void }) {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`text-xs px-2 py-0.5 rounded-full ${TIPO_COLOR[entry.tipo]}`}>
-              {TIPO_LABEL[entry.tipo]}
-            </span>
-            {entry.autor && (
-              <span className="text-xs text-gray-400">por {entry.autor}</span>
-            )}
+      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{creating ? 'Nueva entrada' : 'Editar entrada'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Tipo</Label>
+                <select
+                  value={form.tipo}
+                  onChange={e => setForm({ ...form, tipo: e.target.value as Tipo })}
+                  className={nativeSelectCls}
+                >
+                  {TIPOS.map(t => (
+                    <option key={t} value={t}>{TIPO_LABEL[t]}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Autor</Label>
+                <Input
+                  value={form.autor}
+                  onChange={e => setForm({ ...form, autor: e.target.value })}
+                  placeholder="rena / fran"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Título</Label>
+              <Input
+                value={form.titulo}
+                onChange={e => setForm({ ...form, titulo: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Resumen</Label>
+              <Input
+                value={form.resumen}
+                onChange={e => setForm({ ...form, resumen: e.target.value })}
+                placeholder="1-2 frases (opcional)"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Tags (csv)</Label>
+              <Input
+                value={form.tags}
+                onChange={e => setForm({ ...form, tags: e.target.value })}
+                placeholder="transferencia,papeles"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Contenido</Label>
+              <Textarea
+                value={form.contenido}
+                onChange={e => setForm({ ...form, contenido: e.target.value })}
+                className="font-mono min-h-[260px]"
+              />
+            </div>
           </div>
-          <h1 className="text-lg font-semibold">{entry.titulo}</h1>
-          {entry.resumen && (
-            <p className="text-sm text-gray-500 mt-1">{entry.resumen}</p>
-          )}
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button
-            onClick={onEdit}
-            className="text-sm px-3 py-1.5 rounded border border-gray-200 hover:bg-gray-50"
-          >
-            Editar
-          </button>
-          <button
-            onClick={onDelete}
-            className="text-sm px-3 py-1.5 rounded border border-red-200 text-red-600 hover:bg-red-50"
-          >
-            Eliminar
-          </button>
-        </div>
-      </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={save} disabled={saving}>
+              {saving ? 'Guardando…' : 'Guardar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {entry.tags && (
-        <div className="flex flex-wrap gap-1">
-          {entry.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => (
-            <span key={t} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-              {t}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <pre className="whitespace-pre-wrap font-sans text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded p-4">
-{entry.contenido}
-      </pre>
-
-      {entry.updated_at && (
-        <p className="text-xs text-gray-400">
-          Actualizada: {new Date(entry.updated_at).toLocaleDateString('es-AR')}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function EntryForm({
-  form, setForm, saving, error, onSave, onCancel, isNew,
-}: {
-  form: FormState
-  setForm: (f: FormState) => void
-  saving: boolean
-  error: string
-  onSave: () => void
-  onCancel: () => void
-  isNew: boolean
-}) {
-  function set<K extends keyof FormState>(k: K) {
-    return (v: FormState[K]) => setForm({ ...form, [k]: v })
-  }
-
-  return (
-    <div className="space-y-3 max-w-2xl">
-      <h2 className="text-base font-semibold">
-        {isNew ? 'Nueva entrada' : 'Editar entrada'}
-      </h2>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={labelCls}>Tipo</label>
-          <select
-            value={form.tipo}
-            onChange={e => set('tipo')(e.target.value as Tipo)}
-            className={inputCls}
-          >
-            {TIPOS.map(t => (
-              <option key={t} value={t}>{TIPO_LABEL[t]}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={labelCls}>Autor</label>
-          <input
-            type="text"
-            value={form.autor}
-            onChange={e => set('autor')(e.target.value)}
-            className={inputCls}
-            placeholder="rena / fran"
-          />
-        </div>
-      </div>
-
-      <div>
-        <label className={labelCls}>Título</label>
-        <input
-          type="text"
-          value={form.titulo}
-          onChange={e => set('titulo')(e.target.value)}
-          className={inputCls}
-        />
-      </div>
-
-      <div>
-        <label className={labelCls}>Resumen</label>
-        <input
-          type="text"
-          value={form.resumen}
-          onChange={e => set('resumen')(e.target.value)}
-          className={inputCls}
-          placeholder="1-2 frases (opcional)"
-        />
-      </div>
-
-      <div>
-        <label className={labelCls}>Tags (csv)</label>
-        <input
-          type="text"
-          value={form.tags}
-          onChange={e => set('tags')(e.target.value)}
-          className={inputCls}
-          placeholder="transferencia,papeles"
-        />
-      </div>
-
-      <div>
-        <label className={labelCls}>Contenido</label>
-        <textarea
-          value={form.contenido}
-          onChange={e => set('contenido')(e.target.value)}
-          className={`${inputCls} font-mono`}
-          rows={14}
-        />
-      </div>
-
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      <div className="flex gap-2">
-        <button
-          onClick={onSave}
-          disabled={saving}
-          className="bg-gray-900 text-white text-sm rounded px-4 py-2 hover:bg-gray-700 disabled:opacity-50"
-        >
-          {saving ? 'Guardando…' : 'Guardar'}
-        </button>
-        <button
-          onClick={onCancel}
-          disabled={saving}
-          className="text-sm px-4 py-2 rounded border border-gray-200 hover:bg-gray-50"
-        >
-          Cancelar
-        </button>
-      </div>
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Eliminar entrada?</DialogTitle>
+            <DialogDescription>
+              Se eliminará &quot;{selected?.titulo}&quot;. Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={remove}>Eliminar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
