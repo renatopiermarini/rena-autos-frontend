@@ -448,7 +448,7 @@ export default function StockClient({
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
-  const [groupMode, setGroupMode] = useState<GroupMode>('ninguno')
+  const [groupMode, setGroupMode] = useState<GroupMode>('estado')
 
   const activos = vehicles.filter(v => v.estado !== 'vendido' && v.estado !== 'potencial')
   const potenciales = vehicles.filter(v => v.estado === 'potencial')
