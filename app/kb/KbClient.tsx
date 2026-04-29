@@ -298,11 +298,11 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
       </section>
 
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[calc(100vh-4rem)] flex flex-col">
           <DialogHeader>
             <DialogTitle>{creating ? 'Nueva entrada' : 'Editar entrada'}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3 overflow-y-auto flex-1 pr-1 -mr-1">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Tipo</Label>
@@ -353,7 +353,7 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
               <Textarea
                 value={form.contenido}
                 onChange={e => setForm({ ...form, contenido: e.target.value })}
-                className="font-mono min-h-[260px]"
+                className="font-mono min-h-[260px] max-h-[50vh]"
               />
             </div>
           </div>
