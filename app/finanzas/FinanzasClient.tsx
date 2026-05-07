@@ -1,5 +1,5 @@
 'use client'
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { computeVehicleFinancials, computePrestamoStatus } from '@/lib/kapso'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -518,6 +518,8 @@ function VehicleFinancialDetail({
 
 // ── Tab 4 · Movimientos (con filtros) ─────────────────────────────────────────
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const
+
 function MovimientosTab({
   movimientos, vehiclesById,
 }: { movimientos: any[]; vehiclesById: any }) {
@@ -527,6 +529,8 @@ function MovimientosTab({
   const [vehId, setVehId]       = useState<string>('')
   const [desde, setDesde]       = useState<string>('')
   const [hasta, setHasta]       = useState<string>('')
+  const [pageSize, setPageSize] = useState<number>(25)
+  const [page, setPage]         = useState<number>(1)
 
   const categoriasDisponibles = useMemo(() => {
     const s = new Set<string>()
@@ -543,7 +547,7 @@ function MovimientosTab({
       .sort((a, b) => (a.marca ?? '').localeCompare(b.marca ?? ''))
   }, [movimientos, vehiclesById])
 
-  const filtered = movimientos.filter((m: any) => {
+  const filtered = useMemo(() => movimientos.filter((m: any) => {
     if (cats.size > 0 && !cats.has(m.categoria)) return false
     if (cuenta && m.cuenta !== cuenta) return false
     if (tipo && m.tipo !== tipo) return false
@@ -551,10 +555,20 @@ function MovimientosTab({
     if (desde && m.created_at < desde) return false
     if (hasta && m.created_at > hasta + 'T23:59:59') return false
     return true
-  }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+  [movimientos, cats, cuenta, tipo, vehId, desde, hasta])
 
   const totalIngresos = filtered.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + Number(m.monto ?? 0), 0)
   const totalEgresos  = filtered.filter(m => m.tipo === 'egreso').reduce((s, m) => s + Number(m.monto ?? 0), 0)
+
+  // Pagination: clamp page to range whenever filtered length or pageSize change.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const startIdx = (safePage - 1) * pageSize
+  const visible = filtered.slice(startIdx, startIdx + pageSize)
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   function toggleCat(c: string) {
     setCats(prev => {
@@ -562,6 +576,7 @@ function MovimientosTab({
       next.has(c) ? next.delete(c) : next.add(c)
       return next
     })
+    setPage(1)
   }
 
   const hasFilters = cats.size || cuenta || tipo || vehId || desde || hasta
@@ -584,30 +599,30 @@ function MovimientosTab({
             ))}
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <select className={nativeSelectCls} value={tipo} onChange={e => setTipo(e.target.value)}>
+            <select className={nativeSelectCls} value={tipo} onChange={e => { setTipo(e.target.value); setPage(1) }}>
               <option value="">Tipo: todos</option>
               <option value="ingreso">Ingreso</option>
               <option value="egreso">Egreso</option>
             </select>
-            <select className={nativeSelectCls} value={cuenta} onChange={e => setCuenta(e.target.value)}>
+            <select className={nativeSelectCls} value={cuenta} onChange={e => { setCuenta(e.target.value); setPage(1) }}>
               <option value="">Cuenta: todas</option>
               <option value="cash">Cash</option>
               <option value="nexo">Nexo</option>
               <option value="fiwind">Fiwind</option>
             </select>
-            <select className={nativeSelectCls} value={vehId} onChange={e => setVehId(e.target.value)}>
+            <select className={nativeSelectCls} value={vehId} onChange={e => { setVehId(e.target.value); setPage(1) }}>
               <option value="">Auto: todos</option>
               {vehiclesConMovs.map((v: any) => (
                 <option key={v.id} value={v.id}>{autoLabel(v)}</option>
               ))}
             </select>
-            <Input type="date" className="h-8 w-auto text-xs" value={desde} onChange={e => setDesde(e.target.value)} />
-            <Input type="date" className="h-8 w-auto text-xs" value={hasta} onChange={e => setHasta(e.target.value)} />
+            <Input type="date" className="h-8 w-auto text-xs" value={desde} onChange={e => { setDesde(e.target.value); setPage(1) }} />
+            <Input type="date" className="h-8 w-auto text-xs" value={hasta} onChange={e => { setHasta(e.target.value); setPage(1) }} />
             {hasFilters ? (
               <Button
                 size="xs"
                 variant="ghost"
-                onClick={() => { setCats(new Set()); setCuenta(''); setTipo(''); setVehId(''); setDesde(''); setHasta('') }}
+                onClick={() => { setCats(new Set()); setCuenta(''); setTipo(''); setVehId(''); setDesde(''); setHasta(''); setPage(1) }}
               >
                 Limpiar
               </Button>
@@ -641,7 +656,7 @@ function MovimientosTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((m: any) => {
+                {visible.map((m: any) => {
                   const veh = m.vehicle_id ? vehiclesById[m.vehicle_id] : null
                   return (
                     <tr key={m.id}>
@@ -665,6 +680,36 @@ function MovimientosTab({
               </tbody>
             </table>
           </div>
+
+          {filtered.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-2 text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span>
+                  {startIdx + 1}–{Math.min(startIdx + pageSize, filtered.length)} de {filtered.length}
+                </span>
+                <span className="opacity-50">·</span>
+                <label className="flex items-center gap-1.5">
+                  Por página:
+                  <select
+                    className={nativeSelectCls}
+                    value={pageSize}
+                    onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+                  >
+                    {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button size="xs" variant="outline" disabled={safePage <= 1} onClick={() => setPage(1)}>«</Button>
+                <Button size="xs" variant="outline" disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</Button>
+                <span className="px-2 tabular-nums text-muted-foreground">
+                  {safePage} / {totalPages}
+                </span>
+                <Button size="xs" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</Button>
+                <Button size="xs" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage(totalPages)}>»</Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
