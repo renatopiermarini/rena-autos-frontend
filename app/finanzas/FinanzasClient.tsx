@@ -558,8 +558,15 @@ function MovimientosTab({
   }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
   [movimientos, cats, cuenta, tipo, vehId, desde, hasta])
 
-  const totalIngresos = filtered.filter(m => m.tipo === 'ingreso').reduce((s, m) => s + Number(m.monto ?? 0), 0)
-  const totalEgresos  = filtered.filter(m => m.tipo === 'egreso').reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  // Totales: separar movimientos reales (afecta_balance=true → saldo_post no nulo)
+  // de asientos contables off-balance (préstamos recibidos, vehicle_purchase
+  // que pagó un acreedor directo, etc). Los off-balance NO son cash flow real
+  // y mezclarlos en el "Neto" infla los números.
+  const cashIngresos = filtered.filter(m => m.tipo === 'ingreso' && m.saldo_post != null).reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  const cashEgresos  = filtered.filter(m => m.tipo === 'egreso'  && m.saldo_post != null).reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  const offIngresos  = filtered.filter(m => m.tipo === 'ingreso' && m.saldo_post == null).reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  const offEgresos   = filtered.filter(m => m.tipo === 'egreso'  && m.saldo_post == null).reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  const cashNeto     = cashIngresos - cashEgresos
 
   // Pagination: clamp page to range whenever filtered length or pageSize change.
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -631,13 +638,24 @@ function MovimientosTab({
         </CardContent>
       </Card>
 
-      <div className="flex items-center gap-6 text-sm px-1">
-        <span className="text-muted-foreground">{filtered.length} movimiento{filtered.length === 1 ? '' : 's'}</span>
-        <span className="text-emerald-600 tabular-nums">+{fmt(totalIngresos)}</span>
-        <span className="text-destructive tabular-nums">-{fmt(totalEgresos)}</span>
-        <span className="text-foreground font-medium tabular-nums">
-          Neto: {totalIngresos - totalEgresos >= 0 ? '+' : ''}{fmt(totalIngresos - totalEgresos)}
-        </span>
+      <div className="space-y-1 px-1">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+          <span className="text-muted-foreground">{filtered.length} movimiento{filtered.length === 1 ? '' : 's'}</span>
+          <span className="text-emerald-600 tabular-nums">+{fmt(cashIngresos)}</span>
+          <span className="text-destructive tabular-nums">-{fmt(cashEgresos)}</span>
+          <span className="text-foreground font-medium tabular-nums">
+            Neto: {cashNeto >= 0 ? '+' : ''}{fmt(cashNeto)}
+          </span>
+        </div>
+        {(offIngresos > 0 || offEgresos > 0) && (
+          <div className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+            <span title="Préstamos recibidos, vehicle_purchase pagados por terceros, etc. — registros contables sin impacto en saldo de cuenta">
+              + asientos sin impacto en saldo:
+            </span>
+            <span className="text-emerald-600/70 tabular-nums">+{fmt(offIngresos)}</span>
+            <span className="text-destructive/70 tabular-nums">-{fmt(offEgresos)}</span>
+          </div>
+        )}
       </div>
 
       <Card size="sm">
