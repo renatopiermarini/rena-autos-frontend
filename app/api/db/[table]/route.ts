@@ -5,7 +5,7 @@ const BASE    = process.env.KAPSO_DB_URL!
 const KEY     = process.env.KAPSO_API_KEY!
 const HEADERS = { 'X-API-Key': KEY, 'Content-Type': 'application/json' }
 
-const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'transferencias', 'kb_entries'])
+const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'transferencias', 'kb_entries', 'verificaciones_mecanicas'])
 
 function bustCache() {
   // Invalidate Data Cache for every page so router.refresh() gets fresh data.

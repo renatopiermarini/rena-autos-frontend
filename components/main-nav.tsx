@@ -14,7 +14,7 @@ const NAV = [
   { href: '/tareas',         label: 'Tareas'        },
   { href: '/kb',             label: 'KB'            },
   { href: '/transferencias', label: 'Transferencias' },
-  { href: '/setup',          label: 'Setup'          },
+  { href: '/verificaciones', label: 'Verificaciones' },
 ]
 
 export function MainNav() {
