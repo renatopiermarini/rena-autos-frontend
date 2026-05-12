@@ -44,7 +44,20 @@ const ESTADOS = [
 const nativeSelectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
-function ToggleCheck({ vehicleId, field, value }: { vehicleId: number; field: string; value: boolean }) {
+// Mapeo del flag del vehículo → tipo de tarea que se debe completar
+// cuando se tilda el check en la tabla.
+const TIPO_FOR_FIELD: Record<string, string> = {
+  lavado:    'lavado',
+  fotos_ok:  'fotos',
+  publicado: 'publicacion',
+}
+
+function ToggleCheck({
+  vehicleId, field, value, pendingTareaIds = [],
+}: {
+  vehicleId: number; field: string; value: boolean; pendingTareaIds?: number[]
+}) {
+  const router = useRouter()
   const [val, setVal] = useState(value)
   const [error, setError] = useState(false)
 
@@ -58,7 +71,26 @@ function ToggleCheck({ vehicleId, field, value }: { vehicleId: number; field: st
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: next ? 1 : 0, updated_at: new Date().toISOString() }),
     })
-    if (!res.ok) { setVal(!next); setError(true) }
+    if (!res.ok) { setVal(!next); setError(true); return }
+
+    // Al tildar como hecho, completamos también las tareas pendientes del mismo tipo
+    // (lavado→lavado, fotos_ok→fotos, publicado→publicacion). No revertimos al destildar.
+    if (next && pendingTareaIds.length > 0) {
+      const now = new Date().toISOString()
+      await Promise.all(pendingTareaIds.map(id =>
+        fetch(`/api/db/tareas?id=${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            estado: 'completada',
+            completado_por: 'rena',
+            fecha_completado: now,
+            updated_at: now,
+          }),
+        })
+      ))
+    }
+    router.refresh()
   }
 
   return (
@@ -91,6 +123,29 @@ function fmtN(n: any) {
 function fmtFecha(iso: string) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+
+function fmtFechaCorta(iso: string | null | undefined) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+}
+
+function horaDeTarea(t: any): string {
+  // El agente guarda la hora en `fecha_vencimiento` (si es ISO) o como
+  // "Hora: HH:MM. ..." dentro de `descripcion`. Idéntica lógica que en TareasClient.
+  const iso = t?.fecha_vencimiento ?? ''
+  if (typeof iso === 'string' && iso.includes('T')) {
+    const time = iso.split('T')[1] ?? ''
+    const [h, m] = time.split(':')
+    if (h && m) return `${h}:${m}`
+  }
+  const m = (t?.descripcion ?? '').match(/^Hora:\s*(\d{1,2}:\d{2})/i)
+  return m ? m[1].padStart(5, '0') : ''
+}
+
+const TIPO_TAREA_LABEL: Record<string, string> = {
+  lavado: 'Lavado', fotos: 'Fotos', publicacion: 'Publicación',
+  tramite: 'Trámite', seguimiento: 'Seguimiento', otro: 'Otro',
 }
 
 function Field({ label, value }: { label: string; value: any }) {
@@ -128,8 +183,8 @@ function FSelect({ label, value, onChange, options }: {
   )
 }
 
-function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos }: {
-  v: any; clientes: any[]; vehicles: any[]; movimientos: any[]; prestamos: any[]
+function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas = [] }: {
+  v: any; clientes: any[]; vehicles: any[]; movimientos: any[]; prestamos: any[]; tareas?: any[]
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
@@ -318,6 +373,47 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos }: {
           </div>
         )}
 
+        {(() => {
+          const pendientes = tareas.filter(t => t.vehicle_id === v.id && t.estado !== 'completada')
+          if (pendientes.length === 0) return null
+          pendientes.sort((a, b) => {
+            const fa = a.fecha_vencimiento || ''
+            const fb = b.fecha_vencimiento || ''
+            if (fa !== fb) return fa.localeCompare(fb)
+            return (horaDeTarea(a) || '').localeCompare(horaDeTarea(b) || '')
+          })
+          return (
+            <div className="mt-4 border-t border-border pt-3">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                Tareas pendientes ({pendientes.length})
+              </p>
+              <div className="space-y-1">
+                {pendientes.map(t => {
+                  const hora = horaDeTarea(t)
+                  const fecha = fmtFechaCorta(t.fecha_vencimiento)
+                  const cuando = [fecha, hora].filter(Boolean).join(' ')
+                  return (
+                    <div key={t.id} className="flex items-center justify-between text-sm gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {t.tipo && (
+                          <Badge variant="outline" className="text-[10px] shrink-0">
+                            {TIPO_TAREA_LABEL[t.tipo] ?? t.tipo}
+                          </Badge>
+                        )}
+                        <span className="truncate">{t.titulo}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 tabular-nums">
+                        {t.asignado && <span className="capitalize">{t.asignado}</span>}
+                        {cuando && <span>{cuando}</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
         <Button
           variant="outline"
           size="sm"
@@ -364,6 +460,8 @@ function VehicleTable({
         <tbody>
           {vehicles.map(v => {
             const pendientes = tareasAuto(v.id)
+            const pendientesPorTipo = (tipo: string) =>
+              pendientes.filter(t => t.tipo === tipo).map(t => t.id)
             const isOpen = expanded.has(v.id)
             return (
               <Fragment key={v.id}>
@@ -397,11 +495,11 @@ function VehicleTable({
                       : '—'}
                   </td>
                   <td className="py-2.5 px-3 text-muted-foreground">{diasEnStock(v.fecha_ingreso)}</td>
-                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="lavado" value={!!v.lavado} /></td>
-                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="fotos_ok" value={!!v.fotos_ok} /></td>
-                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} /></td>
+                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} /></td>
+                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} /></td>
+                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} /></td>
                 </tr>
-                {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} />}
+                {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} />}
               </Fragment>
             )
           })}
@@ -601,7 +699,7 @@ export default function StockClient({
                             <Badge variant={badgeVariant}>{badgeLabel}</Badge>
                           </td>
                         </tr>
-                        {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} />}
+                        {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} />}
                       </Fragment>
                     )
                   })}
@@ -644,7 +742,7 @@ export default function StockClient({
                             {fmtFecha(v.fecha_venta)}
                           </td>
                         </tr>
-                        {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} />}
+                        {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} />}
                       </Fragment>
                     )
                   })}
