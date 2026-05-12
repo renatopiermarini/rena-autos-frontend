@@ -67,6 +67,14 @@ function fmtHora(iso: string) {
   const [h, m] = time.split(':')
   return `${h}:${m}`
 }
+function horaDeTarea(t: any): string {
+  // El agente guarda fecha_vencimiento como DATE (YYYY-MM-DD) y prefija la hora
+  // en descripcion como "Hora: HH:MM. ...". Soportamos ambos formatos.
+  const fromIso = fmtHora(t?.fecha_vencimiento)
+  if (fromIso) return fromIso
+  const m = (t?.descripcion ?? '').match(/^Hora:\s*(\d{1,2}:\d{2})/i)
+  return m ? m[1].padStart(5, '0') : ''
+}
 function fmtFechaLarga(isoDay: string) {
   return new Date(isoDay + 'T12:00:00').toLocaleDateString('es-AR', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -133,9 +141,10 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
       </div>
       <div className="flex items-center gap-2 ml-3 shrink-0">
         {t.asignado && <AsignadoBadge nombre={t.asignado} />}
-        {t.fecha_vencimiento && (
+        {(t.fecha_vencimiento || horaDeTarea(t)) && (
           <span className="text-xs text-muted-foreground tabular-nums">
-            {fmtFecha(t.fecha_vencimiento)}{fmtHora(t.fecha_vencimiento) && ` ${fmtHora(t.fecha_vencimiento)}`}
+            {t.fecha_vencimiento && fmtFecha(t.fecha_vencimiento)}
+            {horaDeTarea(t) && `${t.fecha_vencimiento ? ' ' : ''}${horaDeTarea(t)}`}
           </span>
         )}
         {isPendiente && (
@@ -347,7 +356,7 @@ function TaskCard({ t }: { t: any }) {
     ? 'bg-blue-600 text-white'
     : 'bg-white/60 text-muted-foreground'
 
-  const hora = fmtHora(t.fecha_vencimiento)
+  const hora = horaDeTarea(t)
   return (
     <div className={`${style} rounded px-1.5 py-0.5 text-xs leading-snug flex items-center gap-1`} title={t.titulo}>
       {hora && <span className="font-semibold shrink-0 tabular-nums">{hora}</span>}
@@ -386,8 +395,8 @@ function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) 
   }
   for (const key of Object.keys(tasksByDay)) {
     tasksByDay[key].sort((a, b) => {
-      const ha = fmtHora(a.fecha_vencimiento)
-      const hb = fmtHora(b.fecha_vencimiento)
+      const ha = horaDeTarea(a)
+      const hb = horaDeTarea(b)
       if (ha && hb) return ha.localeCompare(hb)
       if (ha) return -1
       if (hb) return 1
