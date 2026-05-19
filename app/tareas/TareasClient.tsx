@@ -13,6 +13,31 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon } from 'lucide-react'
 
+// ── Team config ───────────────────────────────────────────────────────────────
+// Single source of truth for who can be assigned a task. Adding a teammate
+// (e.g. Marshiot) is one line here — badge / avatar / section / dropdown all
+// read from this. Keys MUST match the lowercase strings stored in the DB's
+// `asignado` column (also the buckets the backend reactor uses).
+type Persona = 'rena' | 'fran' | 'marshiot'
+
+type PersonaConfig = {
+  label:  string   // shown in section headers and dropdown
+  badge:  string   // tailwind classes for the rounded "Rena"-style pill
+  avatar: string   // tailwind classes for the small initial circle in cards
+}
+
+const TEAM: Record<Persona, PersonaConfig> = {
+  rena:     { label: 'Rena',     badge: 'bg-foreground text-background',  avatar: 'bg-foreground text-background' },
+  fran:     { label: 'Fran',     badge: 'bg-blue-600 text-white',         avatar: 'bg-blue-600 text-white' },
+  marshiot: { label: 'Marshiot', badge: 'bg-violet-600 text-white',       avatar: 'bg-violet-600 text-white' },
+}
+const TEAM_ORDER: Persona[] = ['rena', 'fran', 'marshiot']
+
+function personaFor(asignado: string | null | undefined): Persona | null {
+  const a = (asignado ?? '').toLowerCase()
+  return (TEAM_ORDER as string[]).includes(a) ? (a as Persona) : null
+}
+
 const PRIORIDAD_RANK: Record<string, number> = { urgente: 0, alta: 1, media: 2, baja: 3 }
 
 const PRIORIDAD_DOT: Record<string, string> = {
@@ -83,17 +108,14 @@ function fmtFechaLarga(isoDay: string) {
 
 function AsignadoBadge({ nombre, size = 'sm' }: { nombre: string; size?: 'sm' | 'xs' }) {
   if (!nombre) return null
-  const isRena = nombre.toLowerCase() === 'rena'
-  const isFran = nombre.toLowerCase() === 'fran'
-  const style = isRena
-    ? 'bg-foreground text-background'
-    : isFran
-    ? 'bg-blue-600 text-white'
+  const persona = personaFor(nombre)
+  const style = persona
+    ? TEAM[persona].badge
     : 'bg-muted text-muted-foreground'
   const pad = size === 'xs' ? 'px-1.5 py-0 text-[10px]' : 'px-2 py-0.5 text-xs'
   return (
     <span className={`${style} ${pad} rounded-full font-medium capitalize leading-tight whitespace-nowrap`}>
-      {nombre}
+      {persona ? TEAM[persona].label : nombre}
     </span>
   )
 }
@@ -211,15 +233,18 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
   }
 
   const byPersona = () => {
-    const orden = ['rena', 'fran']
-    const grupos: Record<string, any[]> = { rena: [], fran: [], sin_asignar: [] }
+    // Initialize a bucket for every teammate so the section ordering stays
+    // stable even when a person has no open tasks.
+    const grupos: Record<string, any[]> = { sin_asignar: [] }
+    for (const p of TEAM_ORDER) grupos[p] = []
+
     for (const t of activas) {
-      const a = (t.asignado ?? '').toLowerCase()
-      if (a === 'rena') grupos['rena'].push(t)
-      else if (a === 'fran') grupos['fran'].push(t)
+      const persona = personaFor(t.asignado)
+      if (persona) grupos[persona].push(t)
       else grupos['sin_asignar'].push(t)
     }
-    const entries = orden
+
+    const entries = TEAM_ORDER
       .filter(k => grupos[k].length > 0)
       .map(k => [k, grupos[k]] as [string, any[]])
     if (grupos['sin_asignar'].length > 0) entries.push(['sin_asignar', grupos['sin_asignar']])
@@ -347,13 +372,10 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
 const MAX_CARDS = 3
 
 function TaskCard({ t }: { t: any }) {
-  const style  = PRIORIDAD_CARD[t.prioridad] ?? PRIORIDAD_CARD['baja']
-  const isRena = t.asignado?.toLowerCase() === 'rena'
-  const isFran = t.asignado?.toLowerCase() === 'fran'
-  const initStyle = isRena
-    ? 'bg-foreground text-background'
-    : isFran
-    ? 'bg-blue-600 text-white'
+  const style   = PRIORIDAD_CARD[t.prioridad] ?? PRIORIDAD_CARD['baja']
+  const persona = personaFor(t.asignado)
+  const initStyle = persona
+    ? TEAM[persona].avatar
     : 'bg-white/60 text-muted-foreground'
 
   const hora = horaDeTarea(t)
@@ -613,8 +635,9 @@ function NuevaTareaDialog({
           <div className="space-y-1.5">
             <Label>Asignado</Label>
             <select className={nativeSelectCls} value={form.asignado} onChange={e => set('asignado', e.target.value)}>
-              <option value="rena">Rena</option>
-              <option value="fran">Fran</option>
+              {TEAM_ORDER.map(p => (
+                <option key={p} value={p}>{TEAM[p].label}</option>
+              ))}
               <option value="">Sin asignar</option>
             </select>
           </div>
