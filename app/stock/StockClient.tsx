@@ -122,12 +122,16 @@ function fmtN(n: any) {
 
 function fmtFecha(iso: string) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  // Date-only "YYYY-MM-DD" → local noon, else new Date() reads it as UTC midnight
+  // and renders the previous day in UTC-3.
+  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T12:00:00')
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 function fmtFechaCorta(iso: string | null | undefined) {
   if (!iso) return ''
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T12:00:00')
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
 }
 
 function horaDeTarea(t: any): string {

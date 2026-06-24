@@ -83,7 +83,11 @@ const nativeSelectCls =
 
 function fmtFecha(iso: string) {
   if (!iso) return ''
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
+  // Date-only "YYYY-MM-DD" must be parsed as LOCAL noon — otherwise new Date()
+  // reads it as UTC midnight and renders the previous day in UTC-3 (e.g. a tarea
+  // due 2026-06-24 showed as 23/6). Full ISO strings carry their own offset.
+  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T12:00:00')
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
 }
 function fmtHora(iso: string) {
   if (!iso || !iso.includes('T')) return ''
