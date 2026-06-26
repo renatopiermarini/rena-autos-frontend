@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
+import { visitaConflict } from '@/lib/agenda'
 
 const BASE    = process.env.KAPSO_DB_URL!
 const KEY     = process.env.KAPSO_API_KEY!
@@ -12,6 +13,40 @@ function bustCache() {
   revalidatePath('/', 'layout')
 }
 
+// Defense-in-depth: the dashboard UI already blocks a conflicting visita, but enforce
+// it here too so no client can write a visita on top of a transferencia turno block.
+// Mirrors the bot (rena-autos-api). Fail-open: if we can't read transferencias, allow.
+async function fetchAllTransferencias(): Promise<any[]> {
+  const all: any[] = []
+  let offset = 0
+  for (let i = 0; i < 20; i++) {
+    const res = await fetch(`${BASE}/transferencias?limit=200&offset=${offset}`, { headers: HEADERS, cache: 'no-store' })
+    if (!res.ok) return all
+    const page: any[] = (await res.json()).data ?? []
+    all.push(...page)
+    if (page.length < 200) break
+    offset += page.length
+  }
+  return all
+}
+
+async function visitaConflict409(table: string, body: any): Promise<NextResponse | null> {
+  if (table !== 'visitas' || !body?.fecha) return null
+  try {
+    const transferencias = await fetchAllTransferencias()
+    const hit = visitaConflict(body.fecha, transferencias)
+    if (hit) {
+      return NextResponse.json(
+        { error: 'conflicto_turno', message: `No se puede agendar: choca con el turno de transferencia de ${hit.auto}.`, auto: hit.auto },
+        { status: 409 },
+      )
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ table: string }> },
@@ -20,6 +55,8 @@ export async function POST(
   if (!ALLOWED.has(table)) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
 
   const body = await request.json()
+  const conflict = await visitaConflict409(table, body)
+  if (conflict) return conflict
   const res = await fetch(`${BASE}/${table}`, {
     method: 'POST',
     headers: HEADERS,
@@ -40,6 +77,8 @@ export async function PATCH(
   const qs  = request.nextUrl.searchParams.toString()
   const url = qs ? `${BASE}/${table}?${qs}` : `${BASE}/${table}`
   const body = await request.json()
+  const conflict = await visitaConflict409(table, body)
+  if (conflict) return conflict
   const res = await fetch(url, {
     method: 'PATCH',
     headers: HEADERS,

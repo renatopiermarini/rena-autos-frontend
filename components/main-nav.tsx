@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 
 const NAV = [
   { href: '/',               label: 'Inicio'        },
+  { href: '/agenda',         label: 'Agenda'        },
   { href: '/stock',          label: 'Stock'         },
   { href: '/interesados',    label: 'Interesados'   },
   { href: '/ofertas',        label: 'Ofertas'       },

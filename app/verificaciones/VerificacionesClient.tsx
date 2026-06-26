@@ -2,6 +2,7 @@
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { fmtDMY as fmtFecha, todayKey as today } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,18 +24,6 @@ const ESTADOS: string[] = ['pendiente', 'hecha', 'pagada']
 
 const nativeSelectCls =
   'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
-
-function fmtFecha(iso: string | null | undefined) {
-  if (!iso) return '—'
-  // Date-only "YYYY-MM-DD" → local noon, else new Date() reads it as UTC midnight
-  // and renders the previous day in UTC-3.
-  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T12:00:00')
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-}
-
-function today() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function autoLabel(v: any): string {
   if (!v) return '—'

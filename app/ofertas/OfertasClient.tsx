@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { fmtDM as fmtDate } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,10 +26,6 @@ function fmtMoney(n: any) {
   return `USD ${Number(n).toLocaleString('es-AR')}`
 }
 
-function fmtDate(iso: string) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
-}
 
 function OfertaRow({
   o, vehicleLabel, interesadoLabel,

@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { fmtDateTime, fmtDM, toARInputValue, fromARInputValue } from '@/lib/date'
+import { visitaConflict } from '@/lib/agenda'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,36 +24,27 @@ const RESULTADOS = ['pendiente', 'concretada', 'cancelada', 'no_show'] as const
 const nativeSelectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
-function fmtDateTime(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
+const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
-function fmtDate(iso: string) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
-}
-
-function isoToLocalInput(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function localInputToIso(local: string): string {
-  if (!local) return ''
-  return new Date(local).toISOString()
+// True (and toasts) if the chosen datetime-local lands inside an active transferencia
+// turno block — the same rule the bot enforces (lib/agenda + backend agenda_rules.py).
+function visitaChocaConTurno(fechaInput: string, transferencias: any[]): boolean {
+  if (!fechaInput) return false
+  const hit = visitaConflict(fromARInputValue(fechaInput), transferencias)
+  if (hit) {
+    toast.error(`No se puede agendar: choca con el turno de transferencia de ${hit.auto} (${hhmm(hit.start)}–${hhmm(hit.end)}).`)
+    return true
+  }
+  return false
 }
 
 function VisitaRow({
-  v, vehicleLabel, interesadoLabel,
-}: { v: any; vehicleLabel: (id: any) => string; interesadoLabel: (id: any) => string }) {
+  v, vehicleLabel, interesadoLabel, transferencias,
+}: { v: any; vehicleLabel: (id: any) => string; interesadoLabel: (id: any) => string; transferencias: any[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [notas, setNotas] = useState(v.notas ?? '')
-  const [fecha, setFecha] = useState(isoToLocalInput(v.fecha))
+  const [fecha, setFecha] = useState(toARInputValue(v.fecha))
   const [saving, setSaving] = useState<string>('')
 
   async function setResultado(resultado: string) {
@@ -62,9 +55,10 @@ function VisitaRow({
   }
 
   async function saveDetalles() {
+    if (fecha && visitaChocaConTurno(fecha, transferencias)) return
     setSaving('detalles')
     const payload: any = { notas: notas || null }
-    if (fecha) payload.fecha = localInputToIso(fecha)
+    if (fecha) payload.fecha = fromARInputValue(fecha)
     const ok = await patchRecord('visitas', v.id, payload)
     setSaving('')
     if (ok) { toast.success('Cambios guardados'); router.refresh() }
@@ -105,7 +99,7 @@ function VisitaRow({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2">
             <div><p className="text-xs text-muted-foreground">Vehículo</p><p className="text-sm">{vehicleLabel(v.vehicle_id)}</p></div>
             <div><p className="text-xs text-muted-foreground">Interesado</p><p className="text-sm">{interesadoLabel(v.interesado_id)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Creada</p><p className="text-sm">{fmtDate(v.created_at)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Creada</p><p className="text-sm">{fmtDM(v.created_at)}</p></div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3 items-end">
@@ -152,8 +146,8 @@ function VisitaRow({
 }
 
 function NuevaVisitaForm({
-  vehicles, interesados, onClose,
-}: { vehicles: any[]; interesados: any[]; onClose: () => void }) {
+  vehicles, interesados, transferencias, onClose,
+}: { vehicles: any[]; interesados: any[]; transferencias: any[]; onClose: () => void }) {
   const router = useRouter()
   const [form, setForm] = useState({
     vehicle_id: '', interesado_id: '', fecha: '', notas: '',
@@ -165,11 +159,12 @@ function NuevaVisitaForm({
       toast.error('Vehículo, interesado y fecha son obligatorios')
       return
     }
+    if (visitaChocaConTurno(form.fecha, transferencias)) return
     setSaving(true)
     const payload: any = {
       vehicle_id: Number(form.vehicle_id),
       interesado_id: Number(form.interesado_id),
-      fecha: localInputToIso(form.fecha),
+      fecha: fromARInputValue(form.fecha),
       resultado: 'pendiente',
       email_enviado: 0,
       notas: form.notas || null,
@@ -241,8 +236,8 @@ function NuevaVisitaForm({
 type Filtro = 'todas' | 'proximas' | 'pasadas' | typeof RESULTADOS[number]
 
 export default function VisitasClient({
-  visitas, vehicles, interesados,
-}: { visitas: any[]; vehicles: any[]; interesados: any[] }) {
+  visitas, vehicles, interesados, transferencias,
+}: { visitas: any[]; vehicles: any[]; interesados: any[]; transferencias: any[] }) {
   const [showNueva, setShowNueva] = useState(false)
   const [filter, setFilter] = useState<Filtro>('proximas')
 
@@ -290,7 +285,7 @@ export default function VisitasClient({
       </div>
 
       {showNueva && (
-        <NuevaVisitaForm vehicles={vehicles} interesados={interesados} onClose={() => setShowNueva(false)} />
+        <NuevaVisitaForm vehicles={vehicles} interesados={interesados} transferencias={transferencias} onClose={() => setShowNueva(false)} />
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -310,7 +305,7 @@ export default function VisitasClient({
       <Card size="sm">
         <CardContent className="p-0">
           {sorted.map(v => (
-            <VisitaRow key={v.id} v={v} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} />
+            <VisitaRow key={v.id} v={v} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} transferencias={transferencias} />
           ))}
           {sorted.length === 0 && (
             <p className="px-4 py-6 text-sm text-muted-foreground text-center">Sin visitas.</p>

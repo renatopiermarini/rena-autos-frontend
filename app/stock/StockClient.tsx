@@ -2,6 +2,7 @@
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { computeVehicleFinancials, computePrestamoStatus } from '@/lib/kapso'
+import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -118,20 +119,6 @@ function fmt(n: any) {
 function fmtN(n: any) {
   if (n == null || n === '') return '—'
   return Number(n).toLocaleString('es-AR')
-}
-
-function fmtFecha(iso: string) {
-  if (!iso) return '—'
-  // Date-only "YYYY-MM-DD" → local noon, else new Date() reads it as UTC midnight
-  // and renders the previous day in UTC-3.
-  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T12:00:00')
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
-}
-
-function fmtFechaCorta(iso: string | null | undefined) {
-  if (!iso) return ''
-  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T12:00:00')
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
 }
 
 function horaDeTarea(t: any): string {
