@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { fmtDateTime, fmtDM, toARInputValue, fromARInputValue } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,36 +23,13 @@ const RESULTADOS = ['pendiente', 'concretada', 'cancelada', 'no_show'] as const
 const nativeSelectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
-function fmtDateTime(iso: string) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-function fmtDate(iso: string) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
-}
-
-function isoToLocalInput(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function localInputToIso(local: string): string {
-  if (!local) return ''
-  return new Date(local).toISOString()
-}
-
 function VisitaRow({
   v, vehicleLabel, interesadoLabel,
 }: { v: any; vehicleLabel: (id: any) => string; interesadoLabel: (id: any) => string }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [notas, setNotas] = useState(v.notas ?? '')
-  const [fecha, setFecha] = useState(isoToLocalInput(v.fecha))
+  const [fecha, setFecha] = useState(toARInputValue(v.fecha))
   const [saving, setSaving] = useState<string>('')
 
   async function setResultado(resultado: string) {
@@ -64,7 +42,7 @@ function VisitaRow({
   async function saveDetalles() {
     setSaving('detalles')
     const payload: any = { notas: notas || null }
-    if (fecha) payload.fecha = localInputToIso(fecha)
+    if (fecha) payload.fecha = fromARInputValue(fecha)
     const ok = await patchRecord('visitas', v.id, payload)
     setSaving('')
     if (ok) { toast.success('Cambios guardados'); router.refresh() }
@@ -105,7 +83,7 @@ function VisitaRow({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2">
             <div><p className="text-xs text-muted-foreground">Vehículo</p><p className="text-sm">{vehicleLabel(v.vehicle_id)}</p></div>
             <div><p className="text-xs text-muted-foreground">Interesado</p><p className="text-sm">{interesadoLabel(v.interesado_id)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Creada</p><p className="text-sm">{fmtDate(v.created_at)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Creada</p><p className="text-sm">{fmtDM(v.created_at)}</p></div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3 items-end">
@@ -169,7 +147,7 @@ function NuevaVisitaForm({
     const payload: any = {
       vehicle_id: Number(form.vehicle_id),
       interesado_id: Number(form.interesado_id),
-      fecha: localInputToIso(form.fecha),
+      fecha: fromARInputValue(form.fecha),
       resultado: 'pendiente',
       email_enviado: 0,
       notas: form.notas || null,

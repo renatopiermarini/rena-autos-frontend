@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord } from '@/lib/kapso'
+import { fmtDM as fmtFecha, fmtHora, fmtFechaLarga } from '@/lib/date'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,21 +82,6 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 const nativeSelectCls =
   'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
-function fmtFecha(iso: string) {
-  if (!iso) return ''
-  // Date-only "YYYY-MM-DD" must be parsed as LOCAL noon — otherwise new Date()
-  // reads it as UTC midnight and renders the previous day in UTC-3 (e.g. a tarea
-  // due 2026-06-24 showed as 23/6). Full ISO strings carry their own offset.
-  const d = iso.includes('T') ? new Date(iso) : new Date(iso + 'T12:00:00')
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' })
-}
-function fmtHora(iso: string) {
-  if (!iso || !iso.includes('T')) return ''
-  const [, time] = iso.split('T')
-  if (!time) return ''
-  const [h, m] = time.split(':')
-  return `${h}:${m}`
-}
 function horaDeTarea(t: any): string {
   // El agente guarda fecha_vencimiento como DATE (YYYY-MM-DD) y prefija la hora
   // en descripcion como "Hora: HH:MM. ...". Soportamos ambos formatos.
@@ -103,11 +89,6 @@ function horaDeTarea(t: any): string {
   if (fromIso) return fromIso
   const m = (t?.descripcion ?? '').match(/^Hora:\s*(\d{1,2}:\d{2})/i)
   return m ? m[1].padStart(5, '0') : ''
-}
-function fmtFechaLarga(isoDay: string) {
-  return new Date(isoDay + 'T12:00:00').toLocaleDateString('es-AR', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  })
 }
 
 function AsignadoBadge({ nombre, size = 'sm' }: { nombre: string; size?: 'sm' | 'xs' }) {
