@@ -16,12 +16,24 @@ function bustCache() {
 // Defense-in-depth: the dashboard UI already blocks a conflicting visita, but enforce
 // it here too so no client can write a visita on top of a transferencia turno block.
 // Mirrors the bot (rena-autos-api). Fail-open: if we can't read transferencias, allow.
+async function fetchAllTransferencias(): Promise<any[]> {
+  const all: any[] = []
+  let offset = 0
+  for (let i = 0; i < 20; i++) {
+    const res = await fetch(`${BASE}/transferencias?limit=200&offset=${offset}`, { headers: HEADERS, cache: 'no-store' })
+    if (!res.ok) return all
+    const page: any[] = (await res.json()).data ?? []
+    all.push(...page)
+    if (page.length < 200) break
+    offset += page.length
+  }
+  return all
+}
+
 async function visitaConflict409(table: string, body: any): Promise<NextResponse | null> {
   if (table !== 'visitas' || !body?.fecha) return null
   try {
-    const res = await fetch(`${BASE}/transferencias?limit=200&offset=0`, { headers: HEADERS, cache: 'no-store' })
-    if (!res.ok) return null
-    const transferencias = (await res.json()).data ?? []
+    const transferencias = await fetchAllTransferencias()
     const hit = visitaConflict(body.fecha, transferencias)
     if (hit) {
       return NextResponse.json(
