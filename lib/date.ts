@@ -109,18 +109,21 @@ export function fmtFechaLarga(s?: string | null): string {
   return d ? d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) : ''
 }
 
+// Pin the AR timezone so an instant formats to the same wall-clock whether this runs
+// on the server (Vercel = UTC) or in the browser — correct times + no hydration drift.
+const AR_TZ_NAME = 'America/Argentina/Buenos_Aires'
+
 /** "HH:MM" for an instant; "" for a date-only value (no time of day). */
 export function fmtHora(iso?: string | null): string {
   if (!iso || !iso.includes('T')) return ''
   const d = parseInstant(iso)
   if (!d) return ''
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${p(d.getHours())}:${p(d.getMinutes())}`
+  return d.toLocaleTimeString('es-AR', { timeZone: AR_TZ_NAME, hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 /** "DD/MM HH:MM" for an instant. */
 export function fmtDateTime(iso?: string | null): string {
   const d = parseInstant(iso)
   if (!d) return ''
-  return d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleString('es-AR', { timeZone: AR_TZ_NAME, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
