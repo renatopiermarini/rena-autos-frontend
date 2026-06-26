@@ -2,7 +2,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord } from '@/lib/kapso'
-import { fmtDM as fmtFecha, fmtHora, fmtFechaLarga } from '@/lib/date'
+import { fmtDM as fmtFecha, fmtHora } from '@/lib/date'
+import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, PlusIcon } from 'lucide-react'
+import { CheckIcon, PlusIcon } from 'lucide-react'
 
 // ── Team config ───────────────────────────────────────────────────────────────
 // Single source of truth for who can be assigned a task. Adding a teammate
@@ -76,8 +77,6 @@ const TIPO_LABEL: Record<string, string> = {
   otro:        'Otro',
 }
 
-const DIAS  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 const nativeSelectCls =
   'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
@@ -354,8 +353,6 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
 
 // ── Calendar ──────────────────────────────────────────────────────────────────
 
-const MAX_CARDS = 3
-
 function TaskCard({ t }: { t: any }) {
   const style   = PRIORIDAD_CARD[t.prioridad] ?? PRIORIDAD_CARD['baja']
   const persona = personaFor(t.asignado)
@@ -377,166 +374,32 @@ function TaskCard({ t }: { t: any }) {
   )
 }
 
-function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
-  const now = new Date()
-  const [year, setYear]         = useState(now.getFullYear())
-  const [month, setMonth]       = useState(now.getMonth())
-  const [selected, setSelected] = useState<string | null>(null)
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
-
+export function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
   function autoNombre(id: number | null) {
     if (!id) return null
     const v = vehicles.find((v: any) => v.id === id)
     return v ? `${v.marca} ${v.modelo} ${v.año}` : null
   }
-
   const activas = tareas.filter(t => t.estado !== 'completada')
-
-  const tasksByDay: Record<string, any[]> = {}
-  const sinFecha: any[] = []
-  for (const t of activas) {
-    if (!t.fecha_vencimiento) { sinFecha.push(t); continue }
-    const key = t.fecha_vencimiento.slice(0, 10)
-    if (!tasksByDay[key]) tasksByDay[key] = []
-    tasksByDay[key].push(t)
+  // Within a day: timed tasks first (by HH:MM), then by priority.
+  const sortDay = (a: any, b: any) => {
+    const ha = horaDeTarea(a), hb = horaDeTarea(b)
+    if (ha && hb) return ha.localeCompare(hb)
+    if (ha) return -1
+    if (hb) return 1
+    return (PRIORIDAD_RANK[a.prioridad] ?? 3) - (PRIORIDAD_RANK[b.prioridad] ?? 3)
   }
-  for (const key of Object.keys(tasksByDay)) {
-    tasksByDay[key].sort((a, b) => {
-      const ha = horaDeTarea(a)
-      const hb = horaDeTarea(b)
-      if (ha && hb) return ha.localeCompare(hb)
-      if (ha) return -1
-      if (hb) return 1
-      return (PRIORIDAD_RANK[a.prioridad] ?? 3) - (PRIORIDAD_RANK[b.prioridad] ?? 3)
-    })
-  }
-
-  const firstDay    = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const todayKey    = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-')
-
-  function dayKey(d: number) {
-    return `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
-  }
-  function prevMonth() {
-    if (month === 0) { setYear(y => y-1); setMonth(11) } else setMonth(m => m-1)
-    setSelected(null); setExpandedDays(new Set())
-  }
-  function nextMonth() {
-    if (month === 11) { setYear(y => y+1); setMonth(0) } else setMonth(m => m+1)
-    setSelected(null); setExpandedDays(new Set())
-  }
-  function toggleExpand(key: string, e: React.MouseEvent) {
-    e.stopPropagation()
-    setExpandedDays(prev => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  }
-
-  const cells: (number | null)[] = [
-    ...Array(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  while (cells.length % 7 !== 0) cells.push(null)
-
-  const selectedTasks = selected ? (tasksByDay[selected] ?? []) : []
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Button size="icon-sm" variant="ghost" onClick={prevMonth}><ChevronLeftIcon className="size-4" /></Button>
-        <span className="text-sm font-medium w-44 text-center">{MESES[month]} {year}</span>
-        <Button size="icon-sm" variant="ghost" onClick={nextMonth}><ChevronRightIcon className="size-4" /></Button>
-        <Button
-          size="xs"
-          variant="outline"
-          onClick={() => { setYear(now.getFullYear()); setMonth(now.getMonth()); setSelected(todayKey) }}
-          className="ml-2"
-        >Hoy</Button>
-      </div>
-
-      <Card size="sm">
-        <CardContent className="p-0">
-          <div className="grid grid-cols-7 bg-muted/40 border-b">
-            {DIAS.map(d => <div key={d} className="py-2 text-center text-xs text-muted-foreground font-medium">{d}</div>)}
-          </div>
-          <div className="divide-y divide-border">
-            {Array.from({ length: cells.length / 7 }, (_, row) => (
-              <div key={row} className="grid grid-cols-7 divide-x divide-border">
-                {cells.slice(row*7, row*7+7).map((day, col) => {
-                  if (day === null) return <div key={`empty-${row}-${col}`} className="min-h-28 bg-muted/20 p-1" />
-                  const key       = dayKey(day)
-                  const dayTasks  = tasksByDay[key] ?? []
-                  const isToday   = key === todayKey
-                  const isSel     = key === selected
-                  const isExp     = expandedDays.has(key)
-                  const shown     = isExp ? dayTasks : dayTasks.slice(0, MAX_CARDS)
-                  const hidden    = dayTasks.length - MAX_CARDS
-                  return (
-                    <div
-                      key={key}
-                      onClick={() => setSelected(isSel ? null : key)}
-                      className={`min-h-28 p-1.5 cursor-pointer transition-colors ${
-                        isSel ? 'bg-accent ring-1 ring-inset ring-ring' : isToday ? 'bg-blue-50/70' : 'hover:bg-muted/40'
-                      }`}
-                    >
-                      <div className="mb-1">
-                        <span className={`text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
-                          isToday ? 'bg-blue-600 text-white' : isSel ? 'text-foreground' : 'text-muted-foreground'
-                        }`}>{day}</span>
-                      </div>
-                      <div className="space-y-0.5">
-                        {shown.map(t => <TaskCard key={t.id} t={t} />)}
-                        {!isExp && hidden > 0 && (
-                          <button onClick={e => toggleExpand(key, e)} className="text-xs text-muted-foreground hover:text-foreground pl-1">
-                            +{hidden} más
-                          </button>
-                        )}
-                        {isExp && hidden > 0 && (
-                          <button onClick={e => toggleExpand(key, e)} className="text-xs text-muted-foreground hover:text-foreground pl-1">
-                            ver menos
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {selected && (
-        <Card size="sm">
-          <CardHeader className="border-b py-2.5">
-            <CardTitle className="text-sm">
-              {fmtFechaLarga(selected)}
-              {selectedTasks.length > 0 && <span className="text-muted-foreground font-normal ml-2">— {selectedTasks.length} tarea{selectedTasks.length !== 1 ? 's' : ''}</span>}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border p-0">
-            {selectedTasks.length === 0
-              ? <p className="px-3 py-2.5 text-sm text-muted-foreground">Sin tareas para este día.</p>
-              : selectedTasks.map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} />)
-            }
-          </CardContent>
-        </Card>
-      )}
-
-      {sinFecha.length > 0 && (
-        <Card size="sm">
-          <CardHeader className="border-b py-2.5">
-            <CardTitle className="text-sm">Sin fecha límite ({sinFecha.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border p-0">
-            {sinFecha.map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} />)}
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    <MonthGrid
+      items={activas}
+      dayKeyOf={t => (t.fecha_vencimiento ? t.fecha_vencimiento.slice(0, 10) : null)}
+      itemKey={t => t.id}
+      renderChip={t => <TaskCard t={t} />}
+      renderDetail={t => <TareaRow t={t} autoNombre={autoNombre} />}
+      sortDay={sortDay}
+      noun="tarea"
+      sinFechaLabel="Sin fecha límite"
+    />
   )
 }
 
