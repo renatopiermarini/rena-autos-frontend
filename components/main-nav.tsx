@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 const NAV = [
   { href: '/',               label: 'Inicio'        },
@@ -26,7 +27,8 @@ export function MainNav() {
   return (
     <header className="border-b border-border sticky top-0 z-30 bg-background/90 backdrop-blur-sm">
       <div className="mx-auto w-full max-w-[1600px] px-8 py-3 flex items-center gap-8">
-        <Link href="/" className="font-semibold text-sm tracking-tight shrink-0">
+        <Link href="/" className="flex items-center gap-2 font-semibold text-sm tracking-tight shrink-0">
+          <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground text-[11px] font-bold leading-none">RP</span>
           Renato Piermarini Autos
         </Link>
         <nav className="flex gap-1 overflow-x-auto scrollbar-hide">
@@ -39,7 +41,7 @@ export function MainNav() {
                 className={cn(
                   'text-sm px-3 py-1.5 rounded-md transition-colors whitespace-nowrap',
                   active
-                    ? 'bg-muted text-foreground font-medium'
+                    ? 'bg-primary/10 text-primary font-medium'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
                 )}
               >
@@ -48,6 +50,9 @@ export function MainNav() {
             )
           })}
         </nav>
+        <div className="ml-auto shrink-0">
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   )

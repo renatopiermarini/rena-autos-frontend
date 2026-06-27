@@ -11,11 +11,11 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, MailIcon, PlusIcon } from 'lucide-react'
 
-const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  pendiente: 'secondary',
-  aceptada: 'default',
+const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
+  pendiente: 'warning',
+  aceptada: 'success',
   rechazada: 'destructive',
-  contraoferta: 'outline',
+  contraoferta: 'info',
 }
 
 const nativeSelectCls =
@@ -77,7 +77,7 @@ function OfertaRow({
           <span className="text-sm text-muted-foreground whitespace-nowrap">— {fmtMoney(o.monto_ofrecido)}</span>
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          <span className={`inline-flex items-center gap-1 text-xs ${o.email_enviado ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs ${o.email_enviado ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
             <MailIcon className="size-3" /> {o.email_enviado ? 'enviado' : 'pendiente'}
           </span>
           <span className="text-xs text-muted-foreground">{interesadoLabel(o.interesado_id)}</span>

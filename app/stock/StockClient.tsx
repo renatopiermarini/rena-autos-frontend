@@ -3,6 +3,7 @@ import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { computeVehicleFinancials, computePrestamoStatus } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
+import { estadoMeta } from '@/lib/estados'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,18 +23,6 @@ const CAT_LABEL_FIN: Record<string, string> = {
   refund: 'Reembolso',
   down_payment: 'Seña',
   sin_categoria: 'Sin categoría',
-}
-
-const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  en_stock: 'default',
-  confirmado: 'secondary',
-  vendido: 'outline',
-  reservado: 'secondary',
-  en_reparacion: 'destructive',
-  a_ingresar: 'outline',
-  va_a_pensarlo: 'outline',
-  necesita_follow_up: 'destructive',
-  potencial: 'outline',
 }
 
 const ESTADOS = [
@@ -98,7 +87,7 @@ function ToggleCheck({
     <button
       onClick={toggle}
       title={error ? 'Error al guardar' : val ? 'Marcar como pendiente' : 'Marcar como listo'}
-      className={`transition-colors ${val ? 'text-emerald-600 hover:text-emerald-800' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
+      className={`transition-colors ${val ? 'text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
     >
       {error ? <AlertCircleIcon className="size-4 text-destructive" /> : <CheckIcon className="size-4" />}
     </button>
@@ -280,7 +269,7 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
           {margen != null && (
             <div>
               <p className="text-xs text-muted-foreground">Margen</p>
-              <p className={`text-sm font-medium ${margen >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+              <p className={`text-sm font-medium ${margen >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
                 {margen >= 0 ? '+' : ''}{fmt(margen)}
               </p>
             </div>
@@ -327,7 +316,7 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
                   ) : fin.margen_esperado != null && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Margen esperado</span>
-                      <span className={fin.margen_esperado >= 0 ? 'text-emerald-600' : 'text-destructive'}>
+                      <span className={fin.margen_esperado >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>
                         {(fin.margen_esperado >= 0 ? '+' : '') + fmt(fin.margen_esperado)}
                       </span>
                     </div>
@@ -349,7 +338,7 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
                         <span>{acr}</span>
                         <div className="flex items-center gap-2 text-xs">
                           <span className="text-muted-foreground">saldo {fmt(st.saldo_pendiente)}</span>
-                          <span className={st.vencido ? 'text-destructive' : st.proximo ? 'text-amber-600' : 'text-muted-foreground'}>
+                          <span className={st.vencido ? 'text-destructive' : st.proximo ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}>
                             {st.dias_vencimiento == null ? '—'
                               : st.vencido ? `vencido ${Math.abs(st.dias_vencimiento)}d`
                               : `${st.dias_vencimiento}d`}
@@ -473,9 +462,7 @@ function VehicleTable({
                   </td>
                   <td className="py-2.5 px-3 text-muted-foreground">{v.dominio || '—'}</td>
                   <td className="py-2.5 px-3">
-                    <Badge variant={ESTADO_VARIANT[v.estado] ?? 'outline'}>
-                      {v.estado === 'confirmado' ? 'Consignación' : v.estado === 'en_stock' ? 'Propios' : v.estado?.replace(/_/g, ' ')}
-                    </Badge>
+                    <Badge variant={estadoMeta(v.estado).variant}>{estadoMeta(v.estado).label}</Badge>
                   </td>
                   <td className="py-2.5 px-3 text-muted-foreground tabular-nums">{v.km ? fmtN(v.km) : '—'}</td>
                   <td className="py-2.5 px-3 tabular-nums">

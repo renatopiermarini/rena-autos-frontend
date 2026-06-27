@@ -2,18 +2,19 @@ import { getBalances, getTareas, getVehicles, getPrestamos, getOfertas, getVisit
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { AlertTriangleIcon } from 'lucide-react'
+import { AlertTriangleIcon, CarIcon, CalendarClockIcon, ArrowLeftRightIcon } from 'lucide-react'
 import { MiniWeek } from '@/components/calendar/MiniWeek'
 import { transferenciaBlock, transferenciaBlocks } from '@/lib/agenda'
 import { fmtDateTime } from '@/lib/date'
+import { estadoMeta } from '@/lib/estados'
 
-const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  en_stock: 'default',
-  confirmado: 'secondary',
-  vendido: 'outline',
-  reservado: 'secondary',
-  en_reparacion: 'destructive',
-  a_ingresar: 'outline',
+// Tone → icon-chip classes (literal strings so Tailwind picks them up).
+const TONE: Record<string, string> = {
+  primary: 'bg-primary/10 text-primary',
+  info: 'bg-info/10 text-info',
+  warning: 'bg-warning/10 text-warning',
+  destructive: 'bg-destructive/10 text-destructive',
+  muted: 'bg-muted text-muted-foreground',
 }
 
 export default async function Inicio() {
@@ -69,10 +70,10 @@ export default async function Inicio() {
   }
 
   const metrics = [
-    { label: 'Stock activo',       value: activos.length,            href: '/stock' },
-    { label: 'Visitas pendientes', value: visitasPendientes.length,  href: '/visitas' },
-    { label: 'Turnos próximos',    value: turnosProximos.length,     href: '/transferencias' },
-    { label: 'Tareas urgentes',    value: urgentes.length,           href: '/tareas' },
+    { label: 'Stock activo',       value: activos.length,            href: '/stock',          icon: CarIcon,             tone: 'primary' },
+    { label: 'Visitas pendientes', value: visitasPendientes.length,  href: '/visitas',        icon: CalendarClockIcon,   tone: visitasPendientes.length ? 'info' : 'muted' },
+    { label: 'Turnos próximos',    value: turnosProximos.length,     href: '/transferencias', icon: ArrowLeftRightIcon,  tone: turnosProximos.length ? 'warning' : 'muted' },
+    { label: 'Tareas urgentes',    value: urgentes.length,           href: '/tareas',         icon: AlertTriangleIcon,   tone: urgentes.length ? 'destructive' : 'muted' },
   ]
 
   return (
@@ -96,27 +97,41 @@ export default async function Inicio() {
       )}
 
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-        {balances.map((b: any) => (
-          <Card key={b.id} size="sm">
-            <CardContent>
-              <p className="text-xs text-muted-foreground capitalize mb-1">{b.cuenta}</p>
-              <p className="text-xl font-light tabular-nums">${Number(b.saldo ?? 0).toLocaleString('es-AR')}</p>
-            </CardContent>
-          </Card>
-        ))}
+        {balances.map((b: any) => {
+          const saldo = Number(b.saldo ?? 0)
+          const low = b.cuenta === 'cash' && saldo < 500
+          return (
+            <Card key={b.id} size="sm">
+              <CardContent>
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{b.cuenta}</p>
+                <p className={`text-xl font-light tabular-nums ${low ? 'text-destructive' : ''}`}>
+                  ${saldo.toLocaleString('es-AR')}
+                </p>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {metrics.map(m => (
-          <Link key={m.label} href={m.href}>
-            <Card size="sm" className="hover:bg-muted/40 transition-colors">
-              <CardContent className="py-3">
-                <p className="text-xs text-muted-foreground">{m.label}</p>
-                <p className="text-2xl font-light tabular-nums">{m.value}</p>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
+        {metrics.map(m => {
+          const Icon = m.icon
+          return (
+            <Link key={m.label} href={m.href}>
+              <Card size="sm" className="hover:bg-muted/40 hover:ring-foreground/20 transition-colors">
+                <CardContent className="py-3 flex items-center gap-3">
+                  <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${TONE[m.tone]}`}>
+                    <Icon className="size-[18px]" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-2xl font-light tabular-nums leading-none">{m.value}</p>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">{m.label}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -153,7 +168,7 @@ export default async function Inicio() {
                 <span className="text-sm">{v.marca} {v.modelo} {v.año}</span>
                 <div className="flex items-center gap-2">
                   {v.dominio && <span className="text-xs text-muted-foreground">{v.dominio}</span>}
-                  <Badge variant={ESTADO_VARIANT[v.estado] ?? 'outline'}>{v.estado?.replace(/_/g, ' ')}</Badge>
+                  <Badge variant={estadoMeta(v.estado).variant}>{estadoMeta(v.estado).label}</Badge>
                 </div>
               </div>
             ))}

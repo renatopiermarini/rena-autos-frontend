@@ -11,11 +11,11 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react'
 
-const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  activo: 'default',
+const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
+  activo: 'info',
   contactado: 'secondary',
-  reservo: 'secondary',
-  compro: 'outline',
+  reservo: 'warning',
+  compro: 'success',
   perdido: 'destructive',
 }
 

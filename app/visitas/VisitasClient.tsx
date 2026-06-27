@@ -12,11 +12,11 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, MailIcon, PlusIcon } from 'lucide-react'
 
-const RESULTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  pendiente: 'secondary',
-  concretada: 'default',
+const RESULTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
+  pendiente: 'info',
+  concretada: 'success',
   cancelada: 'destructive',
-  no_show: 'outline',
+  no_show: 'warning',
 }
 
 const RESULTADOS = ['pendiente', 'concretada', 'cancelada', 'no_show'] as const
@@ -86,7 +86,7 @@ function VisitaRow({
           <span className="text-sm text-muted-foreground whitespace-nowrap">— {interesadoLabel(v.interesado_id)}</span>
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          <span className={`inline-flex items-center gap-1 text-xs ${v.email_enviado ? 'text-emerald-600' : 'text-muted-foreground'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs ${v.email_enviado ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
             <MailIcon className="size-3" /> {v.email_enviado ? 'enviado' : 'pendiente'}
           </span>
           <Badge variant={RESULTADO_VARIANT[resultado] ?? 'outline'}>{resultado}</Badge>

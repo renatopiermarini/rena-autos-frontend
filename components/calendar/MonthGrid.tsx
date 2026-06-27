@@ -110,7 +110,7 @@ export function MonthGrid<T>({
                       key={key}
                       onClick={() => setSelected(isSel ? null : key)}
                       className={`min-h-28 p-1.5 cursor-pointer transition-colors ${
-                        isSel ? 'bg-accent ring-1 ring-inset ring-ring' : isToday ? 'bg-blue-50/70' : 'hover:bg-muted/40'
+                        isSel ? 'bg-accent ring-1 ring-inset ring-ring' : isToday ? 'bg-blue-50/70 dark:bg-blue-950/40' : 'hover:bg-muted/40'
                       }`}
                     >
                       <div className="mb-1">
