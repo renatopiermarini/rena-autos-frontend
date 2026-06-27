@@ -14,11 +14,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react'
 
-const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
-  pendiente:  'secondary',
-  en_proceso: 'default',
-  completada: 'outline',
-  cancelada:  'outline',
+const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
+  pendiente:  'warning',
+  en_proceso: 'info',
+  completada: 'success',
+  cancelada:  'secondary',
 }
 
 const ESTADOS: string[] = ['pendiente', 'en_proceso', 'completada', 'cancelada']

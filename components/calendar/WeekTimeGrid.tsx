@@ -66,7 +66,7 @@ export function WeekTimeGrid({
               {days.map((d, i) => {
                 const isToday = localDayKey(d) === todayKey
                 return (
-                  <div key={i} className={`py-2 text-center text-xs ${isToday ? 'text-blue-700 font-semibold' : 'text-muted-foreground font-medium'}`}>
+                  <div key={i} className={`py-2 text-center text-xs ${isToday ? 'text-blue-700 dark:text-blue-400 font-semibold' : 'text-muted-foreground font-medium'}`}>
                     {DIAS_SEMANA[i]} {d.getDate()}
                   </div>
                 )
@@ -88,7 +88,7 @@ export function WeekTimeGrid({
                 const dayEvents = events.filter(e => localDayKey(e.start) === dk)
                 const dayBlocks = blocks.filter(b => localDayKey(b.start) === dk)
                 return (
-                  <div key={di} className={`relative border-l ${isToday ? 'bg-blue-50/40' : ''}`} style={{ height: laneHeight }}>
+                  <div key={di} className={`relative border-l ${isToday ? 'bg-blue-50/40 dark:bg-blue-950/30' : ''}`} style={{ height: laneHeight }}>
                     {hours.map(h => <div key={h} className="border-b border-border/70" style={{ height: HOUR_PX }} />)}
 
                     {dayBlocks.map(b => {
@@ -101,12 +101,12 @@ export function WeekTimeGrid({
                           key={`b${b.id}`}
                           onClick={() => onBlockClick?.(b)}
                           title={`Turno · ${b.title} (${hhmm(b.start)}–${hhmm(b.end)})`}
-                          className="absolute left-px right-px overflow-hidden bg-amber-50 border-l-[3px] border-amber-600"
+                          className="absolute left-px right-px overflow-hidden bg-amber-50 dark:bg-amber-950/40 border-l-[3px] border-amber-600"
                           style={{ top, height }}
                         >
-                          <div className="px-1 pt-0.5 text-[10px] leading-tight text-amber-900">
+                          <div className="px-1 pt-0.5 text-[10px] leading-tight text-amber-900 dark:text-amber-200">
                             <span className="font-medium tabular-nums">{hhmm(b.start)}</span> {b.title}
-                            <div className="text-amber-800">Turno · bloqueado</div>
+                            <div className="text-amber-800 dark:text-amber-300">Turno · bloqueado</div>
                           </div>
                         </div>
                       )
@@ -120,10 +120,10 @@ export function WeekTimeGrid({
                           key={`e${e.id}`}
                           onClick={() => onEventClick?.(e)}
                           title={`${hhmm(e.start)} ${e.title}${e.subtitle ? ' — ' + e.subtitle : ''}`}
-                          className="absolute left-0.5 right-0.5 overflow-hidden bg-blue-50 border-l-2 border-blue-600 cursor-pointer hover:bg-blue-100"
+                          className="absolute left-0.5 right-0.5 overflow-hidden bg-blue-50 dark:bg-blue-950/40 border-l-2 border-blue-600 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50"
                           style={{ top, height: 20 }}
                         >
-                          <div className="px-1 text-[10px] leading-tight truncate text-blue-900">
+                          <div className="px-1 text-[10px] leading-tight truncate text-blue-900 dark:text-blue-200">
                             <span className="font-medium tabular-nums">{hhmm(e.start)}</span> {e.title}
                           </div>
                         </div>

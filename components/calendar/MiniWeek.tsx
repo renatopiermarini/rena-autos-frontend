@@ -42,7 +42,7 @@ export function MiniWeek({ visitas, transferencias }: { visitas: any[]; transfer
       <CardContent className="py-3">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium">Esta semana</span>
-          <Link href="/agenda" className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
+          <Link href="/agenda" className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
             Ver agenda <ArrowRightIcon className="size-3" />
           </Link>
         </div>
@@ -56,10 +56,10 @@ export function MiniWeek({ visitas, transferencias }: { visitas: any[]; transfer
               <Link
                 key={i}
                 href="/agenda"
-                className={`rounded-md py-1.5 hover:bg-muted/60 transition-colors ${isToday ? 'bg-blue-50' : ''}`}
+                className={`rounded-md py-1.5 hover:bg-muted/60 transition-colors ${isToday ? 'bg-blue-50 dark:bg-blue-950/40' : ''}`}
               >
                 <div className="text-[10px] text-muted-foreground">{DIAS_SEMANA[i]}</div>
-                <div className={`text-sm ${isToday ? 'font-semibold text-blue-700' : ''}`}>{d.getDate()}</div>
+                <div className={`text-sm ${isToday ? 'font-semibold text-blue-700 dark:text-blue-400' : ''}`}>{d.getDate()}</div>
                 <div className="flex items-center justify-center gap-0.5 h-2 mt-0.5">
                   {nt > 0 && <span className="inline-block w-3 h-1.5 rounded-sm bg-amber-500" title={`${nt} turno(s)`} />}
                   {Array.from({ length: Math.min(nv, 3) }).map((_, j) => (

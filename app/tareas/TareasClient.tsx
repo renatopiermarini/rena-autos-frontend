@@ -57,15 +57,15 @@ const PRIORIDAD_BORDER: Record<string, string> = {
 }
 
 const PRIORIDAD_CARD: Record<string, string> = {
-  urgente: 'bg-red-50 border-l-[3px] border-red-500 text-red-900',
-  alta:    'bg-orange-50 border-l-[3px] border-orange-400 text-orange-900',
-  media:   'bg-yellow-50 border-l-[3px] border-yellow-400 text-yellow-900',
+  urgente: 'bg-red-50 border-l-[3px] border-red-500 text-red-900 dark:bg-red-950/50 dark:text-red-100',
+  alta:    'bg-orange-50 border-l-[3px] border-orange-400 text-orange-900 dark:bg-orange-950/50 dark:text-orange-100',
+  media:   'bg-yellow-50 border-l-[3px] border-yellow-400 text-yellow-900 dark:bg-yellow-950/50 dark:text-yellow-100',
   baja:    'bg-muted/50 border-l-[3px] border-border text-muted-foreground',
 }
 
-const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
-  pendiente: 'secondary',
-  en_curso:  'default',
+const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'info'> = {
+  pendiente: 'warning',
+  en_curso:  'info',
 }
 
 const TIPO_LABEL: Record<string, string> = {
@@ -160,7 +160,7 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
             onClick={completar}
             disabled={completing}
             title="Marcar como completada"
-            className="text-muted-foreground hover:text-emerald-600"
+            className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
           >
             <CheckIcon className="size-4" />
           </Button>
@@ -358,7 +358,7 @@ function TaskCard({ t }: { t: any }) {
   const persona = personaFor(t.asignado)
   const initStyle = persona
     ? TEAM[persona].avatar
-    : 'bg-white/60 text-muted-foreground'
+    : 'bg-background/60 text-muted-foreground'
 
   const hora = horaDeTarea(t)
   return (
