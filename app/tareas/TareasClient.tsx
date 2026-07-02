@@ -160,7 +160,8 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
             onClick={completar}
             disabled={completing}
             title="Marcar como completada"
-            className="text-muted-foreground hover:text-emerald-600 dark:hover:text-emerald-400"
+            aria-label="Marcar como completada"
+            className="text-muted-foreground hover:text-success"
           >
             <CheckIcon className="size-4" />
           </Button>

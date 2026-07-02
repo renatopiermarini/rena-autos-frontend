@@ -12,7 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon, ArrowLeftRightIcon } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   pendiente:  'warning',
@@ -474,8 +475,12 @@ export default function TransferenciasClient({
                 })}
                 {mostrar.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                      Sin transferencias {filtro === 'activas' ? 'activas' : ''}.
+                    <td colSpan={6}>
+                      <EmptyState
+                        icon={ArrowLeftRightIcon}
+                        title={filtro === 'activas' ? 'Sin transferencias activas' : 'Sin transferencias'}
+                        hint="Creá una con “Nueva transferencia”."
+                      />
                     </td>
                   </tr>
                 )}

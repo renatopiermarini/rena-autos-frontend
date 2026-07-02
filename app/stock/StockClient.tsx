@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, CheckIcon, AlertCircleIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, CheckIcon, AlertCircleIcon, SearchIcon, XIcon, CarIcon } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 
 const CAT_LABEL_FIN: Record<string, string> = {
   vehicle_purchase: 'Compra',
@@ -87,7 +88,9 @@ function ToggleCheck({
     <button
       onClick={toggle}
       title={error ? 'Error al guardar' : val ? 'Marcar como pendiente' : 'Marcar como listo'}
-      className={`transition-colors ${val ? 'text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
+      aria-label={error ? 'Error al guardar' : val ? 'Marcar como pendiente' : 'Marcar como listo'}
+      aria-pressed={val}
+      className={`transition-colors ${val ? 'text-success hover:text-success/80' : 'text-muted-foreground/40 hover:text-muted-foreground'}`}
     >
       {error ? <AlertCircleIcon className="size-4 text-destructive" /> : <CheckIcon className="size-4" />}
     </button>
@@ -269,7 +272,7 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
           {margen != null && (
             <div>
               <p className="text-xs text-muted-foreground">Margen</p>
-              <p className={`text-sm font-medium ${margen >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+              <p className={`text-sm font-medium ${margen >= 0 ? 'text-success' : 'text-destructive'}`}>
                 {margen >= 0 ? '+' : ''}{fmt(margen)}
               </p>
             </div>
@@ -316,7 +319,7 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
                   ) : fin.margen_esperado != null && (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Margen esperado</span>
-                      <span className={fin.margen_esperado >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>
+                      <span className={fin.margen_esperado >= 0 ? 'text-success' : 'text-destructive'}>
                         {(fin.margen_esperado >= 0 ? '+' : '') + fmt(fin.margen_esperado)}
                       </span>
                     </div>
@@ -418,7 +421,7 @@ function VehicleTable({
   }
 
   if (vehicles.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">Sin vehículos.</p>
+    return <EmptyState icon={CarIcon} title="Sin vehículos" className="py-6" />
   }
 
   return (
@@ -427,14 +430,14 @@ function VehicleTable({
         <thead>
           <tr className="border-b border-border text-left">
             <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">Auto</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">Patente</th>
+            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs hidden sm:table-cell">Patente</th>
             <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">Estado</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">KM</th>
+            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs hidden md:table-cell">KM</th>
             <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">Precio</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">Días</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center">Lav</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center">Fotos</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center">Pub</th>
+            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs hidden md:table-cell">Días</th>
+            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center hidden sm:table-cell" title="Lavado">Lav</th>
+            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center hidden sm:table-cell">Fotos</th>
+            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center hidden sm:table-cell" title="Publicado">Pub</th>
           </tr>
         </thead>
         <tbody>
@@ -460,11 +463,11 @@ function VehicleTable({
                       )}
                     </div>
                   </td>
-                  <td className="py-2.5 px-3 text-muted-foreground">{v.dominio || '—'}</td>
+                  <td className="py-2.5 px-3 text-muted-foreground hidden sm:table-cell">{v.dominio || '—'}</td>
                   <td className="py-2.5 px-3">
                     <Badge variant={estadoMeta(v.estado).variant}>{estadoMeta(v.estado).label}</Badge>
                   </td>
-                  <td className="py-2.5 px-3 text-muted-foreground tabular-nums">{v.km ? fmtN(v.km) : '—'}</td>
+                  <td className="py-2.5 px-3 text-muted-foreground tabular-nums hidden md:table-cell">{v.km ? fmtN(v.km) : '—'}</td>
                   <td className="py-2.5 px-3 tabular-nums">
                     {v.precio_publicado
                       ? `$${Number(v.precio_publicado).toLocaleString('es-AR')}`
@@ -472,10 +475,10 @@ function VehicleTable({
                       ? <span className="text-muted-foreground">${Number(v.precio_venta_objetivo).toLocaleString('es-AR')}</span>
                       : '—'}
                   </td>
-                  <td className="py-2.5 px-3 text-muted-foreground">{diasEnStock(v.fecha_ingreso)}</td>
-                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} /></td>
-                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} /></td>
-                  <td className="py-2.5 px-3 text-center"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} /></td>
+                  <td className="py-2.5 px-3 text-muted-foreground hidden md:table-cell">{diasEnStock(v.fecha_ingreso)}</td>
+                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} /></td>
+                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} /></td>
+                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} /></td>
                 </tr>
                 {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} />}
               </Fragment>
@@ -525,12 +528,21 @@ export default function StockClient({
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
   const [groupMode, setGroupMode] = useState<GroupMode>('estado')
+  const [query, setQuery] = useState('')
+
+  const q = query.trim().toLowerCase()
+  const matchesQuery = (v: any) =>
+    !q || [v.marca, v.modelo, v.año, v.dominio, v.color]
+      .filter(Boolean).join(' ').toLowerCase().includes(q)
 
   const activos = vehicles.filter(v => v.estado !== 'vendido' && v.estado !== 'potencial')
-  const potenciales = vehicles.filter(v => v.estado === 'potencial')
-  const vendidos = vehicles.filter(v => v.estado === 'vendido')
+  const potencialesAll = vehicles.filter(v => v.estado === 'potencial')
+  const vendidosAll = vehicles.filter(v => v.estado === 'vendido')
+  const potenciales = potencialesAll.filter(matchesQuery)
+  const vendidos = vendidosAll.filter(matchesQuery)
 
   const filtered = activos.filter(v => {
+    if (!matchesQuery(v)) return false
     if (tipoFilter === 'todos') return true
     return v.tipo_operacion === tipoFilter
   })
@@ -574,11 +586,30 @@ export default function StockClient({
       <div className="flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Stock</h1>
         <span className="text-sm text-muted-foreground">
-          {activos.length} activos · {potenciales.length} potenciales · {vendidos.length} vendidos
+          {activos.length} activos · {potencialesAll.length} potenciales · {vendidosAll.length} vendidos
         </span>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="relative w-full sm:w-64">
+          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+          <Input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Buscar marca, modelo, patente…"
+            aria-label="Buscar vehículo"
+            className="h-8 pl-8 pr-8"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <XIcon className="size-4" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs text-muted-foreground mr-0.5">Tipo:</span>
           {TIPO_FILTER_LABELS.map(({ key, label }) => (
@@ -642,7 +673,11 @@ export default function StockClient({
             </section>
           ))}
           {filtered.length === 0 && (
-            <p className="py-6 text-center text-sm text-muted-foreground">Sin vehículos para este filtro.</p>
+            <EmptyState
+              icon={CarIcon}
+              title={q ? `Sin resultados para “${query.trim()}”` : 'Sin vehículos para este filtro'}
+              hint="Probá cambiar la búsqueda o los filtros."
+            />
           )}
         </div>
       )}

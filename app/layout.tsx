@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
         >
           <MainNav />
-          <main className="mx-auto w-full max-w-[1600px] px-8 py-6">{children}</main>
+          <main className="mx-auto w-full max-w-[1600px] px-4 sm:px-8 py-6">{children}</main>
           <Toaster position="top-right" richColors />
         </ThemeProvider>
       </body>

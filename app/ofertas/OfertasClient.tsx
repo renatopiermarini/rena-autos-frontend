@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, MailIcon, PlusIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, MailIcon, PlusIcon, HandCoinsIcon } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   pendiente: 'warning',
@@ -77,7 +78,7 @@ function OfertaRow({
           <span className="text-sm text-muted-foreground whitespace-nowrap">— {fmtMoney(o.monto_ofrecido)}</span>
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          <span className={`inline-flex items-center gap-1 text-xs ${o.email_enviado ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs ${o.email_enviado ? 'text-success' : 'text-muted-foreground'}`}>
             <MailIcon className="size-3" /> {o.email_enviado ? 'enviado' : 'pendiente'}
           </span>
           <span className="text-xs text-muted-foreground">{interesadoLabel(o.interesado_id)}</span>
@@ -298,7 +299,7 @@ export default function OfertasClient({
             <OfertaRow key={o.id} o={o} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} />
           ))}
           {sorted.length === 0 && (
-            <p className="px-4 py-6 text-sm text-muted-foreground text-center">Sin ofertas.</p>
+            <EmptyState icon={HandCoinsIcon} title="Sin ofertas" hint="Registrá una con “Nueva oferta”." />
           )}
         </CardContent>
       </Card>

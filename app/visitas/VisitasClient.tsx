@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, MailIcon, PlusIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, MailIcon, PlusIcon, CalendarClockIcon } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 
 const RESULTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   pendiente: 'info',
@@ -86,7 +87,7 @@ function VisitaRow({
           <span className="text-sm text-muted-foreground whitespace-nowrap">— {interesadoLabel(v.interesado_id)}</span>
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          <span className={`inline-flex items-center gap-1 text-xs ${v.email_enviado ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs ${v.email_enviado ? 'text-success' : 'text-muted-foreground'}`}>
             <MailIcon className="size-3" /> {v.email_enviado ? 'enviado' : 'pendiente'}
           </span>
           <Badge variant={RESULTADO_VARIANT[resultado] ?? 'outline'}>{resultado}</Badge>
@@ -308,7 +309,7 @@ export default function VisitasClient({
             <VisitaRow key={v.id} v={v} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} transferencias={transferencias} />
           ))}
           {sorted.length === 0 && (
-            <p className="px-4 py-6 text-sm text-muted-foreground text-center">Sin visitas.</p>
+            <EmptyState icon={CalendarClockIcon} title="Sin visitas" hint="Agendá una con “Nueva visita”." />
           )}
         </CardContent>
       </Card>
