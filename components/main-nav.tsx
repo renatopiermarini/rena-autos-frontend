@@ -26,12 +26,12 @@ export function MainNav() {
 
   return (
     <header className="border-b border-border sticky top-0 z-30 bg-background/90 backdrop-blur-sm">
-      <div className="mx-auto w-full max-w-[1600px] px-8 py-3 flex items-center gap-8">
-        <Link href="/" className="flex items-center gap-2 font-semibold text-sm tracking-tight shrink-0">
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-8 py-3 flex items-center gap-4 sm:gap-8">
+        <Link href="/" className="flex items-center gap-2 font-semibold text-sm tracking-tight shrink-0" aria-label="Renato Piermarini Autos — Inicio">
           <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground text-[11px] font-bold leading-none">RP</span>
-          Renato Piermarini Autos
+          <span className="hidden lg:inline">Renato Piermarini Autos</span>
         </Link>
-        <nav className="flex gap-1 overflow-x-auto scrollbar-hide">
+        <nav className="flex gap-1 overflow-x-auto scrollbar-hide [mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]">
           {NAV.map(n => {
             const active = n.href === '/' ? pathname === '/' : pathname.startsWith(n.href)
             return (
