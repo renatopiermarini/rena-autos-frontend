@@ -13,6 +13,16 @@ function bustCache() {
   revalidatePath('/', 'layout')
 }
 
+// Kapso responds 204 No Content on DELETE; Response.json() throws on
+// bodyless status codes, so pass those through without a JSON body.
+async function proxyResponse(res: Response) {
+  if (res.status === 204 || res.status === 205 || res.status === 304) {
+    return new NextResponse(null, { status: res.status })
+  }
+  const data = await res.json().catch(() => ({}))
+  return NextResponse.json(data, { status: res.status })
+}
+
 // Defense-in-depth: the dashboard UI already blocks a conflicting visita, but enforce
 // it here too so no client can write a visita on top of a transferencia turno block.
 // Mirrors the bot (rena-autos-api). Fail-open: if we can't read transferencias, allow.
@@ -62,9 +72,8 @@ export async function POST(
     headers: HEADERS,
     body: JSON.stringify(body),
   })
-  const data = await res.json().catch(() => ({}))
   if (res.ok) bustCache()
-  return NextResponse.json(data, { status: res.status })
+  return proxyResponse(res)
 }
 
 export async function PATCH(
@@ -84,9 +93,8 @@ export async function PATCH(
     headers: HEADERS,
     body: JSON.stringify(body),
   })
-  const data = await res.json().catch(() => ({}))
   if (res.ok) bustCache()
-  return NextResponse.json(data, { status: res.status })
+  return proxyResponse(res)
 }
 
 export async function DELETE(
@@ -102,7 +110,6 @@ export async function DELETE(
     method: 'DELETE',
     headers: HEADERS,
   })
-  const data = await res.json().catch(() => ({}))
   if (res.ok) bustCache()
-  return NextResponse.json(data, { status: res.status })
+  return proxyResponse(res)
 }
