@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon, UsersIcon } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   activo: 'info',
@@ -373,7 +374,7 @@ export default function InteresadosClient({
             <InteresadoRow key={i.id} i={i} vehicleLabel={vehicleLabel} ofertas={ofertas} />
           ))}
           {sorted.length === 0 && (
-            <p className="px-4 py-6 text-sm text-muted-foreground text-center">Sin interesados.</p>
+            <EmptyState icon={UsersIcon} title="Sin interesados" hint="Sumá uno con “Nuevo interesado”." />
           )}
         </CardContent>
       </Card>

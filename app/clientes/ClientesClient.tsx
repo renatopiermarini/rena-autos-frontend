@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, ContactIcon } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 
 const TIPO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   vendedor: 'secondary',
@@ -261,7 +262,7 @@ export default function ClientesClient({ clientes, interesados }: { clientes: an
           <CardContent className="p-0">
             {clientes.map(c => <ClienteRow key={c.id} c={c} />)}
             {clientes.length === 0 && (
-              <p className="px-4 py-3 text-sm text-muted-foreground">Sin clientes registrados.</p>
+              <EmptyState icon={ContactIcon} title="Sin clientes registrados" className="py-6" />
             )}
           </CardContent>
         </Card>

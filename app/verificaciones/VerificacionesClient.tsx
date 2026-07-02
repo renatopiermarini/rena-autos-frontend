@@ -12,7 +12,8 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon, ClipboardCheckIcon } from 'lucide-react'
+import { EmptyState } from '@/components/empty-state'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   pendiente: 'warning',
@@ -366,8 +367,11 @@ export default function VerificacionesClient({
                 })}
                 {mostrar.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                      Sin verificaciones {filtro === 'falta_pagar' ? 'por pagar' : 'pagas'}.
+                    <td colSpan={6}>
+                      <EmptyState
+                        icon={ClipboardCheckIcon}
+                        title={`Sin verificaciones ${filtro === 'falta_pagar' ? 'por pagar' : 'pagas'}`}
+                      />
                     </td>
                   </tr>
                 )}

@@ -48,7 +48,7 @@ function autoLabel(v: any) {
 }
 
 function TipoAmount({ tipo, monto, size = 'sm' }: { tipo: string; monto: any; size?: 'sm' | 'xs' }) {
-  const cls = tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'
+  const cls = tipo === 'ingreso' ? 'text-success' : 'text-destructive'
   const sign = tipo === 'ingreso' ? '+' : '-'
   return (
     <span className={`${size === 'sm' ? 'text-sm' : 'text-xs'} font-medium ${cls} tabular-nums`}>
@@ -392,7 +392,7 @@ function PorVehiculoTab({
                       <td className={`px-3 py-2.5 text-right font-medium tabular-nums ${
                         f.es_consignacion ? 'text-muted-foreground text-xs'
                         : f.margen_esperado == null ? 'text-muted-foreground'
-                        : f.margen_esperado >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'
+                        : f.margen_esperado >= 0 ? 'text-success' : 'text-destructive'
                       }`}>
                         {f.es_consignacion ? 'consignación'
                           : f.margen_esperado == null ? '—'
@@ -497,7 +497,7 @@ function VehicleFinancialDetail({
             {movsAuto.map((m: any) => (
               <div key={m.id} className="flex items-center justify-between px-3 py-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className={`text-xs ${m.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{m.tipo}</span>
+                  <span className={`text-xs ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>{m.tipo}</span>
                   <span className="text-sm truncate">{m.nota || CAT_LABEL[m.categoria] || m.categoria}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs whitespace-nowrap shrink-0">
@@ -638,7 +638,7 @@ function MovimientosTab({
       <div className="space-y-1 px-1">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span className="text-muted-foreground">{filtered.length} movimiento{filtered.length === 1 ? '' : 's'}</span>
-          <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">+{fmt(cashIngresos)}</span>
+          <span className="text-success tabular-nums">+{fmt(cashIngresos)}</span>
           <span className="text-destructive tabular-nums">-{fmt(cashEgresos)}</span>
           <span className="text-foreground font-medium tabular-nums">
             Neto: {cashNeto >= 0 ? '+' : ''}{fmt(cashNeto)}
@@ -649,7 +649,7 @@ function MovimientosTab({
             <span title="Préstamos recibidos, vehicle_purchase pagados por terceros, etc. — registros contables sin impacto en saldo de cuenta">
               + asientos sin impacto en saldo:
             </span>
-            <span className="text-emerald-600/70 dark:text-emerald-400/70 tabular-nums">+{fmt(offIngresos)}</span>
+            <span className="text-success/70 tabular-nums">+{fmt(offIngresos)}</span>
             <span className="text-destructive/70 tabular-nums">-{fmt(offEgresos)}</span>
           </div>
         )}
@@ -676,14 +676,14 @@ function MovimientosTab({
                   return (
                     <tr key={m.id}>
                       <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">{fmtFecha(m.created_at)}</td>
-                      <td className={`px-3 py-2 text-xs ${m.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>{m.tipo}</td>
+                      <td className={`px-3 py-2 text-xs ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>{m.tipo}</td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">{CAT_LABEL[m.categoria] ?? m.categoria}</td>
                       <td className="px-3 py-2 text-xs text-muted-foreground capitalize">{m.cuenta}</td>
                       <td className="px-3 py-2 text-xs">
                         {veh ? `${veh.marca} ${veh.modelo}` : <span className="text-muted-foreground/60">—</span>}
                       </td>
                       <td className="px-3 py-2 text-sm truncate max-w-xs">{m.nota || ''}</td>
-                      <td className={`px-3 py-2 text-sm font-medium text-right whitespace-nowrap tabular-nums ${m.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                      <td className={`px-3 py-2 text-sm font-medium text-right whitespace-nowrap tabular-nums ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>
                         {m.tipo === 'ingreso' ? '+' : '-'}{fmt(m.monto)}
                       </td>
                     </tr>
