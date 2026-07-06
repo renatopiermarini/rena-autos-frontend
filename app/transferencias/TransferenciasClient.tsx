@@ -77,7 +77,14 @@ function TransferenciaEdit({
   const [saving, setSaving] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
 
+  // The D1 transferencias table historically stored NULL ids, so legacy rows
+  // are only addressable by vehicle_id. Prefer the real id when the row has
+  // one (rows created after the table rebuild); fall back for legacy rows.
+  const rowId: number | null = t.id ?? t.vehicle_id ?? null
+  const rowKeyName = t.id != null ? 'id' : 'vehicle_id'
+
   async function save() {
+    if (rowId == null) { toast.error('Registro sin identificador — no se puede editar.'); return }
     setSaving(true)
     const veh = vehicles.find(v => v.id === vehicleId)
     const patchData: Record<string, any> = {
@@ -93,7 +100,7 @@ function TransferenciaEdit({
       horario: horario,
       notas: notas,
     }
-    const ok = await patchRecord('transferencias', t.vehicle_id, patchData, 'vehicle_id')
+    const ok = await patchRecord('transferencias', rowId, patchData, rowKeyName)
     if (vehicleId && monto !== '' && !Number.isNaN(Number(monto))) {
       await patchRecord('vehicles', Number(vehicleId), { precio_venta_final: Number(monto) })
     }
@@ -103,7 +110,8 @@ function TransferenciaEdit({
   }
 
   async function cambiarEstado(est: string) {
-    const ok = await patchRecord('transferencias', t.vehicle_id, { estado: est }, 'vehicle_id')
+    if (rowId == null) { toast.error('Registro sin identificador — no se puede editar.'); return }
+    const ok = await patchRecord('transferencias', rowId, { estado: est }, rowKeyName)
     if (est === 'completada' && t.vehicle_id) {
       await patchRecord('vehicles', t.vehicle_id, {
         estado: 'vendido',
@@ -115,7 +123,8 @@ function TransferenciaEdit({
   }
 
   async function eliminar() {
-    const ok = await deleteRecord('transferencias', t.vehicle_id, 'vehicle_id')
+    if (rowId == null) { toast.error('Registro sin identificador — no se puede eliminar.'); setConfirmDel(false); return }
+    const ok = await deleteRecord('transferencias', rowId, rowKeyName)
     setConfirmDel(false)
     if (ok) { toast.success('Transferencia eliminada'); onDone() }
     else toast.error('Error al eliminar.')
