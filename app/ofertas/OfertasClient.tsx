@@ -187,7 +187,7 @@ function NuevaOfertaForm({
               <option value="">—</option>
               {vehicles.filter(v => v.estado !== 'vendido').map(v => (
                 <option key={v.id} value={v.id}>
-                  {v.marca} {v.modelo} {v.año} {v.dominio ? `(${v.dominio})` : ''}
+                  {`${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim() || `#${v.id}`} {v.dominio ? `(${v.dominio})` : ''}
                 </option>
               ))}
             </select>
@@ -202,7 +202,7 @@ function NuevaOfertaForm({
               <option value="">— Sin identificar</option>
               {interesados.map(i => (
                 <option key={i.id} value={i.id}>
-                  {i.nombre} {i.telefono ? `(${i.telefono})` : ''}
+                  {i.nombre || `Interesado #${i.id}`} {i.telefono ? `(${i.telefono})` : ''}
                 </option>
               ))}
             </select>

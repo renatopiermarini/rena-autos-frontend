@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord } from '@/lib/kapso'
-import { fmtDM as fmtFecha, fmtHora } from '@/lib/date'
+import { fmtDM as fmtFecha, fmtHora, instantDayKey } from '@/lib/date'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -131,7 +131,7 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-          <p className="text-sm font-medium leading-snug">{t.titulo}</p>
+          <p className="text-sm font-medium leading-snug">{t.titulo || 'Sin título'}</p>
         </div>
         <div className="flex items-center gap-2 mt-1 flex-wrap pl-4">
           {t.tipo && (
@@ -179,7 +179,7 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
   function autoNombre(id: number | null) {
     if (!id) return null
     const v = vehicles.find((v: any) => v.id === id)
-    return v ? `${v.marca} ${v.modelo} ${v.año}` : null
+    return v ? `${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim() || null : null
   }
 
   const activas     = tareas.filter(t => t.estado !== 'completada')
@@ -365,7 +365,7 @@ function TaskCard({ t }: { t: any }) {
   return (
     <div className={`${style} rounded px-1.5 py-0.5 text-xs leading-snug flex items-center gap-1`} title={t.titulo}>
       {hora && <span className="font-semibold shrink-0 tabular-nums">{hora}</span>}
-      <span className="truncate flex-1">{t.titulo}</span>
+      <span className="truncate flex-1">{t.titulo || 'Sin título'}</span>
       {t.asignado && (
         <span className={`${initStyle} rounded-full w-3.5 h-3.5 flex items-center justify-center text-[9px] font-bold shrink-0`}>
           {t.asignado[0].toUpperCase()}
@@ -379,7 +379,7 @@ export function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: an
   function autoNombre(id: number | null) {
     if (!id) return null
     const v = vehicles.find((v: any) => v.id === id)
-    return v ? `${v.marca} ${v.modelo} ${v.año}` : null
+    return v ? `${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim() || null : null
   }
   const activas = tareas.filter(t => t.estado !== 'completada')
   // Within a day: timed tasks first (by HH:MM), then by priority.
@@ -393,7 +393,7 @@ export function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: an
   return (
     <MonthGrid
       items={activas}
-      dayKeyOf={t => (t.fecha_vencimiento ? t.fecha_vencimiento.slice(0, 10) : null)}
+      dayKeyOf={t => (t.fecha_vencimiento ? instantDayKey(t.fecha_vencimiento) || null : null)}
       itemKey={t => t.id}
       renderChip={t => <TaskCard t={t} />}
       renderDetail={t => <TareaRow t={t} autoNombre={autoNombre} />}

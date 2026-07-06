@@ -58,7 +58,7 @@ export default async function Inicio() {
 
   const alertas: string[] = []
   const cash = balances.find((b: any) => b.cuenta === 'cash')
-  if (cash && cash.saldo < 500) alertas.push(`Cash bajo: $${cash.saldo}`)
+  if (cash && Number(cash.saldo ?? 0) < 500) alertas.push(`Cash bajo: $${cash.saldo ?? 0}`)
   prestamosActivos.forEach((p: any) => {
     if (!p.fecha_vencimiento) return
     const dias = Math.ceil((new Date(p.fecha_vencimiento).getTime() - hoy.getTime()) / 86400000)
@@ -165,7 +165,7 @@ export default async function Inicio() {
           <CardContent className="divide-y divide-border p-0 max-h-[420px] overflow-y-auto">
             {activos.slice(0, 12).map((v: any) => (
               <div key={v.id} className="flex items-center justify-between px-3 py-2">
-                <span className="text-sm">{v.marca} {v.modelo} {v.año}</span>
+                <span className="text-sm">{`${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim() || '—'}</span>
                 <div className="flex items-center gap-2">
                   {v.dominio && <span className="text-xs text-muted-foreground">{v.dominio}</span>}
                   <Badge variant={estadoMeta(v.estado).variant}>{estadoMeta(v.estado).label}</Badge>
@@ -183,7 +183,7 @@ export default async function Inicio() {
           <CardContent className="divide-y divide-border p-0 max-h-[420px] overflow-y-auto">
             {urgentes.slice(0, 12).map((t: any) => (
               <div key={t.id} className="flex items-center justify-between px-3 py-2">
-                <span className="text-sm">{t.titulo}</span>
+                <span className="text-sm">{t.titulo || 'Sin título'}</span>
                 <span className="text-xs text-muted-foreground">{t.asignado}</span>
               </div>
             ))}
@@ -202,7 +202,7 @@ export default async function Inicio() {
               <div key={o.id} className="flex items-center justify-between px-3 py-2">
                 <span className="text-sm truncate">{autoLabel(o.vehicle_id)}</span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-sm text-muted-foreground tabular-nums">USD {Number(o.monto_ofrecido).toLocaleString('es-AR')}</span>
+                  <span className="text-sm text-muted-foreground tabular-nums">USD {(Number(o.monto_ofrecido) || 0).toLocaleString('es-AR')}</span>
                   <Badge variant={o.email_enviado ? 'default' : 'outline'}>{o.email_enviado ? 'enviado' : 'pendiente'}</Badge>
                 </div>
               </div>
