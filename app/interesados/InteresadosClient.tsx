@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { patchRecord, postRecord, deleteRecordDetailed } from '@/lib/kapso'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -88,9 +88,10 @@ function InteresadoRow({
   async function borrar() {
     if (!confirm(`¿Borrar interesado ${i.nombre}?`)) return
     setSaving(true)
-    const ok = await deleteRecord('interesados', i.id)
+    const { ok, error } = await deleteRecordDetailed('interesados', i.id)
     setSaving(false)
     if (ok) { toast.success('Borrado'); router.refresh() }
+    else toast.error(error || 'Error al borrar')
   }
 
   const ofertasDeEste = ofertas.filter(o => o.interesado_id === i.id)

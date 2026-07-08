@@ -68,8 +68,20 @@ export async function deleteRecord(
   id: number,
   keyName: string = 'id',
 ): Promise<boolean> {
+  return (await deleteRecordDetailed(table, id, keyName)).ok
+}
+
+// Like deleteRecord but surfaces the proxy's rejection message (e.g. the 409
+// "tiene N visitas vinculadas" from the orphan-guard) so the UI can show it.
+export async function deleteRecordDetailed(
+  table: string,
+  id: number,
+  keyName: string = 'id',
+): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(`/api/db/${table}?${keyName}=${id}`, { method: 'DELETE' })
-  return res.ok
+  if (res.ok) return { ok: true }
+  const json = await res.json().catch(() => ({} as any))
+  return { ok: false, error: json.message || json.error || `Error ${res.status}` }
 }
 
 // ── Derived finance helpers (pure) ────────────────────────────────────────────
