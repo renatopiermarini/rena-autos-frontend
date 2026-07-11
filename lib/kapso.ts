@@ -132,8 +132,15 @@ export function computeVehicleFinancials(
   for (const m of movimientos) {
     if (m.vehicle_id !== vehicleId) continue
     if (m.tipo !== 'egreso') continue
-    const cat = m.categoria || 'sin_categoria'
+    // Only real vehicle costs count as gastos. 'vehicle_purchase' is the SAME
+    // money as vehicle.precio_compra (live 2026-07-11: vehicles 33/36 had
+    // both → costo_total double-counted the purchase); 'refund' cancels an
+    // ingreso (returned seña), it isn't a cost of the car. Off-balance
+    // expenses (saldo_post null, fronted by an acreedor) DO count — the car
+    // cost that money regardless of whose pocket paid first.
+    if (m.categoria !== 'vehicle_expense') continue
     const monto = Number(m.monto ?? 0)
+    const cat = m.categoria || 'sin_categoria'
     gastos_por_categoria[cat] = (gastos_por_categoria[cat] ?? 0) + monto
     gastos_total += monto
   }
