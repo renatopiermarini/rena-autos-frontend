@@ -75,7 +75,8 @@ function ClienteRow({ c }: { c: any }) {
       toast.success('Cliente actualizado')
       router.refresh()
     } else {
-      toast.error('Error al guardar')
+      const err = await res.json().catch(() => ({} as any))
+      toast.error(err.message || err.error || 'Error al guardar')
     }
   }
 

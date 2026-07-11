@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { patchRecord, postRecord, deleteRecordDetailed } from '@/lib/kapso'
+import { patchRecordDetailed, postRecord, deleteRecordDetailed } from '@/lib/kapso'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,12 +62,13 @@ function InteresadoRow({
 
   async function setEstadoQuick(estado: string) {
     setSaving(true)
-    const ok = await patchRecord('interesados', i.id, {
+    const { ok, error } = await patchRecordDetailed('interesados', i.id, {
       estado,
       updated_at: new Date().toISOString(),
     })
     setSaving(false)
     if (ok) { toast.success(`Estado: ${estado}`); router.refresh() }
+    else toast.error(error || 'Error al actualizar')
   }
 
   async function save() {
@@ -80,9 +81,10 @@ function InteresadoRow({
     for (const k of Object.keys(payload)) {
       if (payload[k] === '' && k !== 'nombre') payload[k] = null
     }
-    const ok = await patchRecord('interesados', i.id, payload)
+    const { ok, error } = await patchRecordDetailed('interesados', i.id, payload)
     setSaving(false)
     if (ok) { setEditing(false); toast.success('Guardado'); router.refresh() }
+    else toast.error(error || 'Error al guardar')
   }
 
   async function borrar() {

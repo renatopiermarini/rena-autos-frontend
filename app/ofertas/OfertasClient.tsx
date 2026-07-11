@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { patchRecordDetailed, postRecord, deleteRecordDetailed } from '@/lib/kapso'
 import { fmtDM as fmtDate } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -40,28 +40,31 @@ function OfertaRow({
     setSaving(estado)
     const payload: any = { estado, updated_at: new Date().toISOString() }
     if (estado === 'aceptada') payload.monto_aceptado = o.monto_ofrecido
-    const ok = await patchRecord('ofertas', o.id, payload)
+    const { ok, error } = await patchRecordDetailed('ofertas', o.id, payload)
     setSaving('')
     if (ok) { toast.success(`Oferta ${estado}`); router.refresh() }
+    else toast.error(error || 'Error al actualizar')
   }
 
   async function saveRespuesta() {
     setSaving('respuesta')
-    const ok = await patchRecord('ofertas', o.id, {
+    const { ok, error } = await patchRecordDetailed('ofertas', o.id, {
       respuesta_propietario: respuesta || null,
       fecha_respuesta: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
     setSaving('')
     if (ok) { toast.success('Respuesta guardada'); router.refresh() }
+    else toast.error(error || 'Error al guardar')
   }
 
   async function borrar() {
     if (!confirm(`¿Borrar oferta #${o.id}?`)) return
     setSaving('delete')
-    const ok = await deleteRecord('ofertas', o.id)
+    const { ok, error } = await deleteRecordDetailed('ofertas', o.id)
     setSaving('')
     if (ok) { toast.success('Oferta borrada'); router.refresh() }
+    else toast.error(error || 'Error al borrar')
   }
 
   const estado = o.estado ?? 'pendiente'

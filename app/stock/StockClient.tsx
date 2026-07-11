@@ -68,7 +68,7 @@ function ToggleCheck({
     // (lavado→lavado, fotos_ok→fotos, publicado→publicacion). No revertimos al destildar.
     if (next && pendingTareaIds.length > 0) {
       const now = new Date().toISOString()
-      await Promise.all(pendingTareaIds.map(id =>
+      const results = await Promise.all(pendingTareaIds.map(id =>
         fetch(`/api/db/tareas?id=${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -80,6 +80,8 @@ function ToggleCheck({
           }),
         })
       ))
+      const failed = results.filter(r => !r.ok).length
+      if (failed > 0) toast.error(`${failed} tarea(s) vinculada(s) no se pudieron completar`)
     }
     router.refresh()
   }
@@ -211,7 +213,10 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
     })
     setSaving(false)
     if (res.ok) { setEditing(false); toast.success('Vehículo actualizado'); router.refresh() }
-    else toast.error('Error al guardar')
+    else {
+      const err = await res.json().catch(() => ({} as any))
+      toast.error(err.message || err.error || 'Error al guardar')
+    }
   }
 
   const cliente = clientes.find((c: any) => c.id === v.cliente_id)

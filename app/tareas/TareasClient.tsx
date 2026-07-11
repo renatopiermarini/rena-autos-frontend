@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { patchRecord, postRecord } from '@/lib/kapso'
+import { patchRecordDetailed, postRecord } from '@/lib/kapso'
 import { fmtDM as fmtFecha, fmtHora, instantDayKey } from '@/lib/date'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -116,14 +116,14 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
   async function completar(e: React.MouseEvent) {
     e.stopPropagation()
     setCompleting(true)
-    const ok = await patchRecord('tareas', t.id, {
+    const { ok, error } = await patchRecordDetailed('tareas', t.id, {
       estado: 'completada',
       completado_por: 'rena',
       fecha_completado: new Date().toISOString(),
     })
     setCompleting(false)
     if (ok) { toast.success('Tarea completada'); router.refresh() }
-    else toast.error('Error al completar.')
+    else toast.error(error || 'Error al completar.')
   }
 
   return (

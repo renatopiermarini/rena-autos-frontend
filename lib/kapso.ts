@@ -39,28 +39,48 @@ export async function getVerificaciones()  { return get('verificaciones_mecanica
 
 // ── Client-side mutations (call the /api/db proxy) ────────────────────────────
 
+// The /api/db proxy returns actionable errors (400 "`estado` inválido: …",
+// 404 "No existe…", 409 "tiene N visitas vinculadas") — the *Detailed helpers
+// surface them so callers can toast the real reason instead of a generic
+// "Error al guardar" (or, worse, nothing).
+async function proxyError(res: Response): Promise<string> {
+  const json = await res.json().catch(() => ({} as any))
+  return json.message || json.error || `Error ${res.status}`
+}
+
 export async function patchRecord(
   table: string,
   id: number,
   data: object,
   keyName: string = 'id',
 ): Promise<boolean> {
+  return (await patchRecordDetailed(table, id, data, keyName)).ok
+}
+
+export async function patchRecordDetailed(
+  table: string,
+  id: number,
+  data: object,
+  keyName: string = 'id',
+): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(`/api/db/${table}?${keyName}=${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  return res.ok
+  if (res.ok) return { ok: true }
+  return { ok: false, error: await proxyError(res) }
 }
 
-export async function postRecord(table: string, data: object): Promise<{ ok: boolean; data?: any }> {
+export async function postRecord(table: string, data: object): Promise<{ ok: boolean; data?: any; error?: string }> {
   const res = await fetch(`/api/db/${table}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
   const json = await res.json().catch(() => ({}))
-  return { ok: res.ok, data: json }
+  if (res.ok) return { ok: true, data: json }
+  return { ok: false, data: json, error: json.message || json.error || `Error ${res.status}` }
 }
 
 export async function deleteRecord(
@@ -80,8 +100,7 @@ export async function deleteRecordDetailed(
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(`/api/db/${table}?${keyName}=${id}`, { method: 'DELETE' })
   if (res.ok) return { ok: true }
-  const json = await res.json().catch(() => ({} as any))
-  return { ok: false, error: json.message || json.error || `Error ${res.status}` }
+  return { ok: false, error: await proxyError(res) }
 }
 
 // ── Derived finance helpers (pure) ────────────────────────────────────────────

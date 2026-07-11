@@ -1,7 +1,7 @@
 'use client'
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { deleteRecordDetailed, patchRecordDetailed, postRecord } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, todayKey as today } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -67,10 +67,10 @@ function VerificacionEdit({
       fecha_pago: fechaPago || null,
       notas,
     }
-    const ok = await patchRecord('verificaciones_mecanicas', v.id, patchData)
+    const { ok, error } = await patchRecordDetailed('verificaciones_mecanicas', v.id, patchData)
     setSaving(false)
     if (ok) { toast.success('Verificación actualizada'); onDone() }
-    else toast.error('Error al guardar.')
+    else toast.error(error || 'Error al guardar.')
   }
 
   async function cambiarEstado(est: string) {
@@ -79,16 +79,16 @@ function VerificacionEdit({
       patch.fecha_pago = today()
       setFechaPago(patch.fecha_pago)
     }
-    const ok = await patchRecord('verificaciones_mecanicas', v.id, patch)
+    const { ok, error } = await patchRecordDetailed('verificaciones_mecanicas', v.id, patch)
     if (ok) { toast.success(`Estado: ${est}`); onDone() }
-    else toast.error('Error al cambiar estado.')
+    else toast.error(error || 'Error al cambiar estado.')
   }
 
   async function eliminar() {
-    const ok = await deleteRecord('verificaciones_mecanicas', v.id)
+    const { ok, error } = await deleteRecordDetailed('verificaciones_mecanicas', v.id)
     setConfirmDel(false)
     if (ok) { toast.success('Verificación eliminada'); onDone() }
-    else toast.error('Error al eliminar.')
+    else toast.error(error || 'Error al eliminar.')
   }
 
   return (

@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { patchRecordDetailed, postRecord, deleteRecordDetailed } from '@/lib/kapso'
 import { fmtDateTime, fmtDM, toARInputValue, fromARInputValue } from '@/lib/date'
 import { visitaConflict } from '@/lib/agenda'
 import { Card, CardContent } from '@/components/ui/card'
@@ -50,9 +50,10 @@ function VisitaRow({
 
   async function setResultado(resultado: string) {
     setSaving(resultado)
-    const ok = await patchRecord('visitas', v.id, { resultado })
+    const { ok, error } = await patchRecordDetailed('visitas', v.id, { resultado })
     setSaving('')
     if (ok) { toast.success(`Visita ${resultado}`); router.refresh() }
+    else toast.error(error || 'Error al actualizar')
   }
 
   async function saveDetalles() {
@@ -60,17 +61,19 @@ function VisitaRow({
     setSaving('detalles')
     const payload: any = { notas: notas || null }
     if (fecha) payload.fecha = fromARInputValue(fecha)
-    const ok = await patchRecord('visitas', v.id, payload)
+    const { ok, error } = await patchRecordDetailed('visitas', v.id, payload)
     setSaving('')
     if (ok) { toast.success('Cambios guardados'); router.refresh() }
+    else toast.error(error || 'Error al guardar')
   }
 
   async function borrar() {
     if (!confirm(`¿Borrar visita #${v.id}?`)) return
     setSaving('delete')
-    const ok = await deleteRecord('visitas', v.id)
+    const { ok, error } = await deleteRecordDetailed('visitas', v.id)
     setSaving('')
     if (ok) { toast.success('Visita borrada'); router.refresh() }
+    else toast.error(error || 'Error al borrar')
   }
 
   const resultado = v.resultado ?? 'pendiente'
