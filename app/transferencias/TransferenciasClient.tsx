@@ -2,7 +2,7 @@
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import { deleteRecordDetailed, patchRecord, patchRecordDetailed, postRecord } from '@/lib/kapso'
-import { fmtDMY as fmtFecha } from '@/lib/date'
+import { fmtDMY as fmtFecha, todayKey } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -116,7 +116,7 @@ function TransferenciaEdit({
     if (est === 'completada' && t.vehicle_id) {
       const venta = await patchRecordDetailed('vehicles', t.vehicle_id, {
         estado: 'vendido',
-        fecha_venta: new Date().toISOString().slice(0, 10),
+        fecha_venta: todayKey(),   // AR-local: UTC slice wrote TOMORROW after 21:00
       })
       if (!venta.ok) toast.error(venta.error || 'No se pudo marcar el vehículo como vendido')
     }

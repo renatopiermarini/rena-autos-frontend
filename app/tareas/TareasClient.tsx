@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecordDetailed, postRecord } from '@/lib/kapso'
-import { fmtDM as fmtFecha, fmtHora, instantDayKey } from '@/lib/date'
+import { fmtDM as fmtFecha, fmtHora, localDayKey, parseAny } from '@/lib/date'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -393,7 +393,9 @@ export function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: an
   return (
     <MonthGrid
       items={activas}
-      dayKeyOf={t => (t.fecha_vencimiento ? instantDayKey(t.fecha_vencimiento) || null : null)}
+      // fecha_vencimiento is date-only: instantDayKey parsed it as UTC midnight
+      // → previous day in AR (tasks landed one calendar cell early).
+      dayKeyOf={t => { const d = parseAny(t.fecha_vencimiento); return d ? localDayKey(d) : null }}
       itemKey={t => t.id}
       renderChip={t => <TaskCard t={t} />}
       renderDetail={t => <TareaRow t={t} autoNombre={autoNombre} />}

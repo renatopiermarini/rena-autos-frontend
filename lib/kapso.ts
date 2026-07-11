@@ -181,8 +181,12 @@ export function computePrestamoStatus(prestamo: any, today: Date = new Date()): 
   const tasa_anual_pct = tasaRaw > 1 ? tasaRaw : tasaRaw * 100
   const tasa_anual = tasa_anual_pct / 100
 
+  // Date-only strings parse as UTC midnight → AR day-diffs off by one near
+  // midnight; anchor them to local noon (same rule as lib/date.ts parseAny).
   const inicioStr = prestamo.fecha_inicio || prestamo.created_at
-  const inicio = inicioStr ? new Date(inicioStr) : today
+  const inicio = inicioStr
+    ? new Date(String(inicioStr).includes('T') ? inicioStr : inicioStr + 'T12:00:00')
+    : today
   const dias_transcurridos = Math.max(0, Math.floor((today.getTime() - inicio.getTime()) / 86400000))
   const interes_acumulado = capital * tasa_anual * (dias_transcurridos / 365)
 
@@ -191,7 +195,9 @@ export function computePrestamoStatus(prestamo: any, today: Date = new Date()): 
 
   let dias_vencimiento: number | null = null
   if (prestamo.fecha_vencimiento) {
-    const v = new Date(prestamo.fecha_vencimiento)
+    const v = new Date(String(prestamo.fecha_vencimiento).includes('T')
+      ? prestamo.fecha_vencimiento
+      : prestamo.fecha_vencimiento + 'T12:00:00')
     dias_vencimiento = Math.ceil((v.getTime() - today.getTime()) / 86400000)
   }
   const vencido = prestamo.estado === 'vencido' || (dias_vencimiento != null && dias_vencimiento < 0)
