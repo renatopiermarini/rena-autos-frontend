@@ -17,10 +17,11 @@ const RESULTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'd
   pendiente: 'info',
   concretada: 'success',
   cancelada: 'destructive',
-  no_show: 'warning',
+  no_compro: 'warning',
 }
 
-const RESULTADOS = ['pendiente', 'concretada', 'cancelada', 'no_show'] as const
+// Must match the server enum (proxy route.ts / bot ENUMS): no_compro, not no_show.
+const RESULTADOS = ['pendiente', 'concretada', 'cancelada', 'no_compro'] as const
 
 const nativeSelectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'

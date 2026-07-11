@@ -14,7 +14,7 @@ import { EmptyState } from '@/components/empty-state'
 const TIPO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   vendedor: 'secondary',
   comprador: 'default',
-  ambos: 'outline',
+  acreedor: 'destructive',
 }
 
 const nativeSelectCls =
@@ -136,7 +136,7 @@ function ClienteRow({ c }: { c: any }) {
               <select value={form.tipo} onChange={e => set('tipo')(e.target.value)} className={nativeSelectCls}>
                 <option value="comprador">comprador</option>
                 <option value="vendedor">vendedor</option>
-                <option value="ambos">ambos</option>
+                <option value="acreedor">acreedor</option>
               </select>
             </div>
             <div className="space-y-1.5">
