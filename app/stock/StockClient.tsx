@@ -51,9 +51,12 @@ function ToggleCheck({
   const router = useRouter()
   const [val, setVal] = useState(value)
   const [error, setError] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   async function toggle(e: React.MouseEvent) {
     e.stopPropagation()
+    if (busy) return                          // double-toggle race
+    setBusy(true)
     const next = !val
     setVal(next)
     setError(false)
@@ -62,7 +65,7 @@ function ToggleCheck({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ [field]: next ? 1 : 0, updated_at: new Date().toISOString() }),
     })
-    if (!res.ok) { setVal(!next); setError(true); return }
+    if (!res.ok) { setVal(!next); setError(true); setBusy(false); return }
 
     // Al tildar como hecho, completamos también las tareas pendientes del mismo tipo
     // (lavado→lavado, fotos_ok→fotos, publicado→publicacion). No revertimos al destildar.
@@ -83,6 +86,7 @@ function ToggleCheck({
       const failed = results.filter(r => !r.ok).length
       if (failed > 0) toast.error(`${failed} tarea(s) vinculada(s) no se pudieron completar`)
     }
+    setBusy(false)
     router.refresh()
   }
 

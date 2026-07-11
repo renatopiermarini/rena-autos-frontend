@@ -1,7 +1,7 @@
 'use client'
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { deleteRecordDetailed, patchRecord, patchRecordDetailed, postRecord } from '@/lib/kapso'
+import { deleteRecordDetailed, patchRecordDetailed, postRecord } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, todayKey } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -112,6 +112,8 @@ function TransferenciaEdit({
 
   async function cambiarEstado(est: string) {
     if (rowId == null) { toast.error('Registro sin identificador — no se puede editar.'); return }
+    if (saving) return                       // double-click = double vendido/fecha_venta write
+    setSaving(true)
     const { ok, error } = await patchRecordDetailed('transferencias', rowId, { estado: est }, rowKeyName)
     if (est === 'completada' && t.vehicle_id) {
       const venta = await patchRecordDetailed('vehicles', t.vehicle_id, {
@@ -120,6 +122,7 @@ function TransferenciaEdit({
       })
       if (!venta.ok) toast.error(venta.error || 'No se pudo marcar el vehículo como vendido')
     }
+    setSaving(false)
     if (ok) { toast.success(`Estado: ${est.replace(/_/g, ' ')}`); onDone() }
     else toast.error(error || 'Error al cambiar estado.')
   }
@@ -227,6 +230,7 @@ function TransferenciaEdit({
               size="xs"
               variant={t.estado === est ? 'default' : 'outline'}
               onClick={() => cambiarEstado(est)}
+              disabled={saving}
             >
               {est.replace(/_/g, ' ')}
             </Button>
@@ -289,7 +293,8 @@ function NuevaTransferenciaDialog({
     }
     const res = await postRecord('transferencias', payload)
     if (monto !== '' && !Number.isNaN(Number(monto))) {
-      await patchRecord('vehicles', Number(vehicleId), { precio_venta_final: Number(monto) })
+      const precio = await patchRecordDetailed('vehicles', Number(vehicleId), { precio_venta_final: Number(monto) })
+      if (!precio.ok) toast.error(precio.error || 'No se pudo guardar el precio de venta en el vehículo')
     }
     setSaving(false)
     if (res.ok) {

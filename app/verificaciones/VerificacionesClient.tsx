@@ -74,12 +74,15 @@ function VerificacionEdit({
   }
 
   async function cambiarEstado(est: string) {
+    if (saving) return                        // double-click = duplicate PATCH
+    setSaving(true)
     const patch: Record<string, any> = { estado: est }
     if (est === 'pagada' && !fechaPago) {
       patch.fecha_pago = today()
       setFechaPago(patch.fecha_pago)
     }
     const { ok, error } = await patchRecordDetailed('verificaciones_mecanicas', v.id, patch)
+    setSaving(false)
     if (ok) { toast.success(`Estado: ${est}`); onDone() }
     else toast.error(error || 'Error al cambiar estado.')
   }
@@ -136,6 +139,7 @@ function VerificacionEdit({
               size="xs"
               variant={v.estado === est ? 'default' : 'outline'}
               onClick={() => cambiarEstado(est)}
+              disabled={saving}
             >
               {est}
             </Button>
