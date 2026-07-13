@@ -69,3 +69,36 @@ export function transferenciaBlocks(transferencias: any[]): CalendarBlock[] {
   }
   return out
 }
+
+// ── turnos-table blocks (bot-created citas: verificación policial, registro…) ──
+//
+// The bot stores these in the `turnos` table (full ISO `fecha` + optional
+// `duracion_horas`); the agenda ignored them entirely — a freshly agreed turno
+// never showed on the calendar (bug found 2026-07-13). Default width matches
+// BLOCK_HOURS when duracion_horas is absent (legacy rows / column not yet added).
+
+const TURNO_LABELS: Record<string, string> = {
+  transferencia: 'Turno transferencia',
+  verificacion_policial: 'Verificación policial',
+}
+
+export function turnosBlocks(turnos: any[]): CalendarBlock[] {
+  const out: CalendarBlock[] = []
+  for (const t of turnos ?? []) {
+    if (String(t?.estado ?? 'pendiente') !== 'pendiente') continue
+    const start = parseInstant(t?.fecha)
+    if (!start) continue
+    const dur = Number(t?.duracion_horas)
+    const hours = Number.isFinite(dur) && dur > 0 ? dur : BLOCK_HOURS
+    out.push({
+      id: `turno-${t.id}`,
+      title: TURNO_LABELS[String(t?.tipo ?? '')] ?? `Turno ${t?.tipo ?? ''}`.trim(),
+      start,
+      end: new Date(start.getTime() + hours * 3600_000),
+      kind: 'transferencia',
+      subtitle: t.notas || undefined,
+      meta: t,
+    })
+  }
+  return out
+}

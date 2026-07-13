@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CalendarView } from '@/app/tareas/TareasClient'
 import { WeekTimeGrid } from '@/components/calendar/WeekTimeGrid'
-import { transferenciaBlocks } from '@/lib/agenda'
+import { transferenciaBlocks, turnosBlocks } from '@/lib/agenda'
 import { parseInstant } from '@/lib/date'
 import type { CalendarEvent } from '@/components/calendar/types'
 
@@ -17,9 +17,9 @@ function interLabel(interesados: any[], id: any): string {
 }
 
 export default function AgendaClient({
-  tareas, visitas, transferencias, vehicles, interesados,
+  tareas, visitas, transferencias, turnos, vehicles, interesados,
 }: {
-  tareas: any[]; visitas: any[]; transferencias: any[]; vehicles: any[]; interesados: any[]
+  tareas: any[]; visitas: any[]; transferencias: any[]; turnos: any[]; vehicles: any[]; interesados: any[]
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<'tareas' | 'visitas'>('visitas')
@@ -39,7 +39,7 @@ export default function AgendaClient({
     })
   }
 
-  const blocks = transferenciaBlocks(transferencias)
+  const blocks = [...transferenciaBlocks(transferencias), ...turnosBlocks(turnos)]
 
   const pendVisitas = visitas.filter(v => v.resultado === 'pendiente').length
 
