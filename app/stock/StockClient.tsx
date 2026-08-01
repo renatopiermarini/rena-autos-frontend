@@ -542,7 +542,10 @@ export default function StockClient({
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
-  const [groupMode, setGroupMode] = useState<GroupMode>('estado')
+  // Default to ownership, not estado: "is this car mine or on consignment?" is
+  // the question this page gets opened to answer, and grouping by estado made a
+  // propio car sit under a heading that read like consignación.
+  const [groupMode, setGroupMode] = useState<GroupMode>('tipo')
   const [query, setQuery] = useState('')
 
   const q = query.trim().toLowerCase()
