@@ -518,22 +518,10 @@ const ESTADO_ORDER = [
   'a_ingresar', 'confirmado', 'en_stock',
   'en_reparacion', 'va_a_pensarlo', 'necesita_follow_up', 'reservado',
 ]
-// These label ESTADOS, not ownership. 'confirmado' used to render as
-// "Consignación" and 'en_stock' as "Propios", which collided head-on with the
-// propio/consignación vocabulary of tipo_operacion: a car that IS propio showed
-// under a heading saying "Consignación" purely because its estado was
-// confirmado. Ownership has its own grouping (the "Tipo" button) and its own
-// badge — keep these two vocabularies apart.
-const ESTADO_LABEL: Record<string, string> = {
-  potencial: 'Potencial',
-  a_ingresar: 'A ingresar',
-  confirmado: 'Confirmados',
-  en_stock: 'En stock',
-  en_reparacion: 'En reparación',
-  va_a_pensarlo: 'Va a pensarlo',
-  necesita_follow_up: 'Necesita follow-up',
-  reservado: 'Reservado',
-}
+// Group headings reuse lib/estados.ts so there is exactly ONE estado→label map.
+// There used to be a second copy right here, and the two drifted: the headings
+// were corrected while the row badges kept rendering the old wording, so a car
+// could sit under "Propios" with a badge reading "Consignación".
 
 export default function StockClient({
   vehicles, tareas, clientes, movimientos = [], prestamos = [],
@@ -589,7 +577,7 @@ export default function StockClient({
         .map(estado => {
           const vs = filtered.filter(v => v.estado === estado)
           return vs.length > 0
-            ? { label: `${ESTADO_LABEL[estado] ?? estado} (${vs.length})`, vehicles: vs }
+            ? { label: `${estadoMeta(estado).label} (${vs.length})`, vehicles: vs }
             : null
         })
         .filter(Boolean) as { label: string; vehicles: any[] }[]

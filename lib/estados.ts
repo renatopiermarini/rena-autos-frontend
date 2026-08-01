@@ -8,8 +8,12 @@ export type BadgeVariant =
 const ESTADO_META: Record<string, { label: string; variant: BadgeVariant }> = {
   potencial:          { label: 'Potencial',          variant: 'outline' },
   a_ingresar:         { label: 'A ingresar',         variant: 'info' },
-  confirmado:         { label: 'Consignación',       variant: 'info' },
-  en_stock:           { label: 'Propios',            variant: 'success' },
+  // These name ESTADOS, never ownership. They used to read 'Consignación' and
+  // 'Propios', which are tipo_operacion values — so a propio car whose estado
+  // was confirmado showed a badge saying "Consignación". Ownership has its own
+  // grouping and its own badge; keep the two vocabularies apart.
+  confirmado:         { label: 'Confirmado',         variant: 'info' },
+  en_stock:           { label: 'En stock',           variant: 'success' },
   en_reparacion:      { label: 'En reparación',      variant: 'warning' },
   va_a_pensarlo:      { label: 'Va a pensarlo',      variant: 'outline' },
   necesita_follow_up: { label: 'Necesita follow-up', variant: 'destructive' },
