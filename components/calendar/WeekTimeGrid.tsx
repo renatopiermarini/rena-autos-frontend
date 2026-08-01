@@ -51,7 +51,7 @@ type Props = {
   blocks: CalendarBlock[]
   dayStartHour?: number
   dayEndHour?: number
-  /** `YYYY-MM-DD` to open on, from `/agenda?d=`. Applied after mount. */
+  /** `YYYY-MM-DD` to open on, from `/calendario?d=`. Applied after mount. */
   initialDay?: string | null
   onEventClick?: (e: CalendarEvent) => void
   onBlockClick?: (b: CalendarBlock) => void

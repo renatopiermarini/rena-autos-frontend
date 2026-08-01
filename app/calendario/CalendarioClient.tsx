@@ -20,7 +20,7 @@ function interLabel(interesados: any[], id: any): string {
 // `v.notas`, which put raw internal notes on screen wherever an interesado was missing
 // or unrecognised.
 
-export default function AgendaClient({
+export default function CalendarioClient({
   tareas, visitas, transferencias, turnos, vehicles, interesados,
 }: {
   tareas: any[]; visitas: any[]; transferencias: any[]; turnos: any[]; vehicles: any[]; interesados: any[]

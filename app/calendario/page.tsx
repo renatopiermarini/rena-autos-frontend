@@ -1,12 +1,12 @@
 import { getTareas, getVisitas, getTransferencias, getTurnos, getVehicles, getInteresados } from '@/lib/kapso'
-import AgendaClient from './AgendaClient'
+import CalendarioClient from './CalendarioClient'
 
 export default async function Agenda() {
   const [tareas, visitas, transferencias, turnos, vehicles, interesados] = await Promise.all([
     getTareas(), getVisitas(), getTransferencias(), getTurnos(), getVehicles(), getInteresados(),
   ])
   return (
-    <AgendaClient
+    <CalendarioClient
       tareas={tareas}
       visitas={visitas}
       transferencias={transferencias}

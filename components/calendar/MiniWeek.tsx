@@ -7,7 +7,7 @@ import { transferenciaBlocks, turnosBlocks } from '@/lib/agenda'
 
 // Compact read-only strip of the current week for the home dashboard: a blue dot per
 // visita and an amber bar for turnos, per day. Client component so "today"/"this week"
-// resolve in the browser (AR), not on the UTC server. Links to the full /agenda.
+// resolve in the browser (AR), not on the UTC server. Links to the full /calendario.
 
 function mondayOf(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -48,8 +48,8 @@ export function MiniWeek({
       <CardContent className="py-3">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium">Esta semana</span>
-          <Link href="/agenda" className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
-            Ver agenda <ArrowRightIcon className="size-3" />
+          <Link href="/calendario" className="text-xs text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1">
+            Ver calendario <ArrowRightIcon className="size-3" />
           </Link>
         </div>
         <div className="grid grid-cols-7 gap-1 text-center">
@@ -63,7 +63,7 @@ export function MiniWeek({
               // seven identical links to the same week.
               <Link
                 key={i}
-                href={`/agenda?d=${k}`}
+                href={`/calendario?d=${k}`}
                 aria-label={`${DIAS_SEMANA[i]} ${d.getDate()}${isToday ? ' (hoy)' : ''}: ${plural(nv, 'visita')}, ${plural(nt, 'turno')}`}
                 aria-current={isToday ? 'date' : undefined}
                 className={`rounded-md py-1.5 hover:bg-muted/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isToday ? 'bg-blue-50 dark:bg-blue-950/40' : ''}`}

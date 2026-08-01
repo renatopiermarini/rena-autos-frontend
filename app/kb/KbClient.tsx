@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { KbBody } from '@/components/kb-body'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -218,7 +219,7 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
                       <button
                         onClick={() => setSelectedId(e.id)}
                         className={cn(
-                          'w-full text-left px-2 py-1.5 rounded-md text-sm truncate transition-colors',
+                          'w-full text-left px-2 py-1.5 rounded-md text-sm leading-snug line-clamp-2 transition-colors',
                           selectedId === e.id
                             ? 'bg-primary text-primary-foreground'
                             : 'text-foreground hover:bg-muted',
@@ -252,9 +253,9 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
                       <span className="text-xs text-muted-foreground">por {selected.autor}</span>
                     )}
                   </div>
-                  <CardTitle className="text-lg">{selected.titulo}</CardTitle>
+                  <CardTitle className="text-xl leading-snug">{selected.titulo}</CardTitle>
                   {selected.resumen && (
-                    <p className="text-sm text-muted-foreground">{selected.resumen}</p>
+                    <p className="text-[15px] leading-relaxed text-muted-foreground max-w-[68ch]">{selected.resumen}</p>
                   )}
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -275,9 +276,7 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
                   ))}
                 </div>
               )}
-              <pre className="whitespace-pre-wrap font-sans text-sm bg-muted/50 rounded-lg p-4 border border-border">
-{selected.contenido}
-              </pre>
+              <KbBody text={selected.contenido} />
               {selected.updated_at && (
                 <>
                   <Separator />

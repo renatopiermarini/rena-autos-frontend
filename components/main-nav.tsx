@@ -4,17 +4,17 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
 
+// Twelve top-level items was five too many, and five of them were views of the same
+// calendar. Interesados now lives under Clientes; Ofertas is gone.
 const NAV = [
-  { href: '/',               label: 'Inicio'        },
-  { href: '/agenda',         label: 'Agenda'        },
-  { href: '/stock',          label: 'Stock'         },
-  { href: '/interesados',    label: 'Interesados'   },
-  { href: '/ofertas',        label: 'Ofertas'       },
-  { href: '/visitas',        label: 'Visitas'       },
-  { href: '/clientes',       label: 'Clientes'      },
-  { href: '/finanzas',       label: 'Finanzas'      },
-  { href: '/tareas',         label: 'Tareas'        },
-  { href: '/kb',             label: 'KB'            },
+  { href: '/',               label: 'Tablero'        },
+  { href: '/calendario',     label: 'Calendario'     },
+  { href: '/stock',          label: 'Stock'          },
+  { href: '/visitas',        label: 'Visitas'        },
+  { href: '/clientes',       label: 'Clientes'       },
+  { href: '/finanzas',       label: 'Finanzas'       },
+  { href: '/tareas',         label: 'Tareas'         },
+  { href: '/kb',             label: 'KB'             },
   { href: '/transferencias', label: 'Transferencias' },
   { href: '/verificaciones', label: 'Verificaciones' },
 ]

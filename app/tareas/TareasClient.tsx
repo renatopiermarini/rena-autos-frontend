@@ -174,7 +174,10 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
 type SortMode = 'prioridad' | 'vence' | 'auto' | 'persona'
 
 function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
-  const [sort, setSort] = useState<SortMode>('prioridad')
+  // Grouped by person by default. Three people share this dashboard with no per-user
+  // login, so "whose is it" is the question being asked; priority is a filter you
+  // reach for, not the shape of the list.
+  const [sort, setSort] = useState<SortMode>('persona')
 
   function autoNombre(id: number | null) {
     if (!id) return null
