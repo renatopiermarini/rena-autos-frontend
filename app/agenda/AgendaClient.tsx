@@ -35,6 +35,7 @@ export default function AgendaClient({
       start,
       kind: 'visita',
       subtitle: interLabel(interesados, v.interesado_id) || v.notas || undefined,
+      href: `/visitas?id=${v.id}`,
       meta: v,
     })
   }
@@ -63,8 +64,8 @@ export default function AgendaClient({
         : <WeekTimeGrid
             events={events}
             blocks={blocks}
-            onEventClick={() => router.push('/visitas')}
-            onBlockClick={() => router.push('/transferencias')}
+            onEventClick={e => { if (e.href) router.push(e.href) }}
+            onBlockClick={b => { if (b.href) router.push(b.href) }}
           />
       }
     </div>
