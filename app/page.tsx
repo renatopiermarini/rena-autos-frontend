@@ -47,9 +47,19 @@ export default async function Tablero() {
     })
   }
 
+  // Seguimientos are the bot's CRM follow-ups. There are hundreds of them and they
+  // drowned the tablero — on one day they were 38 of 38 items. They stay in /tareas
+  // and the agent still messages about them; this screen is for what a human has to
+  // look at. `tipo` is the real field, the title check catches rows the bot wrote
+  // before it started setting it.
+  const esSeguimiento = (t: any) =>
+    String(t?.tipo ?? '').toLowerCase() === 'seguimiento' ||
+    /^\s*seguimiento\b/i.test(String(t?.titulo ?? ''))
+
   const sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[] = []
   for (const t of tareas) {
     if (t.estado === 'completada') continue
+    if (esSeguimiento(t)) continue
     const urgent = t.prioridad === 'alta'
     // `fecha_vencimiento` is a DATE column. Slice it rather than parsing, so a
     // date-only value never gets pulled a day backwards through UTC.
