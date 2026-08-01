@@ -1,7 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ChevronLeftIcon, ChevronRightIcon, CheckIcon } from 'lucide-react'
+import { ChevronLeftIcon, ChevronRightIcon, CheckIcon, TriangleAlertIcon } from 'lucide-react'
 import { DIAS_CORTOS, MESES_ES, localDayKey, fmtFechaLarga } from '@/lib/date'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +19,8 @@ export type BoardItem = {
   href?: string
   done?: boolean
   urgent?: boolean
+  /** "Choca con X" — a double-booking the validators did not reject. */
+  conflict?: string
   dayKey: string
 }
 
@@ -40,8 +42,8 @@ const KIND_ONE: Record<BoardItem['kind'], string> = {
   visita: 'Visita', turno: 'Turno', tarea: 'Tarea',
 }
 
-// DIAS_CORTOS is Sunday-first; this grid runs Monday-first like the calendario's
-// week view, so the header has to be rotated or every column is mislabelled.
+// DIAS_CORTOS is Sunday-first; this grid runs Monday-first (the AR convention),
+// so the header has to be rotated or every column is mislabelled.
 const DOW_LUN = [...DIAS_CORTOS.slice(1), DIAS_CORTOS[0]]
 
 export function MonthBoard({
@@ -141,6 +143,7 @@ export function MonthBoard({
               const isSel = dk === selected
               const list = byDay[dk] ?? []
               const kinds = Array.from(new Set(list.filter(i => !i.done).map(i => i.kind)))
+              const clash = list.some(i => i.conflict && !i.done)
               return (
                 <button
                   key={dk}
@@ -161,6 +164,9 @@ export function MonthBoard({
                   <span>{day}</span>
                   {/* Which kinds of thing are on this day, before you click it. */}
                   <span className="flex h-1.5 items-center gap-0.5" aria-hidden>
+                    {clash && (
+                      <span className={cn('size-1 rounded-full', isSel ? 'bg-primary-foreground' : 'bg-destructive')} />
+                    )}
                     {kinds.map(k => (
                       <span
                         key={k}
@@ -220,7 +226,7 @@ export function MonthBoard({
             {dayItems.map(it => {
               const body = (
                 <>
-                  <span className={cn('w-1 self-stretch rounded-full shrink-0', KIND_DOT[it.kind])} aria-hidden />
+                  <span className={cn('w-1 self-stretch rounded-full shrink-0', it.conflict ? 'bg-destructive' : KIND_DOT[it.kind])} aria-hidden />
                   <span className="w-[52px] shrink-0 text-sm font-medium tabular-nums text-muted-foreground">
                     {it.hora ?? '—'}
                   </span>
@@ -235,9 +241,14 @@ export function MonthBoard({
                       )}>
                         {KIND_ONE[it.kind]}
                       </span>
-                      {it.subtitle && (
+                      {it.conflict ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive truncate">
+                          <TriangleAlertIcon className="size-3 shrink-0" aria-hidden />
+                          {it.conflict}
+                        </span>
+                      ) : it.subtitle ? (
                         <span className="text-xs text-muted-foreground truncate">{it.subtitle}</span>
-                      )}
+                      ) : null}
                     </span>
                   </span>
                 </>
@@ -274,12 +285,16 @@ export function MonthBoard({
 
               return (
                 <li key={`${it.kind}-${it.id}`}>
-                  <Link
-                    href={it.href ?? '/calendario'}
-                    className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  >
-                    {body}
-                  </Link>
+                  {it.href ? (
+                    <Link
+                      href={it.href}
+                      className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                    >
+                      {body}
+                    </Link>
+                  ) : (
+                    <div className="flex items-center gap-3 px-3 py-2.5">{body}</div>
+                  )}
                 </li>
               )
             })}

@@ -4,11 +4,10 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
 
-// Twelve top-level items was five too many, and five of them were views of the same
-// calendar. Interesados now lives under Clientes; Ofertas is gone.
+// Twelve top-level items was five too many. Interesados lives under Clientes,
+// Ofertas is gone, and the tablero replaced the separate calendario.
 const NAV = [
   { href: '/',               label: 'Tablero'        },
-  { href: '/calendario',     label: 'Calendario'     },
   { href: '/stock',          label: 'Stock'          },
   { href: '/visitas',        label: 'Visitas'        },
   { href: '/clientes',       label: 'Clientes'       },

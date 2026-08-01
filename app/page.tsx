@@ -1,6 +1,6 @@
 import { getTareas, getVehicles, getPrestamos, getVisitas, getTransferencias, getTurnos, getInteresados, getBalances } from '@/lib/kapso'
 import TableroClient from './TableroClient'
-import { transferenciaBlocks, turnosBlocks } from '@/lib/agenda'
+import { transferenciaBlocks, turnosBlocks, blockConflicts, eventConflicts } from '@/lib/agenda'
 import { parseInstant, localDayKey } from '@/lib/date'
 import type { BoardItem } from '@/components/calendar/MonthBoard'
 
@@ -18,16 +18,18 @@ export default async function Tablero() {
   const interLabel = (id: any) => interesados.find((x: any) => x.id === id)?.nombre ?? ''
 
   const items: BoardItem[] = []
+  const visitaInstants: { id: number; start: Date }[] = []
 
   for (const v of visitas) {
     if (!v.fecha || (v.resultado && v.resultado !== 'pendiente')) continue
     const d = parseInstant(v.fecha)
     if (!d) continue
+    visitaInstants.push({ id: v.id, start: d })
     items.push({
       id: v.id,
       kind: 'visita',
       hora: hhmm(d),
-      // Person first, same as the calendario: nobody thinks in vehicles-at-times.
+      // Person first: nobody here thinks in vehicles-at-times.
       title: interLabel(v.interesado_id) || vehLabel(v.vehicle_id),
       subtitle: interLabel(v.interesado_id) ? vehLabel(v.vehicle_id) : undefined,
       href: `/visitas?id=${v.id}`,
@@ -55,6 +57,29 @@ export default async function Tablero() {
   const esSeguimiento = (t: any) =>
     String(t?.tipo ?? '').toLowerCase() === 'seguimiento' ||
     /^\s*seguimiento\b/i.test(String(t?.titulo ?? ''))
+
+  // Double-booking detection. This used to live in the calendario's week grid; with
+  // that screen gone the tablero is the only place a human can catch a clash the
+  // validators never rejected, so the display-layer check moves here. Still NOT the
+  // write rule mirrored in flows/agenda_rules.py — see lib/agenda.ts.
+  const allBlocks = [...transferenciaBlocks(transferencias), ...turnosBlocks(turnos)]
+  const blockClashes = blockConflicts(allBlocks)
+  const visitaClashes = eventConflicts(
+    visitaInstants.map(v => ({ id: v.id, start: v.start })),
+    allBlocks,
+  )
+  const clashLabel = (others: { title: string }[]) =>
+    `Choca con ${others[0].title}${others.length > 1 ? ` +${others.length - 1}` : ''}`
+
+  for (const it of items) {
+    if (it.kind === 'visita') {
+      const hits = visitaClashes.get(it.id)
+      if (hits?.length) it.conflict = clashLabel(hits)
+    } else if (it.kind === 'turno') {
+      const hits = blockClashes.get(it.id)
+      if (hits?.length) it.conflict = clashLabel(hits)
+    }
+  }
 
   const sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[] = []
   for (const t of tareas) {
