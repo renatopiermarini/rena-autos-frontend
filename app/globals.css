@@ -154,3 +154,61 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* ── Patente world (Inicio) ───────────────────────────────────────────────────
+   Mercosur plate as the surface's material. A plate is a retroreflective
+   off-white field, slightly embossed, edged in dark, with a deep blue band
+   across its head. Data sits ON plates; the page ground is the vehicle body
+   they are bolted to. Numbers and dominios are set in the plate face. */
+
+:root {
+  --plate-blue: #0b3aa0;
+  --plate-blue-deep: #072a75;
+  --plate-face: #f6f5f1;
+  --plate-face-lo: #e2e0d8;
+  --plate-ink: #14161c;
+  --plate-edge: #0a0c11;
+}
+
+.font-plate {
+  font-family: var(--font-plate), var(--font-sans), sans-serif;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  letter-spacing: 0.02em;
+}
+
+/* The plate itself: retroreflective face, stamped edge, seated on the body. */
+.plate {
+  background: linear-gradient(177deg, var(--plate-face) 0%, var(--plate-face-lo) 100%);
+  color: var(--plate-ink);
+  border: 1px solid var(--plate-edge);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 0 0 2px rgba(20, 22, 28, 0.08),
+    0 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+/* The blue head band. Sits inside the plate's stamped edge. */
+.plate-band {
+  background: linear-gradient(180deg, var(--plate-blue) 0%, var(--plate-blue-deep) 100%);
+  color: #eef2ff;
+}
+
+/* A small plate, used per-vehicle. Tighter emboss so a list of them stays calm. */
+.plate-sm {
+  background: linear-gradient(177deg, var(--plate-face) 0%, var(--plate-face-lo) 100%);
+  color: var(--plate-ink);
+  border: 1px solid var(--plate-edge);
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* The vehicle body a plate is mounted on. Same in both themes on purpose: the
+   plate only reads as an object when something darker sits behind it. */
+.plate-mount {
+  background: linear-gradient(180deg, #191c23 0%, #101318 100%);
+  border: 1px solid #05070a;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}

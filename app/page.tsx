@@ -1,20 +1,35 @@
 import { getBalances, getTareas, getVehicles, getPrestamos, getOfertas, getVisitas, getTransferencias, getTurnos } from '@/lib/kapso'
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { AlertTriangleIcon, CarIcon, CalendarClockIcon, ArrowLeftRightIcon } from 'lucide-react'
+import { AlertTriangleIcon, CarIcon, CalendarClockIcon, ArrowLeftRightIcon, CircleAlertIcon } from 'lucide-react'
 import { MiniWeek } from '@/components/calendar/MiniWeek'
 import { transferenciaBlock, transferenciaBlocks, turnosBlocks } from '@/lib/agenda'
 import { fmtDateTime } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 
-// Tone → icon-chip classes (literal strings so Tailwind picks them up).
-const TONE: Record<string, string> = {
-  primary: 'bg-primary/10 text-primary',
-  info: 'bg-info/10 text-info',
-  warning: 'bg-warning/10 text-warning',
-  destructive: 'bg-destructive/10 text-destructive',
-  muted: 'bg-muted text-muted-foreground',
+// Inicio in the patente world. See the direction contract in app/layout.tsx.
+// A plate is a real object here: white field, blue head band, stamped edge. Data
+// that identifies a car goes ON a plate; everything else is the body it mounts to.
+
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+/** A vehicle's dominio, set as an actual small plate. */
+function Dominio({ dominio }: { dominio?: string | null }) {
+  if (!dominio) {
+    return (
+      <span className="font-plate text-[11px] tracking-widest text-muted-foreground px-2 py-1">
+        SIN DOMINIO
+      </span>
+    )
+  }
+  return (
+    <span className="plate-sm inline-flex items-stretch overflow-hidden shrink-0">
+      <span className="plate-band w-1.5" aria-hidden />
+      <span className="font-plate font-bold text-[13px] leading-none tracking-[0.14em] px-2 py-1.5">
+        {dominio.toUpperCase()}
+      </span>
+    </span>
+  )
 }
 
 export default async function Inicio() {
@@ -22,11 +37,13 @@ export default async function Inicio() {
     getBalances(), getTareas(), getVehicles(), getPrestamos(), getOfertas(), getVisitas(), getTransferencias(), getTurnos(),
   ])
 
+  function veh(id: number) {
+    return vehicles.find((x: any) => x.id === id)
+  }
   function autoLabel(id: number) {
-    const v = vehicles.find((x: any) => x.id === id)
+    const v = veh(id)
     if (!v) return '—'
-    const base = `${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim()
-    return v.dominio ? `${base} (${v.dominio})` : base
+    return `${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim() || `Auto #${id}`
   }
 
   const activos = vehicles.filter((v: any) => v.estado !== 'vendido' && v.estado !== 'potencial')
@@ -44,18 +61,20 @@ export default async function Inicio() {
     .filter(b => b.start >= hoy)
 
   // Próxima actividad (next 48h): visitas + turnos, merged + sorted.
-  type Proximo = { kind: 'visita' | 'turno'; label: string; when: Date; fechaIso: string }
+  type Proximo = { kind: 'visita' | 'turno'; label: string; dominio?: string; when: Date; fechaIso: string }
   const proximos: Proximo[] = []
   for (const v of visitas) {
     if (!v.fecha || (v.resultado && v.resultado !== 'pendiente')) continue
     const d = new Date(v.fecha)
-    if (d >= hoy && d <= horizon48h) proximos.push({ kind: 'visita', label: autoLabel(v.vehicle_id), when: d, fechaIso: v.fecha })
+    if (d >= hoy && d <= horizon48h) {
+      proximos.push({ kind: 'visita', label: autoLabel(v.vehicle_id), dominio: veh(v.vehicle_id)?.dominio, when: d, fechaIso: v.fecha })
+    }
   }
   for (const t of transferencias) {
     if (t.estado === 'cancelada' || t.estado === 'completada') continue
     const b = transferenciaBlock(t)
     if (b && b.start >= hoy && b.start <= horizon48h) {
-      proximos.push({ kind: 'turno', label: t.auto || autoLabel(t.vehicle_id), when: b.start, fechaIso: b.start.toISOString() })
+      proximos.push({ kind: 'turno', label: t.auto || autoLabel(t.vehicle_id), dominio: veh(t.vehicle_id)?.dominio, when: b.start, fechaIso: b.start.toISOString() })
     }
   }
   proximos.sort((a, b) => a.when.getTime() - b.when.getTime())
@@ -74,145 +93,201 @@ export default async function Inicio() {
   }
 
   const metrics = [
-    { label: 'Stock activo',       value: activos.length,            href: '/stock',          icon: CarIcon,             tone: 'primary' },
-    { label: 'Visitas pendientes', value: visitasPendientes.length,  href: '/visitas',        icon: CalendarClockIcon,   tone: visitasPendientes.length ? 'info' : 'muted' },
-    { label: 'Turnos próximos',    value: turnosProximos.length,     href: '/transferencias', icon: ArrowLeftRightIcon,  tone: turnosProximos.length ? 'warning' : 'muted' },
-    { label: 'Tareas urgentes',    value: urgentes.length,           href: '/tareas',         icon: AlertTriangleIcon,   tone: urgentes.length ? 'destructive' : 'muted' },
+    { label: 'En el lote',   value: activos.length,           href: '/stock',          icon: CarIcon,            alert: false },
+    { label: 'Visitas',      value: visitasPendientes.length, href: '/visitas',        icon: CalendarClockIcon,  alert: false },
+    { label: 'Turnos',       value: turnosProximos.length,    href: '/transferencias', icon: ArrowLeftRightIcon, alert: false },
+    { label: 'Urgentes',     value: urgentes.length,          href: '/tareas',         icon: AlertTriangleIcon,  alert: urgentes.length > 0 },
   ]
 
+  const fecha = `${hoy.getDate()} ${MESES[hoy.getMonth()]} ${hoy.getFullYear()}`
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-xl font-semibold">Inicio</h1>
-        <p className="text-xs text-muted-foreground">
-          {activos.length} autos activos · {visitasPendientes.length} visitas · {urgentes.length} tareas urgentes
-        </p>
+    <div className="space-y-5">
+
+      {/* THE PLATE. The whole first viewport is one, because the first thing this
+          business needs to read is four numbers, at size, without hunting. */}
+      <div className="plate-mount">
+      <section className="plate overflow-hidden">
+        <div className="plate-band flex items-center justify-between px-4 py-1.5">
+          <span className="font-plate text-[11px] font-bold tracking-[0.3em] uppercase">
+            Renato Piermarini Autos
+          </span>
+          <span className="font-plate text-[11px] font-semibold tracking-[0.18em] uppercase tabular-nums">
+            {fecha}
+          </span>
+        </div>
+
+        <div className="relative grid grid-cols-2 lg:grid-cols-4 divide-x divide-[color:var(--plate-ink)]/15">
+          {metrics.map(m => {
+            const Icon = m.icon
+            return (
+              <Link
+                key={m.label}
+                href={m.href}
+                className="group px-4 py-5 lg:py-7 transition-colors hover:bg-[color:var(--plate-ink)]/[0.05] focus-visible:outline-none focus-visible:bg-[color:var(--plate-ink)]/[0.07]"
+              >
+                <span className="flex items-baseline gap-2">
+                  <span
+                    className={`font-plate font-bold tabular-nums leading-none text-5xl lg:text-6xl ${
+                      m.alert ? 'text-[#a11208]' : 'text-[color:var(--plate-ink)]'
+                    }`}
+                  >
+                    {m.value}
+                  </span>
+                  <Icon className={`size-4 shrink-0 ${m.alert ? 'text-[#a11208]' : 'text-[color:var(--plate-ink)]/45'}`} aria-hidden />
+                </span>
+                <span className="mt-2.5 block font-plate text-[11px] font-semibold uppercase tracking-[0.22em] text-[color:var(--plate-ink)]/65 group-hover:text-[color:var(--plate-ink)]">
+                  {m.label}
+                </span>
+              </Link>
+            )
+          })}
+        </div>
+      </section>
       </div>
 
+      {/* Alerts are the red sticker slapped across a plate — the one thing that
+          overrides everything else on the surface. */}
       {alertas.length > 0 && (
-        <Card className="border-destructive/30 bg-destructive/5 py-3">
-          <CardContent className="space-y-1">
-            <div className="flex items-center gap-2 text-destructive text-xs font-semibold uppercase tracking-wide mb-1">
-              <AlertTriangleIcon className="size-4" /> Alertas
-            </div>
-            {alertas.map((a, i) => <p key={i} className="text-sm text-destructive">{a}</p>)}
-          </CardContent>
-        </Card>
+        <section className="rounded-md border border-[#a11208]/45 bg-[#a11208]/12 overflow-hidden">
+          <div className="flex items-center gap-2 bg-[#a11208] px-3 py-1.5 text-white">
+            <CircleAlertIcon className="size-3.5 shrink-0" aria-hidden />
+            <span className="font-plate text-[11px] font-bold uppercase tracking-[0.24em]">
+              {alertas.length === 1 ? 'Atención' : `Atención · ${alertas.length}`}
+            </span>
+          </div>
+          <ul className="divide-y divide-[#a11208]/20">
+            {alertas.map((a, i) => (
+              <li key={i} className="px-3 py-2 text-sm text-[#ff9d93]">{a}</li>
+            ))}
+          </ul>
+        </section>
       )}
 
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-        {balances.map((b: any) => {
-          const saldo = Number(b.saldo ?? 0)
-          const low = b.cuenta === 'cash' && saldo < 500
-          return (
-            <Card key={b.id} size="sm">
-              <CardContent>
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{b.cuenta}</p>
-                <p className={`text-xl font-light tabular-nums ${low ? 'text-destructive' : ''}`}>
-                  ${saldo.toLocaleString('es-AR')}
-                </p>
-              </CardContent>
-            </Card>
-          )
-        })}
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {metrics.map(m => {
-          const Icon = m.icon
-          return (
-            <Link key={m.label} href={m.href}>
-              <Card size="sm" className="hover:bg-muted/40 hover:ring-foreground/20 transition-colors">
-                <CardContent className="py-3 flex items-center gap-3">
-                  <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${TONE[m.tone]}`}>
-                    <Icon className="size-[18px]" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-2xl font-light tabular-nums leading-none">{m.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1 truncate">{m.label}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          )
-        })}
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Próximas 48h — time set in plate numerals so the hour is the thing you catch. */}
+        <section className="rounded-md border border-border bg-card overflow-hidden">
+          <header className="flex items-baseline justify-between border-b border-border px-3 py-2">
+            <h2 className="font-plate text-[11px] font-bold uppercase tracking-[0.22em]">Próximas 48 h</h2>
+            <span className="font-plate text-xs tabular-nums text-muted-foreground">{proximos.length}</span>
+          </header>
+          {proximos.length === 0
+            ? <p className="px-3 py-6 text-center text-sm text-muted-foreground">Nada agendado.</p>
+            : (
+              <ul className="divide-y divide-border">
+                {proximos.slice(0, 7).map((p, i) => (
+                  <li key={i} className="flex items-center gap-3 px-3 py-2">
+                    <span
+                      className={`w-1 self-stretch rounded-full shrink-0 ${p.kind === 'turno' ? 'bg-[color:var(--plate-blue)]' : 'bg-warning'}`}
+                      aria-hidden
+                    />
+                    <span className="font-plate text-sm font-semibold tabular-nums shrink-0 w-[92px]">
+                      {fmtDateTime(p.fechaIso)}
+                    </span>
+                    <span className="text-sm truncate flex-1">{p.label}</span>
+                    <Dominio dominio={p.dominio} />
+                  </li>
+                ))}
+              </ul>
+            )}
+        </section>
+
         <MiniWeek visitas={visitas} transferencias={transferencias} turnos={turnos} />
-
-        <Card size="sm">
-          <CardHeader className="border-b py-3">
-            <CardTitle className="text-sm">Próximas 48 h ({proximos.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border p-0">
-            {proximos.length === 0
-              ? <p className="px-3 py-2.5 text-sm text-muted-foreground">Nada agendado.</p>
-              : proximos.slice(0, 8).map((p, i) => (
-                <div key={i} className="flex items-center justify-between px-3 py-2">
-                  <span className="inline-flex items-center gap-2 text-sm truncate">
-                    <span className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${p.kind === 'turno' ? 'bg-amber-500' : 'bg-blue-600'}`} />
-                    <span className="truncate">{p.kind === 'turno' ? 'Turno · ' : ''}{p.label}</span>
-                  </span>
-                  <span className="text-xs text-muted-foreground tabular-nums shrink-0 ml-2">{fmtDateTime(p.fechaIso)}</span>
-                </div>
-              ))}
-          </CardContent>
-        </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card size="sm">
-          <CardHeader className="border-b py-3">
-            <CardTitle className="text-sm">Stock activo ({activos.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border p-0 max-h-[420px] overflow-y-auto">
-            {activos.slice(0, 12).map((v: any) => (
-              <div key={v.id} className="flex items-center justify-between px-3 py-2">
-                <span className="text-sm">{`${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim() || '—'}</span>
-                <div className="flex items-center gap-2">
-                  {v.dominio && <span className="text-xs text-muted-foreground">{v.dominio}</span>}
+      {/* The rack. Every active car as its own plate — this is the payoff of the world. */}
+      <section className="rounded-md border border-border bg-card overflow-hidden">
+        <header className="flex items-baseline justify-between border-b border-border px-3 py-2">
+          <h2 className="font-plate text-[11px] font-bold uppercase tracking-[0.22em]">En el lote</h2>
+          <Link href="/stock" className="font-plate text-xs tabular-nums text-muted-foreground hover:text-foreground">
+            {activos.length} →
+          </Link>
+        </header>
+        {activos.length === 0
+          ? <p className="px-3 py-6 text-center text-sm text-muted-foreground">Sin autos activos.</p>
+          : (
+            <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-px bg-border">
+              {activos.slice(0, 12).map((v: any) => (
+                <li key={v.id} className="flex items-center gap-3 bg-card px-3 py-2.5">
+                  <Dominio dominio={v.dominio} />
+                  <span className="text-sm truncate flex-1 min-w-0">
+                    {`${v.marca ?? ''} ${v.modelo ?? ''}`.trim() || '—'}
+                    {v.año && <span className="text-muted-foreground"> {v.año}</span>}
+                  </span>
                   <Badge variant={estadoMeta(v.estado).variant}>{estadoMeta(v.estado).label}</Badge>
-                </div>
-              </div>
-            ))}
-            {activos.length === 0 && <p className="px-3 py-2.5 text-sm text-muted-foreground">Sin autos activos.</p>}
-          </CardContent>
-        </Card>
+                </li>
+              ))}
+            </ul>
+          )}
+      </section>
 
-        <Card size="sm">
-          <CardHeader className="border-b py-3">
-            <CardTitle className="text-sm">Tareas urgentes ({urgentes.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border p-0 max-h-[420px] overflow-y-auto">
-            {urgentes.slice(0, 12).map((t: any) => (
-              <div key={t.id} className="flex items-center justify-between px-3 py-2">
-                <span className="text-sm">{t.titulo || 'Sin título'}</span>
-                <span className="text-xs text-muted-foreground">{t.asignado}</span>
-              </div>
-            ))}
-            {urgentes.length === 0 && <p className="px-3 py-2.5 text-sm text-muted-foreground">Sin tareas urgentes.</p>}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section className="rounded-md border border-border bg-card overflow-hidden">
+          <header className="flex items-baseline justify-between border-b border-border px-3 py-2">
+            <h2 className="font-plate text-[11px] font-bold uppercase tracking-[0.22em]">Tareas urgentes</h2>
+            <span className="font-plate text-xs tabular-nums text-muted-foreground">{urgentes.length}</span>
+          </header>
+          {urgentes.length === 0
+            ? <p className="px-3 py-6 text-center text-sm text-muted-foreground">Sin tareas urgentes.</p>
+            : (
+              <ul className="divide-y divide-border">
+                {urgentes.slice(0, 8).map((t: any) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <span className="text-sm truncate">{t.titulo || 'Sin título'}</span>
+                    <span className="font-plate text-[11px] uppercase tracking-wider text-muted-foreground shrink-0">
+                      {t.asignado}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+        </section>
+
+        <section className="rounded-md border border-border bg-card overflow-hidden">
+          <header className="flex items-baseline justify-between border-b border-border px-3 py-2">
+            <h2 className="font-plate text-[11px] font-bold uppercase tracking-[0.22em]">Caja</h2>
+          </header>
+          <ul className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-border">
+            {balances.map((b: any) => {
+              const saldo = Number(b.saldo ?? 0)
+              const low = b.cuenta === 'cash' && saldo < 500
+              return (
+                <li key={b.id} className="bg-card px-3 py-2.5">
+                  <p className="font-plate text-[10px] uppercase tracking-[0.2em] text-muted-foreground">{b.cuenta}</p>
+                  <p className={`font-plate text-lg font-semibold tabular-nums mt-0.5 ${low ? 'text-destructive' : ''}`}>
+                    ${saldo.toLocaleString('es-AR')}
+                  </p>
+                </li>
+              )
+            })}
+            {balances.length === 0 && (
+              <li className="col-span-full bg-card px-3 py-6 text-center text-sm text-muted-foreground">Sin saldos.</li>
+            )}
+          </ul>
+        </section>
       </div>
 
       {ofertasPendientes.length > 0 && (
-        <Card size="sm">
-          <CardHeader className="border-b py-3">
-            <CardTitle className="text-sm">Ofertas pendientes ({ofertasPendientes.length})</CardTitle>
-          </CardHeader>
-          <CardContent className="divide-y divide-border p-0">
+        <section className="rounded-md border border-border bg-card overflow-hidden">
+          <header className="flex items-baseline justify-between border-b border-border px-3 py-2">
+            <h2 className="font-plate text-[11px] font-bold uppercase tracking-[0.22em]">Ofertas pendientes</h2>
+            <span className="font-plate text-xs tabular-nums text-muted-foreground">{ofertasPendientes.length}</span>
+          </header>
+          <ul className="divide-y divide-border">
             {ofertasPendientes.slice(0, 6).map((o: any) => (
-              <div key={o.id} className="flex items-center justify-between px-3 py-2">
-                <span className="text-sm truncate">{autoLabel(o.vehicle_id)}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-sm text-muted-foreground tabular-nums">USD {(Number(o.monto_ofrecido) || 0).toLocaleString('es-AR')}</span>
-                  <Badge variant={o.email_enviado ? 'default' : 'outline'}>{o.email_enviado ? 'enviado' : 'pendiente'}</Badge>
-                </div>
-              </div>
+              <li key={o.id} className="flex items-center gap-3 px-3 py-2">
+                <Dominio dominio={veh(o.vehicle_id)?.dominio} />
+                <span className="text-sm truncate flex-1">{autoLabel(o.vehicle_id)}</span>
+                <span className="font-plate text-sm font-semibold tabular-nums shrink-0">
+                  USD {(Number(o.monto_ofrecido) || 0).toLocaleString('es-AR')}
+                </span>
+                <Badge variant={o.email_enviado ? 'default' : 'outline'}>
+                  {o.email_enviado ? 'enviado' : 'pendiente'}
+                </Badge>
+              </li>
             ))}
-          </CardContent>
-        </Card>
+          </ul>
+        </section>
       )}
     </div>
   )
