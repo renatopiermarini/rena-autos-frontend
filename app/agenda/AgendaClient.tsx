@@ -61,8 +61,10 @@ export default function AgendaClient({
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">Agenda</h1>
+          {/* Totals still ahead, across all time. Per-week counts live on the grid,
+              which is the only place that knows which week you are looking at. */}
           <span className="text-sm text-muted-foreground">
-            {plural(pendVisitas, 'visita')} {pendVisitas === 1 ? 'pendiente' : 'pendientes'} · {plural(turnosProximos, 'turno')}
+            {plural(pendVisitas, 'visita')} {pendVisitas === 1 ? 'próxima' : 'próximas'} · {plural(turnosProximos, 'turno')} {turnosProximos === 1 ? 'próximo' : 'próximos'}
           </span>
         </div>
         <Tabs value={tab} onValueChange={(v: any) => setTab(v)}>

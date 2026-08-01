@@ -6,7 +6,7 @@ import { ChevronLeftIcon, ChevronRightIcon, TriangleAlertIcon } from 'lucide-rea
 import { DIAS_SEMANA, MESES_ES, localDayKey } from '@/lib/date'
 import { BLOCK_HOURS, blockConflicts, eventConflicts } from '@/lib/agenda'
 import { cn } from '@/lib/utils'
-import { packLanes, laneStyle } from './lanes'
+import { packLanes, laneStyle, type Lane } from './lanes'
 import type { CalendarEvent, CalendarBlock } from './types'
 
 // Week time-grid: hours down the Y axis, Mon–Sun across. Visitas render as point
@@ -21,6 +21,10 @@ import type { CalendarEvent, CalendarBlock } from './types'
 //      and offered, not discarded.
 
 const HOUR_PX = 44
+// Past two lanes a day column is ~30px wide and the text is gone, which defeats the
+// point of splitting at all. Beyond this, the extras collapse into a "+N" the user can
+// open per day — the goal is "you can tell there are N", not "N unreadable slivers".
+const MAX_LANES = 2
 // Two lines: who is coming, then which car. A visita carries no duration in the data,
 // so this height is a rendering choice, not a claim — but it is also the collision
 // extent, which is right: two visitas half an hour apart do overlap on screen and
@@ -40,6 +44,7 @@ function addDays(d: Date, n: number): Date {
 }
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 const mesCorto = (m: number) => MESES_ES[m].slice(0, 3).toLowerCase()
+const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
 type Props = {
   events: CalendarEvent[]
@@ -66,6 +71,12 @@ export function WeekTimeGrid({
   }, [initialDay])
 
   const [showFullDay, setShowFullDay] = useState(false)
+  const [openDays, setOpenDays] = useState<Set<string>>(new Set())
+  const toggleDay = (dk: string) => setOpenDays(prev => {
+    const next = new Set(prev)
+    next.has(dk) ? next.delete(dk) : next.add(dk)
+    return next
+  })
   const todayKey = localDayKey(new Date())
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
@@ -110,6 +121,12 @@ export function WeekTimeGrid({
         <span className="text-sm font-medium w-40 text-center">{weekLabel}</span>
         <Button size="icon-sm" variant="ghost" aria-label="Semana siguiente" onClick={() => setWeekStart(w => addDays(w, 7))}><ChevronRightIcon className="size-4" /></Button>
         <Button size="xs" variant="outline" onClick={() => setWeekStart(mondayOf(new Date()))} className="ml-2">Hoy</Button>
+
+        {/* Describes the week actually on screen. The header used to carry an all-time
+            count here, which never matched what you were looking at. */}
+        <span className="text-xs text-muted-foreground">
+          {plural(weekEvents.length, 'visita')} · {plural(weekBlocks.length, 'turno')}
+        </span>
 
         {conflictCount > 0 && (
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-destructive/10 px-2 py-1 text-xs font-medium text-destructive">
@@ -170,16 +187,27 @@ export function WeekTimeGrid({
                 const visibleEvents = dayEvents.filter(e => topFor(e.start) >= 0 && topFor(e.start) < laneHeight)
                 const hiddenCount = (dayBlocks.length - visibleBlocks.length) + (dayEvents.length - visibleEvents.length)
 
-                const packedBlocks = packLanes(visibleBlocks, b => ({
+                const allBlocks = packLanes(visibleBlocks, b => ({
                   top: Math.max(0, topFor(b.start)),
                   bottom: Math.min(laneHeight, topFor(b.end)),
                 }))
                 // Events pack against each other in pixel space, since their height is fixed
                 // and two visitas 20 minutes apart collide visually even though neither has an end.
-                const packedEvents = packLanes(visibleEvents, e => {
+                const allEvents = packLanes(visibleEvents, e => {
                   const top = Math.min(Math.max(0, topFor(e.start)), laneHeight - EVENT_PX)
                   return { top, bottom: top + EVENT_PX }
                 })
+
+                // Cap the split unless this day was opened. Everything past MAX_LANES is
+                // counted, not dropped — the count is the whole point.
+                const opened = openDays.has(dk)
+                const cap = <T,>(rows: Lane<T>[]) => opened
+                  ? rows
+                  : rows.filter(r => r.lane < MAX_LANES)
+                    .map(r => ({ ...r, lanes: Math.min(r.lanes, MAX_LANES) }))
+                const packedBlocks = cap(allBlocks)
+                const packedEvents = cap(allEvents)
+                const overflow = (allBlocks.length - packedBlocks.length) + (allEvents.length - packedEvents.length)
 
                 return (
                   <div
@@ -271,14 +299,28 @@ export function WeekTimeGrid({
                       )
                     })}
 
-                    {hiddenCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowFullDay(true)}
-                        className="absolute inset-x-px bottom-px z-20 rounded-sm bg-muted px-1 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        +{hiddenCount} fuera de hora
-                      </button>
+                    {(overflow > 0 || opened || hiddenCount > 0) && (
+                      <div className="absolute inset-x-px bottom-px z-20 flex flex-col gap-px">
+                        {(overflow > 0 || opened) && (
+                          <button
+                            type="button"
+                            onClick={() => toggleDay(dk)}
+                            aria-expanded={opened}
+                            className="rounded-sm bg-muted px-1 py-0.5 text-[10px] font-medium text-foreground/90 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {opened ? 'Ver menos' : `+${overflow} superpuesta${overflow === 1 ? '' : 's'}`}
+                          </button>
+                        )}
+                        {hiddenCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullDay(true)}
+                            className="rounded-sm bg-muted px-1 py-0.5 text-[10px] font-medium text-foreground/90 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            +{hiddenCount} fuera de hora
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )
