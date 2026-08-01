@@ -19,6 +19,19 @@ export function useDeepLinkId(): number | null {
   return id
 }
 
+/**
+ * Reads a `YYYY-MM-DD` query param once, on mount. Same one-shot, client-only
+ * contract as `useDeepLinkId` — read after mount so the server render stays stable.
+ */
+export function useDeepLinkDay(param = 'd'): string | null {
+  const [day, setDay] = useState<string | null>(null)
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get(param)
+    if (raw && /^\d{4}-\d{2}-\d{2}$/.test(raw)) setDay(raw)
+  }, [param])
+  return day
+}
+
 /** Scrolls a deep-linked row into view once it has rendered. */
 export function useScrollToDeepLink(id: number | null, prefix = 'row') {
   useEffect(() => {

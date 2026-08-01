@@ -1,5 +1,5 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChevronLeftIcon, ChevronRightIcon, TriangleAlertIcon } from 'lucide-react'
@@ -21,7 +21,11 @@ import type { CalendarEvent, CalendarBlock } from './types'
 //      and offered, not discarded.
 
 const HOUR_PX = 44
-const EVENT_PX = 20
+// Two lines: who is coming, then which car. A visita carries no duration in the data,
+// so this height is a rendering choice, not a claim — but it is also the collision
+// extent, which is right: two visitas half an hour apart do overlap on screen and
+// both need to stay readable.
+const EVENT_PX = 36
 
 function mondayOf(d: Date): Date {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate())
@@ -42,14 +46,25 @@ type Props = {
   blocks: CalendarBlock[]
   dayStartHour?: number
   dayEndHour?: number
+  /** `YYYY-MM-DD` to open on, from `/agenda?d=`. Applied after mount. */
+  initialDay?: string | null
   onEventClick?: (e: CalendarEvent) => void
   onBlockClick?: (b: CalendarBlock) => void
 }
 
 export function WeekTimeGrid({
-  events, blocks, dayStartHour = 7, dayEndHour = 21, onEventClick, onBlockClick,
+  events, blocks, dayStartHour = 7, dayEndHour = 21, initialDay, onEventClick, onBlockClick,
 }: Props) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()))
+
+  // Arriving from a MiniWeek day. Applied in an effect rather than in the initial state
+  // so the server render and the first client render agree.
+  useEffect(() => {
+    if (!initialDay) return
+    const [y, m, d] = initialDay.split('-').map(Number)
+    setWeekStart(mondayOf(new Date(y, m - 1, d)))
+  }, [initialDay])
+
   const [showFullDay, setShowFullDay] = useState(false)
   const todayKey = localDayKey(new Date())
 
@@ -104,23 +119,38 @@ export function WeekTimeGrid({
         )}
       </div>
 
-      <Card size="sm">
+      <Card size="sm" className="relative">
+        {/* A calendar should still show its grid when the week is empty — but it should
+            say so, rather than presenting 616px of ruling as if it were a full week. */}
+        {weekEvents.length === 0 && weekBlocks.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center">
+            <p className="rounded-md border bg-background px-3 py-1.5 text-sm text-muted-foreground">
+              Sin visitas ni turnos esta semana
+            </p>
+          </div>
+        )}
         <CardContent className="p-0 overflow-x-auto">
-          <div className="min-w-[640px]">
-            <div className="grid border-b bg-muted/40" style={{ gridTemplateColumns: '44px repeat(7, 1fr)' }}>
-              <div />
+          <div className="min-w-[640px]" role="grid" aria-label={`Semana del ${weekLabel}`}>
+            <div className="grid border-b bg-muted/40" role="row" style={{ gridTemplateColumns: '44px repeat(7, 1fr)' }}>
+              <div role="columnheader" aria-label="Hora" />
               {days.map((d, i) => {
                 const isToday = localDayKey(d) === todayKey
                 return (
-                  <div key={i} className={`py-2 text-center text-xs ${isToday ? 'text-blue-700 dark:text-blue-400 font-semibold' : 'text-muted-foreground font-medium'}`}>
+                  <div
+                    key={i}
+                    role="columnheader"
+                    {...(isToday ? { 'aria-current': 'date' as const } : {})}
+                    className={`py-2 text-center text-xs ${isToday ? 'text-blue-700 dark:text-blue-400 font-semibold' : 'text-muted-foreground font-medium'}`}
+                  >
                     {DIAS_SEMANA[i]} {d.getDate()}
+                    {/* "Today" is otherwise carried by colour alone. */}
                     {isToday && <span className="sr-only"> (hoy)</span>}
                   </div>
                 )
               })}
             </div>
 
-            <div className="grid" style={{ gridTemplateColumns: '44px repeat(7, 1fr)' }}>
+            <div className="grid" role="row" style={{ gridTemplateColumns: '44px repeat(7, 1fr)' }}>
               <div>
                 {hours.map(h => (
                   <div key={h} className="text-[10px] text-muted-foreground text-right pr-1.5 tabular-nums" style={{ height: HOUR_PX }}>
@@ -152,8 +182,23 @@ export function WeekTimeGrid({
                 })
 
                 return (
-                  <div key={di} className={`relative border-l ${isToday ? 'bg-blue-50/40 dark:bg-blue-950/30' : ''}`} style={{ height: laneHeight }}>
-                    {hours.map(h => <div key={h} className="border-b border-border/70" style={{ height: HOUR_PX }} />)}
+                  <div
+                    key={di}
+                    role="gridcell"
+                    aria-label={`${DIAS_SEMANA[di]} ${day.getDate()}`}
+                    className={`relative border-l ${isToday ? 'bg-blue-50/40 dark:bg-blue-950/30' : ''}`}
+                    style={{ height: laneHeight }}
+                  >
+                    {/* Full-strength rules, weighted every third hour. At border/70 these
+                        measured ~1.2:1 against the card and effectively vanished, leaving
+                        pills floating with no readable time axis. */}
+                    {hours.map(h => (
+                      <div
+                        key={h}
+                        className={h % 3 === 0 ? 'border-b border-border' : 'border-b border-border/60'}
+                        style={{ height: HOUR_PX }}
+                      />
+                    ))}
 
                     {packedBlocks.map(({ item: b, lane, lanes }) => {
                       const top = Math.max(0, topFor(b.start))
@@ -175,14 +220,18 @@ export function WeekTimeGrid({
                           style={{ top, height, ...laneStyle(lane, lanes) }}
                         >
                           {choca && <span className="absolute inset-0 bg-destructive/10 pointer-events-none" aria-hidden />}
-                          <div className="relative px-1 pt-0.5 text-[10px] leading-tight text-amber-900 dark:text-amber-200">
-                            <span className="font-medium tabular-nums">{hhmm(b.start)}</span> {b.title}
+                          <div className="relative px-1 pt-0.5 leading-tight text-amber-900 dark:text-amber-200">
+                            <div className="truncate text-xs">
+                              <span className="font-medium tabular-nums">{hhmm(b.start)}</span> {b.title}
+                            </div>
                             {choca
-                              ? <div className="flex items-center gap-0.5 font-medium text-destructive">
+                              ? <div className="flex items-center gap-0.5 text-[11px] font-medium text-destructive">
                                   <TriangleAlertIcon className="size-2.5 shrink-0" aria-hidden />
                                   <span className="truncate">Choca con {choca[0].title}</span>
                                 </div>
-                              : <div className="text-amber-800 dark:text-amber-300">Bloquea la agenda</div>}
+                              : <div className="truncate text-[11px] text-amber-800 dark:text-amber-300">
+                                  {b.subtitle || 'Bloquea la agenda'}
+                                </div>}
                           </div>
                         </Tag>
                       )
@@ -206,10 +255,17 @@ export function WeekTimeGrid({
                           )}
                           style={{ top, height: EVENT_PX, ...laneStyle(lane, lanes) }}
                         >
-                          <div className="flex items-center gap-0.5 px-1 text-[10px] leading-tight truncate text-blue-900 dark:text-blue-200">
-                            {choca && <TriangleAlertIcon className="size-2.5 shrink-0 text-destructive" aria-hidden />}
-                            <span className="font-medium tabular-nums">{hhmm(e.start)}</span>
-                            <span className="truncate">{e.title}</span>
+                          {/* Person first: the car is recoverable from context, the person is not.
+                              Nobody here thinks "Amarok at 3" — they think "Nico is coming at 3". */}
+                          <div className="px-1 pt-0.5 leading-tight text-blue-900 dark:text-blue-200">
+                            <div className="flex items-center gap-0.5 text-xs">
+                              {choca && <TriangleAlertIcon className="size-2.5 shrink-0 text-destructive" aria-hidden />}
+                              <span className="font-medium tabular-nums shrink-0">{hhmm(e.start)}</span>
+                              <span className="truncate">{e.subtitle || e.title}</span>
+                            </div>
+                            <div className="truncate text-[11px] text-blue-800 dark:text-blue-300">
+                              {e.subtitle ? e.title : 'Sin interesado'}
+                            </div>
                           </div>
                         </Tag>
                       )
