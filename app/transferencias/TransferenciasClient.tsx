@@ -1,6 +1,7 @@
 'use client'
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDeepLinkId, useScrollToDeepLink } from '@/lib/deep-link'
 import { deleteRecordDetailed, patchRecordDetailed, postRecord } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, todayKey } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
@@ -381,6 +382,17 @@ export default function TransferenciasClient({
   const [filtro, setFiltro] = useState<'activas' | 'todas'>('activas')
   const [showNew, setShowNew] = useState(false)
 
+  // Arriving from the agenda with ?id=. "activas" hides completadas/canceladas, so a
+  // deep-linked row could be missing from the list it lands on — widen to "todas",
+  // expand the row, and scroll to it.
+  const deepId = useDeepLinkId()
+  useEffect(() => {
+    if (deepId == null) return
+    setFiltro('todas')
+    setExpanded(prev => new Set(prev).add(deepId))
+  }, [deepId])
+  useScrollToDeepLink(deepId, 'transferencia')
+
   function toggle(id: number) {
     setExpanded(prev => {
       const next = new Set(prev)
@@ -447,8 +459,9 @@ export default function TransferenciasClient({
                   return (
                     <Fragment key={rowKey}>
                       <tr
+                        id={`transferencia-${rowKey}`}
                         onClick={() => toggle(rowKey)}
-                        className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/30'}`}
+                        className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/30'} ${rowKey === deepId ? 'ring-1 ring-inset ring-primary/30 bg-primary/5' : ''}`}
                       >
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-1.5">

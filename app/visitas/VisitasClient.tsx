@@ -1,6 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDeepLinkId, useScrollToDeepLink } from '@/lib/deep-link'
 import { patchRecordDetailed, postRecord, deleteRecordDetailed } from '@/lib/kapso'
 import { fmtDateTime, fmtDM, toARInputValue, fromARInputValue } from '@/lib/date'
 import { visitaConflict } from '@/lib/agenda'
@@ -41,10 +42,10 @@ function visitaChocaConTurno(fechaInput: string, transferencias: any[]): boolean
 }
 
 function VisitaRow({
-  v, vehicleLabel, interesadoLabel, transferencias,
-}: { v: any; vehicleLabel: (id: any) => string; interesadoLabel: (id: any) => string; transferencias: any[] }) {
+  v, vehicleLabel, interesadoLabel, transferencias, defaultOpen = false,
+}: { v: any; vehicleLabel: (id: any) => string; interesadoLabel: (id: any) => string; transferencias: any[]; defaultOpen?: boolean }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const [notas, setNotas] = useState(v.notas ?? '')
   const [fecha, setFecha] = useState(toARInputValue(v.fecha))
   const [saving, setSaving] = useState<string>('')
@@ -80,7 +81,7 @@ function VisitaRow({
   const resultado = v.resultado ?? 'pendiente'
 
   return (
-    <div className="border-b border-border last:border-0">
+    <div id={`visita-${v.id}`} className={`border-b border-border last:border-0 ${defaultOpen ? 'bg-primary/5 ring-1 ring-inset ring-primary/30' : ''}`}>
       <div
         onClick={() => setOpen(o => !o)}
         className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
@@ -246,6 +247,13 @@ export default function VisitasClient({
   const [showNueva, setShowNueva] = useState(false)
   const [filter, setFilter] = useState<Filtro>('proximas')
 
+  // Arriving from the agenda with ?id=. The default "proximas" filter excludes past
+  // visitas, so a click on a past one would land on a list that does not contain it —
+  // widen to "todas" so the deep-linked row is always present, then open and scroll to it.
+  const deepId = useDeepLinkId()
+  useEffect(() => { if (deepId != null) setFilter('todas') }, [deepId])
+  useScrollToDeepLink(deepId, 'visita')
+
   function vehicleLabel(id: any) {
     const v = vehicles.find(v => v.id === id)
     if (!v) return 'Sin vehículo'
@@ -310,7 +318,7 @@ export default function VisitasClient({
       <Card size="sm">
         <CardContent className="p-0">
           {sorted.map(v => (
-            <VisitaRow key={v.id} v={v} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} transferencias={transferencias} />
+            <VisitaRow key={v.id} v={v} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} transferencias={transferencias} defaultOpen={v.id === deepId} />
           ))}
           {sorted.length === 0 && (
             <EmptyState icon={CalendarClockIcon} title="Sin visitas" hint="Agendá una con “Nueva visita”." />

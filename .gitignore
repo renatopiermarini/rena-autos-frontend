@@ -3,3 +3,6 @@
 .next/
 node_modules/
 .DS_Store
+
+# Impeccable skill files (tooling, not app source)
+.claude/skills/

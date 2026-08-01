@@ -77,9 +77,9 @@ export function MonthGrid<T>({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Button size="icon-sm" variant="ghost" onClick={prevMonth}><ChevronLeftIcon className="size-4" /></Button>
+        <Button size="icon-sm" variant="ghost" aria-label="Mes anterior" onClick={prevMonth}><ChevronLeftIcon className="size-4" /></Button>
         <span className="text-sm font-medium w-44 text-center">{MESES_ES[month]} {year}</span>
-        <Button size="icon-sm" variant="ghost" onClick={nextMonth}><ChevronRightIcon className="size-4" /></Button>
+        <Button size="icon-sm" variant="ghost" aria-label="Mes siguiente" onClick={nextMonth}><ChevronRightIcon className="size-4" /></Button>
         <Button
           size="xs"
           variant="outline"
@@ -108,8 +108,18 @@ export function MonthGrid<T>({
                   return (
                     <div
                       key={key}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isSel}
+                      {...(isToday ? { 'aria-current': 'date' as const } : {})}
+                      aria-label={`${day}${isToday ? ' (hoy)' : ''}: ${dayItems.length} ${plural(dayItems.length, noun)}`}
                       onClick={() => setSelected(isSel ? null : key)}
-                      className={`min-h-28 p-1.5 cursor-pointer transition-colors ${
+                      onKeyDown={e => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return
+                        e.preventDefault()
+                        setSelected(isSel ? null : key)
+                      }}
+                      className={`min-h-28 p-1.5 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                         isSel ? 'bg-accent ring-1 ring-inset ring-ring' : isToday ? 'bg-blue-50/70 dark:bg-blue-950/40' : 'hover:bg-muted/40'
                       }`}
                     >
@@ -117,11 +127,13 @@ export function MonthGrid<T>({
                         <span className={`text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
                           isToday ? 'bg-blue-600 text-white' : isSel ? 'text-foreground' : 'text-muted-foreground'
                         }`}>{day}</span>
+                        {/* Today is otherwise a blue circle and nothing else. */}
+                        {isToday && <span className="sr-only">hoy</span>}
                       </div>
                       <div className="space-y-0.5">
                         {shown.map(it => <Fragment key={itemKey(it)}>{renderChip(it)}</Fragment>)}
                         {hidden > 0 && (
-                          <button onClick={e => toggleExpand(key, e)} className="text-xs text-muted-foreground hover:text-foreground pl-1">
+                          <button type="button" onClick={e => toggleExpand(key, e)} className="text-xs text-muted-foreground hover:text-foreground px-1 py-0.5 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                             {isExp ? 'ver menos' : `+${hidden} más`}
                           </button>
                         )}

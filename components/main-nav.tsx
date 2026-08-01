@@ -38,6 +38,7 @@ export function MainNav() {
               <Link
                 key={n.href}
                 href={n.href}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
                   'text-sm px-3 py-1.5 rounded-md transition-colors whitespace-nowrap',
                   active

@@ -1,10 +1,10 @@
-import { getBalances, getTareas, getVehicles, getPrestamos, getOfertas, getVisitas, getTransferencias } from '@/lib/kapso'
+import { getBalances, getTareas, getVehicles, getPrestamos, getOfertas, getVisitas, getTransferencias, getTurnos } from '@/lib/kapso'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { AlertTriangleIcon, CarIcon, CalendarClockIcon, ArrowLeftRightIcon } from 'lucide-react'
 import { MiniWeek } from '@/components/calendar/MiniWeek'
-import { transferenciaBlock, transferenciaBlocks } from '@/lib/agenda'
+import { transferenciaBlock, transferenciaBlocks, turnosBlocks } from '@/lib/agenda'
 import { fmtDateTime } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 
@@ -18,8 +18,8 @@ const TONE: Record<string, string> = {
 }
 
 export default async function Inicio() {
-  const [balances, tareas, vehicles, prestamos, ofertas, visitas, transferencias] = await Promise.all([
-    getBalances(), getTareas(), getVehicles(), getPrestamos(), getOfertas(), getVisitas(), getTransferencias(),
+  const [balances, tareas, vehicles, prestamos, ofertas, visitas, transferencias, turnos] = await Promise.all([
+    getBalances(), getTareas(), getVehicles(), getPrestamos(), getOfertas(), getVisitas(), getTransferencias(), getTurnos(),
   ])
 
   function autoLabel(id: number) {
@@ -33,11 +33,15 @@ export default async function Inicio() {
   const urgentes = tareas.filter((t: any) => t.prioridad === 'alta' && t.estado !== 'completada')
   const prestamosActivos = prestamos.filter((p: any) => p.estado === 'activo')
   const ofertasPendientes = ofertas.filter((o: any) => o.estado === 'pendiente')
-  const visitasPendientes = visitas.filter((v: any) => v.resultado === 'pendiente')
-
   const hoy = new Date()
+  // Same definition as the "próximas" filter in VisitasClient: still pendiente AND not yet past.
+  const visitasPendientes = visitas.filter((v: any) =>
+    v.resultado === 'pendiente' && v.fecha && new Date(v.fecha) >= hoy)
   const horizon48h = new Date(hoy.getTime() + 48 * 60 * 60 * 1000)
-  const turnosProximos = transferenciaBlocks(transferencias).filter(b => b.start >= hoy)
+  // Both sources, same as the agenda — counting only transferencias hid every turno
+  // the bot wrote, so this metric disagreed with the calendar it links to.
+  const turnosProximos = [...transferenciaBlocks(transferencias), ...turnosBlocks(turnos)]
+    .filter(b => b.start >= hoy)
 
   // Próxima actividad (next 48h): visitas + turnos, merged + sorted.
   type Proximo = { kind: 'visita' | 'turno'; label: string; when: Date; fechaIso: string }
@@ -135,7 +139,7 @@ export default async function Inicio() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <MiniWeek visitas={visitas} transferencias={transferencias} />
+        <MiniWeek visitas={visitas} transferencias={transferencias} turnos={turnos} />
 
         <Card size="sm">
           <CardHeader className="border-b py-3">

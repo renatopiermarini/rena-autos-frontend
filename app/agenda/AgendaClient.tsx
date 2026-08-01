@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDeepLinkDay } from '@/lib/deep-link'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CalendarView } from '@/app/tareas/TareasClient'
 import { WeekTimeGrid } from '@/components/calendar/WeekTimeGrid'
@@ -15,6 +16,9 @@ function vehLabel(vehicles: any[], id: any): string {
 function interLabel(interesados: any[], id: any): string {
   return interesados.find(x => x.id === id)?.nombre ?? ''
 }
+// `subtitle` is the person the visita is with, and only that. It used to fall back to
+// `v.notas`, which put raw internal notes on screen wherever an interesado was missing
+// or unrecognised.
 
 export default function AgendaClient({
   tareas, visitas, transferencias, turnos, vehicles, interesados,
@@ -23,6 +27,7 @@ export default function AgendaClient({
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<'tareas' | 'visitas'>('visitas')
+  const deepDay = useDeepLinkDay()
 
   const events: CalendarEvent[] = []
   for (const v of visitas) {
@@ -34,21 +39,31 @@ export default function AgendaClient({
       title: vehLabel(vehicles, v.vehicle_id),
       start,
       kind: 'visita',
-      subtitle: interLabel(interesados, v.interesado_id) || v.notas || undefined,
+      subtitle: interLabel(interesados, v.interesado_id) || undefined,
+      href: `/visitas?id=${v.id}`,
       meta: v,
     })
   }
 
   const blocks = [...transferenciaBlocks(transferencias), ...turnosBlocks(turnos)]
 
-  const pendVisitas = visitas.filter(v => v.resultado === 'pendiente').length
+  // Scoped to what is still ahead, matching the "próximas" definition on /visitas and
+  // Inicio. It used to count every pendiente visita ever, including last year's, so the
+  // number never reconciled with anything on screen and people learned to ignore it.
+  const ahora = new Date()
+  const pendVisitas = visitas.filter(v =>
+    v.resultado === 'pendiente' && v.fecha && new Date(v.fecha) >= ahora).length
+  const turnosProximos = blocks.filter(b => b.start >= ahora).length
+  const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">Agenda</h1>
-          <span className="text-sm text-muted-foreground">{pendVisitas} visitas pendientes · {blocks.length} turnos</span>
+          <span className="text-sm text-muted-foreground">
+            {plural(pendVisitas, 'visita')} {pendVisitas === 1 ? 'pendiente' : 'pendientes'} · {plural(turnosProximos, 'turno')}
+          </span>
         </div>
         <Tabs value={tab} onValueChange={(v: any) => setTab(v)}>
           <TabsList>
@@ -63,8 +78,9 @@ export default function AgendaClient({
         : <WeekTimeGrid
             events={events}
             blocks={blocks}
-            onEventClick={() => router.push('/visitas')}
-            onBlockClick={() => router.push('/transferencias')}
+            initialDay={deepDay}
+            onEventClick={e => { if (e.href) router.push(e.href) }}
+            onBlockClick={b => { if (b.href) router.push(b.href) }}
           />
       }
     </div>

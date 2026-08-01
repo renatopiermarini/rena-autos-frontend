@@ -8,7 +8,7 @@
 // match the Python helper. The shared test vector guards against drift.
 
 import { AR_OFFSET, parseInstant } from '@/lib/date'
-import type { CalendarBlock } from '@/components/calendar/types'
+import type { CalendarBlock, CalendarEvent } from '@/components/calendar/types'
 
 export const BLOCK_HOURS = 2
 
@@ -64,6 +64,7 @@ export function transferenciaBlocks(transferencias: any[]): CalendarBlock[] {
       end: b.end,
       kind: 'transferencia',
       subtitle: t.comprador_nombre || undefined,
+      href: `/transferencias?id=${t.id}`,
       meta: t,
     })
   }
@@ -95,10 +96,60 @@ export function turnosBlocks(turnos: any[]): CalendarBlock[] {
       title: TURNO_LABELS[String(t?.tipo ?? '')] ?? `Turno ${t?.tipo ?? ''}`.trim(),
       start,
       end: new Date(start.getTime() + hours * 3600_000),
-      kind: 'transferencia',
+      kind: 'turno',
       subtitle: t.notas || undefined,
+      // Deliberately no `href`: the `turnos` table is read by the agenda and by
+      // nothing else. There is no page that can show one of these rows, so a click
+      // must not navigate — it used to land on /transferencias, which never
+      // contained the record (a verificación policial is not a transferencia).
       meta: t,
     })
+  }
+  return out
+}
+
+// ── Display-layer conflict detection (read surface only) ─────────────────────
+//
+// NOT part of the mirrored write rule. `visitaConflict` above is the half that must
+// match `flows/agenda_rules.py`; widening it here without changing the Python side
+// would make the dashboard reject writes the bot still accepts. These helpers exist
+// because the *calendar* must surface every collision it can see — including ones
+// against bot-written `turnos` rows that the write rule does not cover — so a human
+// can catch what neither validator currently rejects.
+
+/** Half-open overlap between two windows. */
+function windowsOverlap(a: { start: Date; end: Date }, b: { start: Date; end: Date }): boolean {
+  return a.start.getTime() < b.end.getTime() && b.start.getTime() < a.end.getTime()
+}
+
+/** For each block id, the other blocks whose window it overlaps. */
+export function blockConflicts(blocks: CalendarBlock[]): Map<CalendarBlock['id'], CalendarBlock[]> {
+  const out = new Map<CalendarBlock['id'], CalendarBlock[]>()
+  for (let i = 0; i < blocks.length; i++) {
+    for (let j = i + 1; j < blocks.length; j++) {
+      if (!windowsOverlap(blocks[i], blocks[j])) continue
+      if (!out.has(blocks[i].id)) out.set(blocks[i].id, [])
+      if (!out.has(blocks[j].id)) out.set(blocks[j].id, [])
+      out.get(blocks[i].id)!.push(blocks[j])
+      out.get(blocks[j].id)!.push(blocks[i])
+    }
+  }
+  return out
+}
+
+/**
+ * For each event id, the blocks whose window contains its instant.
+ * Uses the same half-open rule as `inBlock` so the calendar agrees with the
+ * validator wherever the validator actually runs.
+ */
+export function eventConflicts(
+  events: { id: CalendarEvent['id']; start: Date }[],
+  blocks: CalendarBlock[],
+): Map<CalendarEvent['id'], CalendarBlock[]> {
+  const out = new Map<CalendarEvent['id'], CalendarBlock[]>()
+  for (const e of events) {
+    const hits = blocks.filter(b => inBlock(e.start, b))
+    if (hits.length) out.set(e.id, hits)
   }
   return out
 }
