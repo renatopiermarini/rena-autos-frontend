@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import { CircleAlertIcon } from 'lucide-react'
 import { patchRecordDetailed } from '@/lib/kapso'
-import { DayStrip, type StripItem } from '@/components/calendar/DayStrip'
+import { MonthBoard, type BoardItem } from '@/components/calendar/MonthBoard'
 import { localDayKey } from '@/lib/date'
 
 // El tablero: qué pinta el día. Nada de plata, nada de stock — eso vive en Finanzas
@@ -14,7 +14,7 @@ import { localDayKey } from '@/lib/date'
 export default function TableroClient({
   items, alertas, sinFecha,
 }: {
-  items: StripItem[]
+  items: BoardItem[]
   alertas: string[]
   sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[]
 }) {
@@ -74,7 +74,7 @@ export default function TableroClient({
         </section>
       )}
 
-      <DayStrip items={withLocalState} onToggleTarea={toggleTarea} />
+      <MonthBoard items={withLocalState} onToggleTarea={toggleTarea} />
 
       {sinFecha.length > 0 && (
         <section className="rounded-lg border border-border bg-card overflow-hidden">

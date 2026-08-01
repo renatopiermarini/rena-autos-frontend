@@ -2,7 +2,7 @@ import { getTareas, getVehicles, getPrestamos, getVisitas, getTransferencias, ge
 import TableroClient from './TableroClient'
 import { transferenciaBlocks, turnosBlocks } from '@/lib/agenda'
 import { parseInstant, localDayKey } from '@/lib/date'
-import type { StripItem } from '@/components/calendar/DayStrip'
+import type { BoardItem } from '@/components/calendar/MonthBoard'
 
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
@@ -17,7 +17,7 @@ export default async function Tablero() {
   }
   const interLabel = (id: any) => interesados.find((x: any) => x.id === id)?.nombre ?? ''
 
-  const items: StripItem[] = []
+  const items: BoardItem[] = []
 
   for (const v of visitas) {
     if (!v.fecha || (v.resultado && v.resultado !== 'pendiente')) continue
