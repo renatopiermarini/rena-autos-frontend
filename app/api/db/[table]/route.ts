@@ -12,7 +12,7 @@ const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofert
 // ENUMS, prod survey 2026-07-07). "equipo" in asignado is real (broadcast bucket).
 const ENUMS: Record<string, Record<string, string[]>> = {
   vehicles: {
-    estado: ['potencial', 'a_ingresar', 'confirmado', 'va_a_pensarlo', 'necesita_follow_up', 'en_stock', 'en_reparacion', 'reservado', 'vendido'],
+    estado: ['a_ingresar', 'en_preparacion', 'publicado', 'reservado', 'vendido'],
     tipo_operacion: ['consignacion', 'propio'],
   },
   tareas: {

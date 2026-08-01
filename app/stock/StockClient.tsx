@@ -26,10 +26,10 @@ const CAT_LABEL_FIN: Record<string, string> = {
   sin_categoria: 'Sin categoría',
 }
 
+// Options for the estado <select> in the edit form. Same five values as
+// lib/estados.ts, in pipeline order; the API whitelist rejects anything else.
 const ESTADOS = [
-  'potencial', 'a_ingresar', 'confirmado', 'en_stock',
-  'en_reparacion', 'va_a_pensarlo', 'necesita_follow_up',
-  'reservado', 'vendido',
+  'a_ingresar', 'en_preparacion', 'publicado', 'reservado', 'vendido',
 ]
 
 const nativeSelectCls =
@@ -514,9 +514,10 @@ const GROUP_LABELS: { key: GroupMode; label: string }[] = [
   { key: 'estado', label: 'Por estado' },
 ]
 
+// Pipeline order for the "Por estado" grouping. `vendido` is deliberately absent
+// — sold cars render in their own section further down the page.
 const ESTADO_ORDER = [
-  'a_ingresar', 'confirmado', 'en_stock',
-  'en_reparacion', 'va_a_pensarlo', 'necesita_follow_up', 'reservado',
+  'a_ingresar', 'en_preparacion', 'publicado', 'reservado',
 ]
 // Group headings reuse lib/estados.ts so there is exactly ONE estado→label map.
 // There used to be a second copy right here, and the two drifted: the headings
@@ -541,10 +542,8 @@ export default function StockClient({
     !q || [v.marca, v.modelo, v.año, v.dominio, v.color]
       .filter(Boolean).join(' ').toLowerCase().includes(q)
 
-  const activos = vehicles.filter(v => v.estado !== 'vendido' && v.estado !== 'potencial')
-  const potencialesAll = vehicles.filter(v => v.estado === 'potencial')
+  const activos = vehicles.filter(v => v.estado !== 'vendido')
   const vendidosAll = vehicles.filter(v => v.estado === 'vendido')
-  const potenciales = potencialesAll.filter(matchesQuery)
   const vendidos = vendidosAll.filter(matchesQuery)
 
   const filtered = activos.filter(v => {
@@ -592,7 +591,7 @@ export default function StockClient({
       <div className="flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Stock</h1>
         <span className="text-sm text-muted-foreground">
-          {activos.length} activos · {potencialesAll.length} potenciales · {vendidosAll.length} vendidos
+          {activos.length} activos · {vendidosAll.length} vendidos
         </span>
       </div>
 
@@ -686,47 +685,6 @@ export default function StockClient({
             />
           )}
         </div>
-      )}
-
-      {potenciales.length > 0 && (
-        <section>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Potenciales ({potenciales.length})</p>
-          <Card size="sm">
-            <CardContent className="p-0">
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-border">
-                  {potenciales.map(v => {
-                    const isOpen = expanded.has(v.id)
-                    const tipo = v.tipo_operacion
-                    const badgeVariant: 'default' | 'secondary' | 'outline' =
-                      tipo === 'propio' ? 'default' : tipo === 'consignacion' ? 'secondary' : 'outline'
-                    const badgeLabel = tipo === 'propio' ? 'propio' : tipo === 'consignacion' ? 'consignación' : 'sin tipo'
-                    return (
-                      <Fragment key={v.id}>
-                        <tr
-                          onClick={() => toggle(v.id)}
-                          className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/50' : 'hover:bg-muted/30'}`}
-                        >
-                          <td className="px-4 py-2.5">
-                            <div className="flex items-center gap-1.5">
-                              {isOpen ? <ChevronUpIcon className="size-3 text-muted-foreground" /> : <ChevronDownIcon className="size-3 text-muted-foreground" />}
-                              <span>{v.marca} {v.modelo} {v.año}</span>
-                              {v.color && <span className="text-xs text-muted-foreground">· {v.color}</span>}
-                            </div>
-                          </td>
-                          <td className="px-4 py-2.5 text-right">
-                            <Badge variant={badgeVariant}>{badgeLabel}</Badge>
-                          </td>
-                        </tr>
-                        {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} />}
-                      </Fragment>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        </section>
       )}
 
       {vendidos.length > 0 && (

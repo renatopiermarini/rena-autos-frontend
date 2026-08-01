@@ -340,7 +340,7 @@ function PrestamosTable({
 function PorVehiculoTab({
   vehicles, movimientos, prestamos, clientesById,
 }: { vehicles: any[]; movimientos: any[]; prestamos: any[]; clientesById: any }) {
-  const activos = vehicles.filter((v: any) => v.estado !== 'vendido' && v.estado !== 'potencial')
+  const activos = vehicles.filter((v: any) => v.estado !== 'vendido')
   const filas = activos.map((v: any) => {
     const f = computeVehicleFinancials(v.id, vehicles, movimientos, prestamos)
     return { v, f }
