@@ -25,8 +25,16 @@ export type BoardItem = {
 const KIND_LABEL: Record<BoardItem['kind'], string> = {
   visita: 'Visitas', turno: 'Turnos', tarea: 'Tareas',
 }
+// One hue per kind, far enough apart to tell at a glance in a dot the size of a
+// full stop: visita blue, turno amber, tarea green. Tareas were grey, which read as
+// "disabled" on the one screen where they are the main thing you act on.
 const KIND_DOT: Record<BoardItem['kind'], string> = {
-  visita: 'bg-info', turno: 'bg-warning', tarea: 'bg-muted-foreground',
+  visita: 'bg-info', turno: 'bg-warning', tarea: 'bg-success',
+}
+const KIND_CHIP: Record<BoardItem['kind'], string> = {
+  visita: 'bg-info/12 text-info',
+  turno: 'bg-warning/12 text-warning',
+  tarea: 'bg-success/12 text-success',
 }
 const KIND_ONE: Record<BoardItem['kind'], string> = {
   visita: 'Visita', turno: 'Turno', tarea: 'Tarea',
@@ -220,8 +228,16 @@ export function MonthBoard({
                     <span className={cn('block text-sm truncate', it.done && 'line-through text-muted-foreground')}>
                       {it.title}
                     </span>
-                    <span className="block text-xs text-muted-foreground truncate">
-                      {KIND_ONE[it.kind]}{it.subtitle ? ` · ${it.subtitle}` : ''}
+                    <span className="mt-0.5 flex items-center gap-1.5 min-w-0">
+                      <span className={cn(
+                        'inline-flex shrink-0 items-center rounded px-1.5 py-px text-[10px] font-medium uppercase tracking-wide',
+                        KIND_CHIP[it.kind],
+                      )}>
+                        {KIND_ONE[it.kind]}
+                      </span>
+                      {it.subtitle && (
+                        <span className="text-xs text-muted-foreground truncate">{it.subtitle}</span>
+                      )}
                     </span>
                   </span>
                 </>
