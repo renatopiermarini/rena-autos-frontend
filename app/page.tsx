@@ -117,5 +117,21 @@ export default async function Tablero() {
     else if (dias <= 30) alertas.push(`Préstamo vence en ${dias} días`)
   })
 
-  return <TableroClient items={items} alertas={alertas} sinFecha={sinFecha} />
+  // Autos en circulación con datos faltantes — banner permanente del Tablero
+  // (reemplaza al aviso diario por WhatsApp, pedido del usuario 2026-08-10).
+  // Misma regla que check_vehicles_incomplete del backend: a_ingresar tiene
+  // campos mínimos permitidos a propósito; vendido ya está cerrado.
+  const CAMPOS_AUTO: [string, string][] = [
+    ['dominio', 'patente'], ['numero_motor', 'n° motor'], ['numero_chasis', 'n° chasis'],
+    ['color', 'color'], ['km', 'km'], ['precio_publicado', 'precio publicado'],
+  ]
+  const datosFaltantes = vehicles
+    .filter((v: any) => v.estado !== 'vendido' && v.estado !== 'a_ingresar')
+    .map((v: any) => ({
+      label: `${v.marca ?? ''} ${v.modelo ?? ''}`.trim() + (v.dominio ? ` (${v.dominio})` : ''),
+      faltan: CAMPOS_AUTO.filter(([campo]) => !v[campo]).map(([, nombre]) => nombre),
+    }))
+    .filter((v: { faltan: string[] }) => v.faltan.length > 0)
+
+  return <TableroClient items={items} alertas={alertas} sinFecha={sinFecha} datosFaltantes={datosFaltantes} />
 }

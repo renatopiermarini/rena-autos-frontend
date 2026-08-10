@@ -12,11 +12,12 @@ import { localDayKey } from '@/lib/date'
 // y en Stock. Acá sólo va lo que pasa y lo que hay que hacer.
 
 export default function TableroClient({
-  items, alertas, sinFecha,
+  items, alertas, sinFecha, datosFaltantes = [],
 }: {
   items: BoardItem[]
   alertas: string[]
   sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[]
+  datosFaltantes?: { label: string; faltan: string[] }[]
 }) {
   const router = useRouter()
   const [done, setDone] = useState<Record<string, boolean>>({})
@@ -69,6 +70,32 @@ export default function TableroClient({
           <ul className="divide-y divide-destructive/15 border-t border-destructive/15">
             {alertas.map((a, i) => (
               <li key={i} className="px-3 py-2 text-sm text-destructive">{a}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Datos faltantes en vehículos — banner permanente (reemplaza al aviso
+          diario por WhatsApp). Ámbar, no rojo: es higiene de datos, no fuego. */}
+      {datosFaltantes.length > 0 && (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <CircleAlertIcon className="size-4 shrink-0" aria-hidden />
+              <h2 className="text-xs font-semibold uppercase tracking-wide">
+                Datos faltantes en {datosFaltantes.length} vehículo{datosFaltantes.length === 1 ? '' : 's'}
+              </h2>
+            </div>
+            <Link href="/stock" className="text-xs text-amber-700 dark:text-amber-300 hover:underline underline-offset-2">
+              Completar en Stock →
+            </Link>
+          </div>
+          <ul className="divide-y divide-amber-200/60 dark:divide-amber-900/60 border-t border-amber-200/60 dark:border-amber-900/60">
+            {datosFaltantes.map((v, i) => (
+              <li key={i} className="px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                <span className="font-medium">{v.label}</span>
+                <span className="text-amber-700/80 dark:text-amber-300/80"> — falta: {v.faltan.join(', ')}</span>
+              </li>
             ))}
           </ul>
         </section>
