@@ -227,8 +227,12 @@ function ResumenTab({
         <StatCard
           label="Por cobrar"
           value={fmt(pat.por_cobrar.total)}
-          sub={pat.por_cobrar.clientes.length > 0 ? pat.por_cobrar.clientes.map(c => `${c.nombre} ${fmt(c.saldo)}`).join(' · ') : 'sin deudas de clientes'}
-          tip={<>Plata nuestra en manos de clientes: gastos que adelantamos por su cuenta (p. ej. un repuesto del auto que nos dejaron en consignación) menos lo que ya devolvieron. Es un activo igual que la caja — solo cambia quién la tiene. Sale de los movimientos &quot;por cuenta del cliente&quot; del ledger.</>}
+          sub={[
+            ...pat.por_cobrar.clientes.map(c => `${c.nombre} ${fmt(c.saldo)}`),
+            ...(pat.por_cobrar.comisiones_consignaciones.total > 0
+              ? [`comisiones consig. ${fmt(pat.por_cobrar.comisiones_consignaciones.total)}`] : []),
+          ].join(' · ') || 'nada por cobrar'}
+          tip={<>Dos cosas: (1) plata nuestra en manos de clientes — gastos que adelantamos por su cuenta menos lo devuelto; (2) <b>comisiones esperadas de consignaciones</b>: nuestro 5% del precio objetivo de cada auto en consignación, que se cobra al venderlo.{pat.por_cobrar.comisiones_consignaciones.autos.length > 0 && <><br /><br />{pat.por_cobrar.comisiones_consignaciones.autos.map(a => `${a.label}: 5% de ${fmt(a.precio_base)} = ${fmt(a.comision)}`).join(' · ')}</>}</>}
         />
         <StatCard
           tone="negative"
@@ -399,29 +403,41 @@ function PatrimonioTab({
 
       {/* Cuentas por cobrar */}
       <SectionTable
-        title={`Cuentas por cobrar (${pat.por_cobrar.clientes.length})`}
-        tip={<>Gastos que adelantamos por cuenta de un cliente (p. ej. un repuesto del auto que nos dejó en consignación) menos lo que ya devolvió. Al vender su auto, se descuentan solos de la liquidación.</>}
+        title={`Por cobrar (${pat.por_cobrar.clientes.length + pat.por_cobrar.comisiones_consignaciones.autos.length})`}
+        tip={<>Dos fuentes: gastos adelantados por cuenta de clientes (menos lo devuelto — al vender su auto se descuentan solos de la liquidación) y las <b>comisiones esperadas</b> de las consignaciones activas (5% del precio objetivo, se cobran al vender).</>}
       >
-        {pat.por_cobrar.clientes.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Ningún cliente nos debe.</p>
+        {pat.por_cobrar.total <= 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Nada por cobrar.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/40">
                 <tr className="text-left">
-                  <Th>Cliente</Th>
-                  <Th right tip={<>Total que pusimos de nuestra caja por su cuenta.</>}>Adelantado</Th>
-                  <Th right tip={<>Lo que ya nos devolvió.</>}>Devuelto</Th>
-                  <Th right tip={<>Adelantado − devuelto: lo que nos debe hoy.</>}>Debe</Th>
+                  <Th>Quién / qué</Th>
+                  <Th tip={<><b>Deuda de cliente</b>: gastos adelantados por su cuenta. <b>Comisión consignación</b>: nuestro 5% del precio objetivo, esperado — se cobra al vender.</>}>Concepto</Th>
+                  <Th right>Detalle</Th>
+                  <Th right tip={<>Deuda de cliente: adelantado − devuelto. Comisión: 5% del precio objetivo.</>}>Monto</Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {pat.por_cobrar.clientes.map(c => (
-                  <tr key={c.cliente_id}>
+                  <tr key={`c${c.cliente_id}`}>
                     <td className="px-3 py-2.5 font-medium">{c.nombre}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(c.adelantado)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(c.devuelto)}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">deuda de cliente</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
+                      adelantado {fmt(c.adelantado)} − devuelto {fmt(c.devuelto)}
+                    </td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-medium">{fmt(c.saldo)}</td>
+                  </tr>
+                ))}
+                {pat.por_cobrar.comisiones_consignaciones.autos.map(a => (
+                  <tr key={`v${a.vehicle_id}`}>
+                    <td className="px-3 py-2.5 font-medium">{a.label}</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">comisión consignación (esperada)</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
+                      5% de {fmt(a.precio_base)}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">{fmt(a.comision)}</td>
                   </tr>
                 ))}
                 <tr className="bg-muted/40 font-medium">

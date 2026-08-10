@@ -199,3 +199,19 @@ describe('computeLiquidacionConsignacion', () => {
     expect(liq.neto_al_cliente).toBe(17500 - 875 - 380)
   })
 })
+
+describe('computePatrimonio · comisiones esperadas de consignaciones', () => {
+  it('5% del precio objetivo (fallback publicado) de consignaciones activas', () => {
+    const vehicles = [
+      { id: 30, marca: 'Chevrolet', modelo: 'Cruze LTZ', tipo_operacion: 'consignacion', estado: 'publicado', precio_venta_objetivo: 14000 },
+      { id: 29, marca: 'Toyota', modelo: 'Hilux GR', tipo_operacion: 'consignacion', estado: 'publicado', precio_publicado: 60000 },
+      { id: 28, marca: 'Jeep', modelo: 'Renegade', tipo_operacion: 'consignacion', estado: 'vendido', precio_venta_objetivo: 9999 },
+      { id: 27, marca: 'Kia', modelo: 'Rio', tipo_operacion: 'consignacion', estado: 'publicado' }, // sin precio
+    ]
+    const pat = computePatrimonio([], vehicles, [], [], HOY)
+    expect(pat.por_cobrar.comisiones_consignaciones.total).toBe(700 + 3000)
+    expect(pat.por_cobrar.comisiones_consignaciones.autos.map(a => a.vehicle_id)).toEqual([29, 30])
+    expect(pat.por_cobrar.total).toBe(3700)
+    expect(pat.capital_propio).toBe(3700)
+  })
+})

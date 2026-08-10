@@ -380,6 +380,10 @@ export type Patrimonio = {
   por_cobrar: {
     total: number
     clientes: { cliente_id: number | null; nombre: string; adelantado: number; devuelto: number; saldo: number }[]
+    comisiones_consignaciones: {
+      total: number
+      autos: { vehicle_id: number | null; label: string; precio_base: number; comision: number }[]
+    }
   }
   deuda_total: number
   interes_mensual_total: number
@@ -453,7 +457,21 @@ export function computePatrimonio(
       saldo: round2(e.adelantado - e.devuelto),
     }))
     .sort((a, b) => b.saldo - a.saldo)
-  const porCobrarTotal = round2(clientesCobrar.reduce((s, c) => s + c.saldo, 0))
+  // Comisiones esperadas de consignaciones activas: nuestro 5% del precio
+  // objetivo (fallback publicado). Se cobran recién al vender — van marcadas
+  // como esperadas — pero son un activo real, igual que la ganancia esperada.
+  const comisionesAutos = vehicles
+    .filter(v => v.tipo_operacion === 'consignacion' && v.estado !== 'vendido')
+    .map(v => {
+      const base = Number(v.precio_venta_objetivo ?? 0) || Number(v.precio_publicado ?? 0)
+      const label = `${v.marca ?? ''} ${v.modelo ?? ''}`.trim() + (v.dominio ? ` (${v.dominio})` : '')
+      return { vehicle_id: coerceId(v.id), label, precio_base: round2(base), comision: round2(base * 0.05) }
+    })
+    .filter(a => a.precio_base > 0)
+    .sort((a, b) => b.comision - a.comision)
+  const comisionesTotal = round2(comisionesAutos.reduce((s, a) => s + a.comision, 0))
+
+  const porCobrarTotal = round2(clientesCobrar.reduce((s, c) => s + c.saldo, 0) + comisionesTotal)
 
   const posiciones = prestamos
     .filter(p => p.estado === 'activo')
@@ -473,7 +491,11 @@ export function computePatrimonio(
       autos,
     },
     en_uso: { total: enUsoTotal, autos: enUso },
-    por_cobrar: { total: porCobrarTotal, clientes: clientesCobrar },
+    por_cobrar: {
+      total: porCobrarTotal,
+      clientes: clientesCobrar,
+      comisiones_consignaciones: { total: comisionesTotal, autos: comisionesAutos },
+    },
     deuda_total: deudaTotal,
     interes_mensual_total: interesMensualTotal,
     capital_propio: capitalPropio,
