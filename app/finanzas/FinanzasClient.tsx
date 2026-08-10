@@ -1,19 +1,24 @@
 'use client'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { computeVehicleFinancials, computePrestamoStatus } from '@/lib/kapso'
+import {
+  computeVehicleFinancials, computeLoanPosition, computePatrimonio,
+  computeLiquidacionConsignacion, affectsBalance,
+} from '@/lib/kapso'
 import { fmtDMY as fmtFecha } from '@/lib/date'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { TooltipProvider, InfoTip } from '@/components/ui/tooltip'
 import { ChevronDownIcon, ChevronUpIcon, AlertTriangleIcon } from 'lucide-react'
 
-type Tab = 'resumen' | 'prestamos' | 'por_vehiculo' | 'movimientos'
+type Tab = 'resumen' | 'patrimonio' | 'prestamos' | 'por_vehiculo' | 'movimientos'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'resumen',      label: 'Resumen'      },
+  { key: 'patrimonio',   label: 'Patrimonio'   },
   { key: 'prestamos',    label: 'Préstamos'    },
   { key: 'por_vehiculo', label: 'Por Vehículo' },
   { key: 'movimientos',  label: 'Movimientos'  },
@@ -26,10 +31,18 @@ const CAT_LABEL: Record<string, string> = {
   general_expense:     'Gasto general',
   marketing:           'Marketing',
   loan:                'Préstamo',
+  loan_disbursement:   'Préstamo recibido',
+  loan_interest:       'Interés préstamo',
+  loan_repayment:      'Devolución préstamo',
+  client_expense:      'Por cuenta del cliente',
+  client_repayment:    'Cliente devolvió',
   refund:              'Reembolso',
   down_payment:        'Seña',
   personal_withdrawal: 'Retiro personal',
   investments:         'Inversión',
+  venta:               'Venta',
+  apertura:            'Apertura',
+  ajuste:              'Ajuste',
   other:               'Otro',
   sin_categoria:       'Sin categoría',
 }
@@ -64,7 +77,6 @@ export default function FinanzasClient({
 }) {
   const [tab, setTab] = useState<Tab>('resumen')
 
-  const today = new Date()
   const total = balances.reduce((s, b) => s + Number(b.saldo ?? 0), 0)
   const clientesById = useMemo(
     () => Object.fromEntries(clientes.map((c: any) => [c.id, c])),
@@ -75,10 +87,15 @@ export default function FinanzasClient({
     [vehicles],
   )
 
-  const prestamosPendientes = prestamos.filter((p: any) => p.estado !== 'pagado')
-  const prestamosVencidos = prestamosPendientes.filter((p: any) => computePrestamoStatus(p, today).vencido)
+  // Una sola pasada deriva TODO el patrimonio del ledger (misma matemática que
+  // el bot: analisis_db(patrimonio) del backend).
+  const patrimonio = useMemo(
+    () => computePatrimonio(movimientos, vehicles, prestamos, clientes),
+    [movimientos, vehicles, prestamos, clientes],
+  )
 
   return (
+    <TooltipProvider>
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Finanzas</h1>
 
@@ -93,18 +110,22 @@ export default function FinanzasClient({
           <ResumenTab
             balances={balances}
             total={total}
+            patrimonio={patrimonio}
             movimientos={movimientos}
-            prestamosVencidos={prestamosVencidos}
             clientesById={clientesById}
             vehiclesById={vehiclesById}
           />
         </TabsContent>
+        <TabsContent value="patrimonio" className="mt-4">
+          <PatrimonioTab patrimonio={patrimonio} clientesById={clientesById} />
+        </TabsContent>
         <TabsContent value="prestamos" className="mt-4">
           <PrestamosTab
             prestamos={prestamos}
+            movimientos={movimientos}
+            patrimonio={patrimonio}
             clientesById={clientesById}
             vehiclesById={vehiclesById}
-            today={today}
           />
         </TabsContent>
         <TabsContent value="por_vehiculo" className="mt-4">
@@ -123,32 +144,98 @@ export default function FinanzasClient({
         </TabsContent>
       </Tabs>
     </div>
+    </TooltipProvider>
   )
 }
 
 // ── Tab 1 · Resumen ───────────────────────────────────────────────────────────
 
-function ResumenTab({
-  balances, total, movimientos, prestamosVencidos, clientesById, vehiclesById,
+function StatCard({
+  label, value, sub, tip, tone = 'default',
 }: {
-  balances: any[]; total: number; movimientos: any[];
-  prestamosVencidos: any[]; clientesById: any; vehiclesById: any
+  label: string; value: string; sub?: React.ReactNode; tip: React.ReactNode;
+  tone?: 'default' | 'hero' | 'positive' | 'negative'
+}) {
+  return (
+    <Card size="sm" className={tone === 'hero' ? 'bg-muted/40' : undefined}>
+      <CardContent>
+        <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
+          {label} <InfoTip>{tip}</InfoTip>
+        </p>
+        <p className={`text-2xl tabular-nums ${
+          tone === 'hero' ? 'font-semibold'
+          : tone === 'positive' ? 'font-medium text-success'
+          : tone === 'negative' ? 'font-medium text-destructive'
+          : 'font-medium'
+        }`}>{value}</p>
+        {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ResumenTab({
+  balances, total, patrimonio, movimientos, clientesById, vehiclesById,
+}: {
+  balances: any[]; total: number; patrimonio: ReturnType<typeof computePatrimonio>;
+  movimientos: any[]; clientesById: any; vehiclesById: any
 }) {
   const movRecientes = [...movimientos]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 20)
 
   const cashBajo = balances.find((b: any) => b.cuenta === 'cash' && Number(b.saldo) < 500)
+  const impagos = patrimonio.posiciones.filter(p => p.modalidad === 'mensual' && p.interes_mensual > 0 && p.interes_adeudado > 0)
   const alertas: string[] = []
   if (cashBajo) alertas.push(`Cash bajo: $${cashBajo.saldo}`)
-  for (const p of prestamosVencidos) {
-    const acr = clientesById[p.acreedor_id]?.nombre ?? '?'
-    const dias = Math.abs(Math.ceil((new Date(p.fecha_vencimiento).getTime() - Date.now()) / 86400000))
-    alertas.push(`Préstamo de ${acr} vencido hace ${dias}d`)
+  for (const p of patrimonio.posiciones.filter(p => p.vencido)) {
+    alertas.push(`Préstamo #${p.id} marcado vencido — deuda ${fmt(p.deuda_total)}`)
+  }
+  for (const p of impagos) {
+    alertas.push(`Interés del mes sin pagar: ${fmt(p.interes_adeudado)} (préstamo #${p.id}) — venció el 1`)
   }
 
+  const pat = patrimonio
   return (
     <div className="space-y-4">
+      {/* Patrimonio — la foto real de la plata, derivada del ledger */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <StatCard
+          tone="hero"
+          label="Capital propio"
+          value={fmt(pat.capital_propio)}
+          sub={pat.en_uso.total > 0
+            ? <>disponible sin vender el auto en uso: <b>{fmt(pat.capital_propio_disponible)}</b></>
+            : 'lo que queda si hoy cobrás y pagás todo'}
+          tip={<>La plata que es realmente tuya: <b>cajas {fmt(pat.cajas.total)}</b> + <b>stock {fmt(pat.stock.total)}</b>{pat.en_uso.total > 0 && <> + <b>auto en uso {fmt(pat.en_uso.total)}</b></>} + <b>por cobrar {fmt(pat.por_cobrar.total)}</b> − <b>deudas {fmt(pat.deuda_total)}</b>. Las cajas mezclan plata propia y prestada — este número es el que las separa. El <b>disponible</b> descuenta el auto en uso, que en lo posible no se vende. Todo sale del ledger de movimientos, no hay ningún saldo cargado a mano.</>}
+        />
+        <StatCard
+          label="Cajas"
+          value={fmt(pat.cajas.total)}
+          sub={`cash ${fmt(pat.cajas.cash)} · nexo ${fmt(pat.cajas.nexo)} · fiwind ${fmt(pat.cajas.fiwind)}`}
+          tip={<>Dinero físico y en cuentas, derivado como <b>suma de ingresos − egresos</b> del ledger (solo movimientos que afectan saldo). Incluye plata prestada: por eso solo, este número sobreestima lo que es tuyo.</>}
+        />
+        <StatCard
+          label="Stock a la venta"
+          value={fmt(pat.stock.total)}
+          sub={<>invertido {fmt(pat.stock.costo_invertido)} · <span className={pat.stock.ganancia_esperada >= 0 ? 'text-success' : 'text-destructive'}>ganancia esp. {pat.stock.ganancia_esperada >= 0 ? '+' : ''}{fmt(pat.stock.ganancia_esperada)}</span>{pat.en_uso.autos.length > 0 && <> · en uso: {pat.en_uso.autos.map(a => `${a.label} ${fmt(a.valor)}`).join(', ')}</>}</>}
+          tip={<>Autos <b>propios sin vender</b> que están a la venta, valuados a lo que se espera obtener por cada uno (precio objetivo cargado en la ficha; sin dato, el costo invertido — nunca se inventa una valuación). Las consignaciones no cuentan (no son nuestras) y el <b>auto en uso</b> va aparte: es patrimonio pero no está a la venta. <b>Ganancia esperada</b> = valor de venta esperado − costo invertido (compra + gastos según el ledger): la ganancia que ya está &quot;adentro&quot; de los autos si se venden al precio previsto.{pat.stock.autos.length > 0 && <><br /><br />{pat.stock.autos.map(a => `${a.label}: ${fmt(a.valor)} (costo ${fmt(a.costo)})`).join(' · ')}</>}</>}
+        />
+        <StatCard
+          label="Por cobrar"
+          value={fmt(pat.por_cobrar.total)}
+          sub={pat.por_cobrar.clientes.length > 0 ? pat.por_cobrar.clientes.map(c => `${c.nombre} ${fmt(c.saldo)}`).join(' · ') : 'sin deudas de clientes'}
+          tip={<>Plata nuestra en manos de clientes: gastos que adelantamos por su cuenta (p. ej. un repuesto del auto que nos dejaron en consignación) menos lo que ya devolvieron. Es un activo igual que la caja — solo cambia quién la tiene. Sale de los movimientos &quot;por cuenta del cliente&quot; del ledger.</>}
+        />
+        <StatCard
+          tone="negative"
+          label="Deudas"
+          value={fmt(pat.deuda_total)}
+          sub={`interés mensual ${fmt(pat.interes_mensual_total)}/mes`}
+          tip={<>Todo lo que debemos a acreedores: <b>capital vivo + interés devengado impago</b> de cada préstamo activo, calculado desde el ledger. Los préstamos con interés mensual pagan capital × tasa ÷ 12 el 1 de cada mes; los &quot;a saldar al final&quot; acumulan interés por día hasta que se cancelan (p. ej. con la venta del auto que financian). El detalle está en la pestaña Préstamos.</>}
+        />
+      </div>
+
       {/* Cuentas */}
       <div className="grid grid-cols-6 gap-3">
         {balances.map((b: any) => (
@@ -161,7 +248,9 @@ function ResumenTab({
         ))}
         <Card size="sm" className="bg-muted/40">
           <CardContent>
-            <p className="text-xs text-muted-foreground mb-1">Total</p>
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
+              Total <InfoTip>Suma de las tres cajas. Ojo: acá adentro hay plata prestada — el número que descuenta deudas es <b>Capital propio</b>, arriba.</InfoTip>
+            </p>
             <p className="text-xl font-semibold tabular-nums">{fmt(total)}</p>
           </CardContent>
         </Card>
@@ -217,28 +306,234 @@ function ResumenTab({
   )
 }
 
-// ── Tab 2 · Préstamos ─────────────────────────────────────────────────────────
+// ── Tab 2 · Patrimonio (el desglose completo) ─────────────────────────────────
 
-function PrestamosTab({
-  prestamos, clientesById, vehiclesById, today,
-}: { prestamos: any[]; clientesById: any; vehiclesById: any; today: Date }) {
-  const pendientes = prestamos.filter((p: any) => p.estado !== 'pagado')
-  const pagados = prestamos.filter((p: any) => p.estado === 'pagado')
+function SectionTable({
+  title, tip, children,
+}: { title: string; tip: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <Card size="sm">
+      <CardHeader className="border-b py-3">
+        <CardTitle className="text-sm flex items-center gap-1.5">{title} <InfoTip>{tip}</InfoTip></CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">{children}</CardContent>
+    </Card>
+  )
+}
 
-  const deudaTotal = pendientes.reduce((s, p) => s + computePrestamoStatus(p, today).saldo_pendiente, 0)
-  const acreedoresUnicos = new Set(pendientes.map((p: any) => p.acreedor_id)).size
+function PatrimonioTab({
+  patrimonio: pat, clientesById,
+}: { patrimonio: ReturnType<typeof computePatrimonio>; clientesById: any }) {
+  const terms: { label: string; monto: number; sign: '+' | '−'; tip: React.ReactNode }[] = [
+    { label: 'Cajas', monto: pat.cajas.total, sign: '+',
+      tip: <>Suma de ingresos − egresos del ledger por cuenta: cash {fmt(pat.cajas.cash)}, nexo {fmt(pat.cajas.nexo)}, fiwind {fmt(pat.cajas.fiwind)}.</> },
+    { label: 'Stock a la venta', monto: pat.stock.total, sign: '+',
+      tip: <>Autos propios sin vender, a valor esperado de venta (precio objetivo de la ficha; sin dato, el costo invertido).</> },
+    ...(pat.en_uso.total > 0 ? [{
+      label: 'Auto en uso', monto: pat.en_uso.total, sign: '+' as const,
+      tip: <>El auto que usamos ({pat.en_uso.autos.map(a => a.label).join(', ')}): es patrimonio, pero no está a la venta — el &quot;disponible&quot; lo descuenta.</>,
+    }] : []),
+    { label: 'Por cobrar', monto: pat.por_cobrar.total, sign: '+',
+      tip: <>Plata nuestra en manos de clientes: gastos adelantados por su cuenta menos lo devuelto.</> },
+    { label: 'Deudas', monto: pat.deuda_total, sign: '−',
+      tip: <>Capital vivo + interés devengado impago de cada préstamo activo.</> },
+  ]
 
   return (
     <div className="space-y-4">
+      {/* La ecuación completa */}
       <Card size="sm" className="bg-muted/40">
         <CardContent>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Deuda si pagás hoy</p>
-          <p className="text-2xl font-semibold tabular-nums">{fmt(deudaTotal)}</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {pendientes.length} préstamo{pendientes.length === 1 ? '' : 's'} pendiente{pendientes.length === 1 ? '' : 's'} · {acreedoresUnicos} acreedor{acreedoresUnicos === 1 ? '' : 'es'} · capital + interés devengado al día
+          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            Cómo se llega al capital propio
+            <InfoTip>Todos los números se derivan del ledger de movimientos y de las fichas de los autos — nada se carga a mano. Si registrás un pago, una venta o un gasto por el bot, esta cuenta se actualiza sola.</InfoTip>
           </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {terms.map((t, i) => (
+              <Fragment key={t.label}>
+                {i > 0 && <span className="text-muted-foreground text-lg">{t.sign === '−' ? '−' : '+'}</span>}
+                <div>
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">{t.label} <InfoTip>{t.tip}</InfoTip></p>
+                  <p className={`text-lg font-medium tabular-nums ${t.sign === '−' ? 'text-destructive' : ''}`}>{fmt(t.monto)}</p>
+                </div>
+              </Fragment>
+            ))}
+            <span className="text-muted-foreground text-lg">=</span>
+            <div>
+              <p className="text-[11px] text-muted-foreground">Capital propio</p>
+              <p className="text-xl font-semibold tabular-nums">{fmt(pat.capital_propio)}</p>
+            </div>
+          </div>
+          {pat.en_uso.total > 0 && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Disponible sin vender el auto en uso: <span className="font-medium text-foreground tabular-nums">{fmt(pat.capital_propio_disponible)}</span>
+            </p>
+          )}
         </CardContent>
       </Card>
+
+      {/* Stock a la venta + en uso, auto por auto */}
+      <SectionTable
+        title={`Stock (${pat.stock.autos.length + pat.en_uso.autos.length})`}
+        tip={<>Cada auto propio sin vender, con su <b>costo invertido</b> (compra + gastos según el ledger), su <b>valor esperado</b> de venta y la <b>ganancia esperada</b> (valor − costo) que queda &quot;adentro&quot; si se vende al precio previsto.</>}
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr className="text-left">
+                <Th>Auto</Th>
+                <Th right tip={<>Compra + gastos, derivado del ledger de movimientos.</>}>Costo invertido</Th>
+                <Th right tip={<>Lo que se espera obtener: el precio objetivo de la ficha; si no hay, el costo (no se inventa valuación).</>}>Valor esperado</Th>
+                <Th right tip={<>Valor esperado − costo invertido.</>}>Ganancia esp.</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {[...pat.stock.autos, ...pat.en_uso.autos.map(a => ({ ...a, enUso: true }))].map((a: any) => (
+                <tr key={a.vehicle_id}>
+                  <td className="px-3 py-2.5 font-medium">
+                    {a.label}
+                    {a.enUso && <Badge variant="outline" className="ml-2" title="Es patrimonio pero no está a la venta">en uso</Badge>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(a.costo)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(a.valor)}</td>
+                  <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${a.valor - a.costo >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {a.valor - a.costo >= 0 ? '+' : ''}{fmt(a.valor - a.costo)}
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-muted/40 font-medium">
+                <td className="px-3 py-2.5">Total (a la venta {fmt(pat.stock.total)}{pat.en_uso.total > 0 ? ` · en uso ${fmt(pat.en_uso.total)}` : ''})</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.stock.costo_invertido + pat.en_uso.autos.reduce((s, a) => s + a.costo, 0))}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.stock.total + pat.en_uso.total)}</td>
+                <td className={`px-3 py-2.5 text-right tabular-nums ${pat.stock.ganancia_esperada >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {pat.stock.ganancia_esperada >= 0 ? '+' : ''}{fmt(pat.stock.ganancia_esperada + pat.en_uso.autos.reduce((s, a) => s + (a.valor - a.costo), 0))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </SectionTable>
+
+      {/* Cuentas por cobrar */}
+      <SectionTable
+        title={`Cuentas por cobrar (${pat.por_cobrar.clientes.length})`}
+        tip={<>Gastos que adelantamos por cuenta de un cliente (p. ej. un repuesto del auto que nos dejó en consignación) menos lo que ya devolvió. Al vender su auto, se descuentan solos de la liquidación.</>}
+      >
+        {pat.por_cobrar.clientes.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Ningún cliente nos debe.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40">
+                <tr className="text-left">
+                  <Th>Cliente</Th>
+                  <Th right tip={<>Total que pusimos de nuestra caja por su cuenta.</>}>Adelantado</Th>
+                  <Th right tip={<>Lo que ya nos devolvió.</>}>Devuelto</Th>
+                  <Th right tip={<>Adelantado − devuelto: lo que nos debe hoy.</>}>Debe</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {pat.por_cobrar.clientes.map(c => (
+                  <tr key={c.cliente_id}>
+                    <td className="px-3 py-2.5 font-medium">{c.nombre}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(c.adelantado)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(c.devuelto)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">{fmt(c.saldo)}</td>
+                  </tr>
+                ))}
+                <tr className="bg-muted/40 font-medium">
+                  <td className="px-3 py-2.5">Total</td>
+                  <td className="px-3 py-2.5" colSpan={2} />
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.por_cobrar.total)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </SectionTable>
+
+      {/* Deudas, préstamo por préstamo */}
+      <SectionTable
+        title={`Deudas (${pat.posiciones.length})`}
+        tip={<>Cada préstamo activo con su deuda al día: capital vivo + interés devengado impago. El detalle completo (cuotas, modalidad, vencimientos) está en la pestaña Préstamos.</>}
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40">
+              <tr className="text-left">
+                <Th>Acreedor</Th>
+                <Th>Modalidad</Th>
+                <Th right>Capital vivo</Th>
+                <Th right>Interés adeudado</Th>
+                <Th right>Deuda hoy</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {pat.posiciones.map(p => (
+                <tr key={p.id}>
+                  <td className="px-3 py-2.5 font-medium">
+                    {clientesById[p.acreedor_id as any]?.nombre ?? `Préstamo #${p.id}`}
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                    {p.modalidad === 'mensual'
+                      ? `mensual · ${fmt(p.interes_mensual)}/mes (${p.tasa_pct}%)`
+                      : `al final (${p.tasa_pct}% por día)`}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(p.capital_vivo)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(p.interes_adeudado)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums font-medium">{fmt(p.deuda_total)}</td>
+                </tr>
+              ))}
+              <tr className="bg-muted/40 font-medium">
+                <td className="px-3 py-2.5">Total · interés mensual {fmt(pat.interes_mensual_total)}/mes</td>
+                <td className="px-3 py-2.5" colSpan={3} />
+                <td className="px-3 py-2.5 text-right tabular-nums text-destructive">{fmt(pat.deuda_total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </SectionTable>
+    </div>
+  )
+}
+
+// ── Tab 3 · Préstamos ─────────────────────────────────────────────────────────
+
+function PrestamosTab({
+  prestamos, movimientos, patrimonio, clientesById, vehiclesById,
+}: {
+  prestamos: any[]; movimientos: any[]; patrimonio: ReturnType<typeof computePatrimonio>;
+  clientesById: any; vehiclesById: any
+}) {
+  const pendientes = prestamos.filter((p: any) => p.estado !== 'pagado')
+  const pagados = prestamos.filter((p: any) => p.estado === 'pagado')
+  const acreedoresUnicos = new Set(pendientes.map((p: any) => p.acreedor_id)).size
+  const mensuales = patrimonio.posiciones.filter(p => p.modalidad === 'mensual' && p.interes_mensual > 0)
+  const alFinal = patrimonio.posiciones.filter(p => p.modalidad === 'al_final')
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <StatCard
+          tone="hero"
+          label="Deuda total hoy"
+          value={fmt(patrimonio.deuda_total)}
+          sub={`${pendientes.length} préstamo${pendientes.length === 1 ? '' : 's'} · ${acreedoresUnicos} acreedor${acreedoresUnicos === 1 ? '' : 'es'}`}
+          tip={<>Lo que costaría cancelar todo hoy: <b>capital vivo</b> (lo prestado menos lo ya devuelto) + <b>interés devengado impago</b> de cada préstamo activo. Los pagos se descuentan solos porque salen del ledger, vinculados a cada préstamo.</>}
+        />
+        <StatCard
+          label="Interés mensual"
+          value={`${fmt(patrimonio.interes_mensual_total)}/mes`}
+          sub="vence el 1 de cada mes"
+          tip={<>Suma de las cuotas de interés de los préstamos con pago mensual: <b>capital × tasa anual ÷ 12</b>. El capital no baja con estas cuotas — solo se paga el interés del mes; el capital se devuelve aparte. El bot avisa por WhatsApp cada día 1.</>}
+        />
+        <StatCard
+          label="Se saldan al final"
+          value={fmt(round0(alFinal.reduce((s, p) => s + p.deuda_total, 0)))}
+          sub={alFinal.length > 0 ? `${alFinal.length} préstamo${alFinal.length === 1 ? '' : 's'} acumulando interés por día` : 'ninguno'}
+          tip={<>Préstamos que no pagan interés mes a mes: el interés se <b>acumula por día</b> (capital × tasa × días ÷ 365) y se cancela todo junto con el capital — típicamente con la venta del auto que financian.</>}
+        />
+      </div>
 
       <Card size="sm">
         <CardHeader className="border-b py-3">
@@ -247,9 +542,9 @@ function PrestamosTab({
         <CardContent className="p-0">
           <PrestamosTable
             prestamos={pendientes}
+            movimientos={movimientos}
             clientesById={clientesById}
             vehiclesById={vehiclesById}
-            today={today}
           />
         </CardContent>
       </Card>
@@ -262,20 +557,35 @@ function PrestamosTab({
           <CardContent className="p-0">
             <PrestamosTable
               prestamos={pagados}
+              movimientos={movimientos}
               clientesById={clientesById}
               vehiclesById={vehiclesById}
-              today={today}
             />
           </CardContent>
         </Card>
+      )}
+      {mensuales.length > 0 && (
+        <p className="text-xs text-muted-foreground px-1">
+          Los intereses mensuales se registran por el bot como &quot;Interés préstamo&quot; vinculados a cada préstamo — al pagarlos, la columna &quot;Mes&quot; pasa a ✓ sola.
+        </p>
       )}
     </div>
   )
 }
 
+function round0(n: number) { return Math.round(n * 100) / 100 }
+
+function Th({ children, tip, right }: { children: React.ReactNode; tip?: React.ReactNode; right?: boolean }) {
+  return (
+    <th className={`px-3 py-2 font-medium text-muted-foreground text-xs ${right ? 'text-right' : ''}`}>
+      <span className="inline-flex items-center gap-1">{children}{tip && <InfoTip>{tip}</InfoTip>}</span>
+    </th>
+  )
+}
+
 function PrestamosTable({
-  prestamos, clientesById, vehiclesById, today,
-}: { prestamos: any[]; clientesById: any; vehiclesById: any; today: Date }) {
+  prestamos, movimientos, clientesById, vehiclesById,
+}: { prestamos: any[]; movimientos: any[]; clientesById: any; vehiclesById: any }) {
   if (prestamos.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Sin préstamos.</p>
   }
@@ -284,39 +594,54 @@ function PrestamosTable({
       <table className="w-full text-sm">
         <thead className="bg-muted/40">
           <tr className="text-left">
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Acreedor</th>
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Capital</th>
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Tasa</th>
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Días</th>
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Interés acum.</th>
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Pagado</th>
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right" title="Capital + interés devengado hasta hoy − pagado">Saldo hoy</th>
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Vencimiento</th>
-            <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Destino</th>
+            <Th>Acreedor</Th>
+            <Th right tip={<>Lo prestado menos lo ya devuelto (las devoluciones salen del ledger, vinculadas al préstamo). Las cuotas de interés NO bajan el capital.</>}>Capital vivo</Th>
+            <Th right>Tasa</Th>
+            <Th tip={<><b>Mensual</b>: paga capital × tasa ÷ 12 el 1 de cada mes. <b>Al final</b>: el interés se acumula por día y se salda junto con el capital.</>}>Modalidad</Th>
+            <Th right tip={<>Para modalidad mensual, la cuota fija del mes. Para &quot;al final&quot;, el interés acumulado por día desde el desembolso (neto de repagos parciales).</>}>Interés</Th>
+            <Th right tip={<>Interés devengado que todavía no se pagó. En modalidad mensual, cuotas vencidas (el 1 de cada mes) sin registrar.</>}>Adeudado</Th>
+            <Th right tip={<>Capital vivo + interés adeudado: lo que costaría cancelar este préstamo hoy.</>}>Deuda hoy</Th>
+            <Th tip={<>Solo modalidad mensual: si la cuota del mes corriente ya se registró. Venció el 1; a partir del 5 sin pagar, el bot lo reclama.</>}>Mes</Th>
+            <Th>Destino</Th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
           {prestamos.map((p: any) => {
-            const st = computePrestamoStatus(p, today)
+            const pos = computeLoanPosition(p, movimientos)
             const acr = clientesById[p.acreedor_id]?.nombre ?? '?'
             const veh = p.vehicle_id ? vehiclesById[p.vehicle_id] : null
-            const vencClass = st.vencido ? 'text-destructive font-medium'
-              : st.proximo ? 'text-amber-600 dark:text-amber-400'
-              : 'text-muted-foreground'
-            const vencLabel = st.dias_vencimiento == null ? '—'
-              : st.vencido ? `vencido hace ${Math.abs(st.dias_vencimiento)}d`
-              : st.proximo ? `en ${st.dias_vencimiento}d`
-              : fmtFecha(p.fecha_vencimiento)
+            const esPagado = p.estado === 'pagado'
             return (
-              <tr key={p.id}>
-                <td className="px-3 py-2.5 font-medium">{acr}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(st.capital)}</td>
-                <td className="px-3 py-2.5 text-right text-muted-foreground text-xs">{st.tasa_anual_pct}%/año</td>
-                <td className="px-3 py-2.5 text-right text-muted-foreground text-xs">{st.dias_transcurridos}d</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(st.interes_acumulado)}</td>
-                <td className="px-3 py-2.5 text-right text-muted-foreground tabular-nums">{fmt(p.monto_pagado ?? 0)}</td>
-                <td className="px-3 py-2.5 text-right font-medium tabular-nums">{fmt(st.saldo_pendiente)}</td>
-                <td className={`px-3 py-2.5 text-xs ${vencClass}`}>{vencLabel}</td>
+              <tr key={p.id} className={esPagado ? 'opacity-60' : ''}>
+                <td className="px-3 py-2.5 font-medium">
+                  {acr}
+                  {pos.vencido && <Badge variant="destructive" className="ml-2">vencido</Badge>}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pos.capital_vivo)}</td>
+                <td className="px-3 py-2.5 text-right text-muted-foreground text-xs">{pos.tasa_pct ? `${pos.tasa_pct}%/año` : '—'}</td>
+                <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                  {pos.modalidad === 'mensual' ? 'mensual' : 'al final'}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums text-xs">
+                  {pos.modalidad === 'mensual'
+                    ? (pos.interes_mensual > 0 ? `${fmt(pos.interes_mensual)}/mes` : '—')
+                    : `${fmt(pos.interes_devengado)} acum.`}
+                </td>
+                <td className={`px-3 py-2.5 text-right tabular-nums ${pos.interes_adeudado > 0 && pos.modalidad === 'mensual' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                  {fmt(pos.interes_adeudado)}
+                </td>
+                <td className="px-3 py-2.5 text-right font-medium tabular-nums">{fmt(pos.deuda_total)}</td>
+                <td className="px-3 py-2.5 text-xs">
+                  {esPagado || pos.modalidad !== 'mensual' || pos.interes_mensual <= 0 ? (
+                    <span className="text-muted-foreground/60">—</span>
+                  ) : pos.interes_mes_pagado ? (
+                    <span className="text-success">pagado ✓</span>
+                  ) : pos.interes_adeudado > 0 ? (
+                    <span className="text-destructive font-medium">impago</span>
+                  ) : (
+                    <span className="text-muted-foreground">vence {pos.proximo_vencimiento ? fmtFecha(pos.proximo_vencimiento) : 'el 1'}</span>
+                  )}
+                </td>
                 <td className="px-3 py-2.5">
                   {veh ? (
                     <Link href="/stock" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
@@ -383,7 +708,9 @@ function PorVehiculoTab({
                         {v.dominio && <span className="text-xs text-muted-foreground ml-1">· {v.dominio}</span>}
                       </td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">{v.tipo_operacion ?? '—'}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmt(f.precio_compra)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums" title={f.fuente_compra === 'vehicle_purchase' ? 'Compra tomada de los movimientos del ledger (la ficha no tiene precio de compra)' : undefined}>
+                        {fmt(f.compra)}
+                      </td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{fmt(f.gastos_total)}</td>
                       <td className="px-3 py-2.5 text-right font-medium tabular-nums">{fmt(f.costo_total)}</td>
                       <td className="px-3 py-2.5 text-right text-muted-foreground tabular-nums">
@@ -447,7 +774,7 @@ function VehicleFinancialDetail({
     <div className="pt-3 grid grid-cols-1 xl:grid-cols-3 gap-4">
       <div>
         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Desglose de gastos</p>
-        {catEntries.length === 0 ? (
+        {catEntries.length === 0 && f.gastos_cliente <= 0 ? (
           <p className="text-sm text-muted-foreground">Sin gastos registrados.</p>
         ) : (
           <div className="border rounded-lg divide-y divide-border bg-background">
@@ -458,29 +785,71 @@ function VehicleFinancialDetail({
               </div>
             ))}
             <div className="flex items-center justify-between px-3 py-2 bg-muted/40 font-medium">
-              <span className="text-sm">Total gastos</span>
-              <span className="text-sm tabular-nums">{fmt(f.gastos_total)}</span>
+              <span className="text-sm">Total gastos nuestros</span>
+              <span className="text-sm tabular-nums">{fmt(f.gastos_total + f.otros_egresos)}</span>
             </div>
+            {f.gastos_cliente > 0 && (
+              <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
+                <span className="text-sm flex items-center gap-1.5">
+                  Por cuenta del cliente
+                  <InfoTip>Gastos que adelantamos por cuenta del dueño del auto (recuperables): NO son costo nuestro ni entran en el costo total — el cliente los debe, y en una consignación se descuentan de su liquidación al vender.</InfoTip>
+                </span>
+                <span className="text-sm tabular-nums">{fmt(f.gastos_cliente)}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
+      {f.es_consignacion && (() => {
+        const liq = computeLiquidacionConsignacion(v.id, [v], movimientos)
+        return (
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              Liquidación al dueño{liq.estimada ? ' (estimada)' : ''}
+              <InfoTip>Lo que le corresponde al dueño de la consignación: precio de venta − nuestra comisión del {liq.comision_pct}% − los gastos que adelantamos por su cuenta.{liq.estimada && <> Como el auto todavía no se vendió, se estima con el precio publicado/objetivo de la ficha.</>}</InfoTip>
+            </p>
+            {liq.fuente_precio === 'sin_precio' ? (
+              <p className="text-sm text-muted-foreground">Sin precio de venta ni precio publicado — no se puede estimar.</p>
+            ) : (
+              <div className="border rounded-lg divide-y divide-border bg-background">
+                <div className="flex items-center justify-between px-3 py-2">
+                  <span className="text-sm">Precio de venta{liq.estimada ? ' (estimado)' : ''}</span>
+                  <span className="text-sm tabular-nums">{fmt(liq.precio_venta)}</span>
+                </div>
+                <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
+                  <span className="text-sm">− Comisión {liq.comision_pct}%</span>
+                  <span className="text-sm tabular-nums">−{fmt(liq.comision)}</span>
+                </div>
+                {liq.gastos_adelantados > 0 && (
+                  <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
+                    <span className="text-sm">− Gastos adelantados por su cuenta</span>
+                    <span className="text-sm tabular-nums">−{fmt(liq.gastos_adelantados)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-3 py-2 bg-muted/40 font-medium">
+                  <span className="text-sm">Neto al dueño</span>
+                  <span className="text-sm tabular-nums">{fmt(liq.neto_al_cliente)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
       {f.prestamos_asociados.length > 0 && (
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Préstamos financiando este auto</p>
           <div className="border rounded-lg divide-y divide-border bg-background">
             {f.prestamos_asociados.map((p: any) => {
-              const st = computePrestamoStatus(p)
+              const pos = computeLoanPosition(p, movimientos)
               const acr = clientesById[p.acreedor_id]?.nombre ?? '?'
               return (
                 <div key={p.id} className="flex items-center justify-between px-3 py-2">
                   <span className="text-sm">{acr}</span>
                   <div className="flex items-center gap-3 text-xs">
-                    <span className="text-muted-foreground">saldo {fmt(st.saldo_pendiente)} ({st.dias_transcurridos}d · {st.tasa_anual_pct}%)</span>
-                    <span className={st.vencido ? 'text-destructive' : st.proximo ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}>
-                      {st.dias_vencimiento == null ? '—'
-                        : st.vencido ? `vencido ${Math.abs(st.dias_vencimiento)}d`
-                        : `${st.dias_vencimiento}d`}
+                    <span className="text-muted-foreground">
+                      deuda {fmt(pos.deuda_total)} ({pos.tasa_pct}% · {pos.modalidad === 'mensual' ? `${fmt(pos.interes_mensual)}/mes` : 'se salda al final'})
                     </span>
+                    {pos.vencido && <span className="text-destructive">vencido</span>}
                   </div>
                 </div>
               )
@@ -555,14 +924,15 @@ function MovimientosTab({
   }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
   [movimientos, cats, cuenta, tipo, vehId, desde, hasta])
 
-  // Totales: separar movimientos reales (afecta_balance=true → saldo_post no nulo)
-  // de asientos contables off-balance (préstamos recibidos, vehicle_purchase
-  // que pagó un acreedor directo, etc). Los off-balance NO son cash flow real
-  // y mezclarlos en el "Neto" infla los números.
-  const cashIngresos = filtered.filter(m => m.tipo === 'ingreso' && m.saldo_post != null).reduce((s, m) => s + Number(m.monto ?? 0), 0)
-  const cashEgresos  = filtered.filter(m => m.tipo === 'egreso'  && m.saldo_post != null).reduce((s, m) => s + Number(m.monto ?? 0), 0)
-  const offIngresos  = filtered.filter(m => m.tipo === 'ingreso' && m.saldo_post == null).reduce((s, m) => s + Number(m.monto ?? 0), 0)
-  const offEgresos   = filtered.filter(m => m.tipo === 'egreso'  && m.saldo_post == null).reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  // Totales: separar movimientos reales (afecta_balance) de asientos contables
+  // off-balance (deuda anotada, gastos adelantados por un acreedor, etc). Los
+  // off-balance NO son cash flow real y mezclarlos en el "Neto" infla los
+  // números. affectsBalance = columna explícita 1/0 con fallback legacy a
+  // saldo_post (misma regla que el backend).
+  const cashIngresos = filtered.filter(m => m.tipo === 'ingreso' && affectsBalance(m)).reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  const cashEgresos  = filtered.filter(m => m.tipo === 'egreso'  && affectsBalance(m)).reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  const offIngresos  = filtered.filter(m => m.tipo === 'ingreso' && !affectsBalance(m)).reduce((s, m) => s + Number(m.monto ?? 0), 0)
+  const offEgresos   = filtered.filter(m => m.tipo === 'egreso'  && !affectsBalance(m)).reduce((s, m) => s + Number(m.monto ?? 0), 0)
   const cashNeto     = cashIngresos - cashEgresos
 
   // Pagination: clamp page to range whenever filtered length or pageSize change.

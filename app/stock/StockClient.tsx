@@ -1,7 +1,7 @@
 'use client'
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { computeVehicleFinancials, computePrestamoStatus } from '@/lib/kapso'
+import { computeVehicleFinancials, computeLoanPosition } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 import { Card, CardContent } from '@/components/ui/card'
@@ -225,10 +225,13 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
 
   const cliente = clientes.find((c: any) => c.id === v.cliente_id)
   const comprador = clientes.find((c: any) => c.id === v.comprador_id)
-  const margen = v.precio_venta_final && v.costo_total
-    ? Number(v.precio_venta_final) - Number(v.costo_total)
-    : null
+  // Costo DERIVADO del ledger (fin.costo_total), no la columna cacheada
+  // v.costo_total — la cache se desincroniza (incidente 130i: 2.368 vs 16.722)
+  // y el margen salía de ahí.
   const fin = computeVehicleFinancials(v.id, vehicles, movimientos, prestamos)
+  const margen = v.precio_venta_final && fin.costo_total
+    ? Number(v.precio_venta_final) - fin.costo_total
+    : null
   const catEntries = Object.entries(fin.gastos_por_categoria).sort((a, b) => b[1] - a[1])
 
   if (editing) {
@@ -274,7 +277,7 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
           <Field label="N° motor" value={v.numero_motor} />
           <Field label="N° chasis" value={v.numero_chasis} />
           <Field label="Precio compra" value={v.precio_compra ? fmt(v.precio_compra) : null} />
-          <Field label="Costo total" value={v.costo_total ? fmt(v.costo_total) : null} />
+          <Field label="Costo total" value={fin.costo_total ? fmt(fin.costo_total) : null} />
           <Field label="Precio objetivo" value={v.precio_venta_objetivo ? fmt(v.precio_venta_objetivo) : null} />
           <Field label="Precio publicado" value={v.precio_publicado ? fmt(v.precio_publicado) : null} />
           <Field label="Precio venta final" value={v.precio_venta_final ? fmt(v.precio_venta_final) : null} />
@@ -343,18 +346,16 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
                 </p>
                 <div className="space-y-1.5">
                   {fin.prestamos_asociados.map((p: any) => {
-                    const st = computePrestamoStatus(p)
+                    const pos = computeLoanPosition(p, movimientos)
                     const acr = clientes.find((c: any) => c.id === p.acreedor_id)?.nombre ?? '?'
                     return (
                       <div key={p.id} className="text-sm flex items-center justify-between">
                         <span>{acr}</span>
                         <div className="flex items-center gap-2 text-xs">
-                          <span className="text-muted-foreground">saldo {fmt(st.saldo_pendiente)}</span>
-                          <span className={st.vencido ? 'text-destructive' : st.proximo ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}>
-                            {st.dias_vencimiento == null ? '—'
-                              : st.vencido ? `vencido ${Math.abs(st.dias_vencimiento)}d`
-                              : `${st.dias_vencimiento}d`}
+                          <span className="text-muted-foreground">
+                            deuda {fmt(pos.deuda_total)} · {pos.modalidad === 'mensual' ? `${fmt(pos.interes_mensual)}/mes` : 'se salda al final'}
                           </span>
+                          {pos.vencido && <span className="text-destructive">vencido</span>}
                         </div>
                       </div>
                     )
@@ -467,6 +468,11 @@ function VehicleTable({
                       <span className="font-medium">{v.marca} {v.modelo}</span>
                       <span className="text-muted-foreground">{v.año}</span>
                       {v.color && <span className="text-xs text-muted-foreground">· {v.color}</span>}
+                      {Number(v.uso_personal ?? 0) > 0 && (
+                        <Badge variant="outline" className="ml-1" title="Auto de uso propio — es patrimonio pero no está a la venta">
+                          en uso
+                        </Badge>
+                      )}
                       {pendientes.length > 0 && (
                         <Badge variant="destructive" className="ml-1">{pendientes.length} tarea{pendientes.length > 1 ? 's' : ''}</Badge>
                       )}

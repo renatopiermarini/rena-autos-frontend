@@ -105,114 +105,435 @@ export async function deleteRecordDetailed(
 }
 
 // ── Derived finance helpers (pure) ────────────────────────────────────────────
+//
+// Every formula here MIRRORS the backend's single definitions in
+// rena-autos-api/tools/kapso_tools.py (_ledger_costo, _loan_position,
+// _affects_balance) and tools/analisis_tool.py (_patrimonio). If the two repos
+// disagree the bot and the dashboard contradict each other in front of the
+// same user — change both or neither.
+
+// D1 returns FKs as TEXT ("6") while our ids are numbers; a strict === match
+// silently drops every row (the backend's 130i incident: costo 2.368 vs
+// 16.722 reales). Coerce both sides, always.
+export function coerceId(x: any): number | null {
+  if (x === null || x === undefined || x === '') return null
+  const n = Number(x)
+  return Number.isFinite(n) ? n : null
+}
+
+// Does this movimiento count toward the account balance? The explicit
+// afecta_balance column (1/0, added 2026-08-10) wins when present; pre-DDL
+// rows fall back to the legacy encoding "saldo_post IS NOT NULL". Note D1 may
+// return the column as the STRING "0" — Boolean('0') is true, so coerce.
+export function affectsBalance(m: any): boolean {
+  const flag = m?.afecta_balance
+  if (flag !== null && flag !== undefined) {
+    const n = Number(flag)
+    if (Number.isFinite(n)) return n !== 0
+  }
+  return m?.saldo_post != null
+}
+
+// Calendar day (YYYY-MM-DD) as seen in Argentina (UTC−3, no DST). Movements
+// are stored in UTC; slicing the raw string puts anything after 21:00 AR on
+// the wrong day. Date-only strings pass through untouched.
+export function arDay(value: any): string {
+  if (!value) return ''
+  const raw = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  const parsed = new Date(raw.includes('T') || raw.includes(' ') ? raw.replace(' ', 'T') : raw)
+  if (isNaN(parsed.getTime())) return raw.slice(0, 10)
+  // Naive strings are UTC in this system (datetime.now(timezone.utc)).
+  const utcMs = raw.endsWith('Z') || /[+-]\d{2}:?\d{2}$/.test(raw)
+    ? parsed.getTime()
+    : parsed.getTime() - parsed.getTimezoneOffset() * 60000
+  return new Date(utcMs - 3 * 3600000).toISOString().slice(0, 10)
+}
 
 export type VehicleFinancials = {
+  compra: number
+  fuente_compra: 'precio_compra' | 'vehicle_purchase' | 'ninguna'
+  advertencia_compra: string | null
   precio_compra: number
   gastos_por_categoria: Record<string, number>
   gastos_total: number
+  otros_egresos: number
+  gastos_cliente: number
   costo_total: number
+  egresos_totales: number
   precio_publicado: number | null
+  precio_venta_objetivo: number | null
   margen_esperado: number | null
   prestamos_asociados: any[]
   es_consignacion: boolean
 }
 
+// Mirror of the backend's _ledger_costo — the ONE cost definition. Rules:
+//  1. compra = vehicles.precio_compra if > 0, else Σ vehicle_purchase egresos —
+//     never both (same money written two ways; summing both double-counts it,
+//     reading only one loses cars whose purchase lives only in the other).
+//  2. gastos = Σ vehicle_expense. compra + gastos = costo_total.
+//  3. otros_egresos = every other egreso linked to the car (commission,
+//     refund…) — outside costo_total, inside egresos_totales (what P&L nets).
+//  4. afecta_balance=false rows DO count: the car cost that money no matter
+//     whose pocket paid first.
+//  5. client_expense (gasto adelantado POR CUENTA del cliente — repuesto del
+//     dueño de una consignación) is NOT our cost: recoverable, reported apart
+//     as gastos_cliente, excluded from every total.
 export function computeVehicleFinancials(
   vehicleId: number,
   vehicles: any[],
   movimientos: any[],
   prestamos: any[],
 ): VehicleFinancials {
-  const v = vehicles.find(x => x.id === vehicleId) ?? {}
+  const vid = coerceId(vehicleId)
+  const v = vehicles.find(x => coerceId(x.id) === vid) ?? {}
   const es_consignacion = v.tipo_operacion === 'consignacion'
   const precio_compra = Number(v.precio_compra ?? 0)
-  const precio_publicado = v.precio_publicado != null ? Number(v.precio_publicado) : null
+  const precio_publicado = v.precio_publicado != null && v.precio_publicado !== '' ? Number(v.precio_publicado) : null
+  const precio_venta_objetivo = v.precio_venta_objetivo != null && v.precio_venta_objetivo !== '' ? Number(v.precio_venta_objetivo) : null
 
   const gastos_por_categoria: Record<string, number> = {}
   let gastos_total = 0
+  let compra_movs = 0
+  let otros_egresos = 0
+  let gastos_cliente = 0
   for (const m of movimientos) {
-    if (m.vehicle_id !== vehicleId) continue
+    if (coerceId(m.vehicle_id) !== vid) continue
     if (m.tipo !== 'egreso') continue
-    // Only real vehicle costs count as gastos. 'vehicle_purchase' is the SAME
-    // money as vehicle.precio_compra (live 2026-07-11: vehicles 33/36 had
-    // both → costo_total double-counted the purchase); 'refund' cancels an
-    // ingreso (returned seña), it isn't a cost of the car. Off-balance
-    // expenses (saldo_post null, fronted by an acreedor) DO count — the car
-    // cost that money regardless of whose pocket paid first.
-    if (m.categoria !== 'vehicle_expense') continue
     const monto = Number(m.monto ?? 0)
     const cat = m.categoria || 'sin_categoria'
+    if (cat === 'vehicle_purchase') { compra_movs += monto; continue }
+    if (cat === 'client_expense')   { gastos_cliente += monto; continue }
+    if (cat === 'vehicle_expense')  { gastos_total += monto }
+    else                            { otros_egresos += monto }
     gastos_por_categoria[cat] = (gastos_por_categoria[cat] ?? 0) + monto
-    gastos_total += monto
   }
 
-  const costo_total = precio_compra + gastos_total
+  let compra: number
+  let fuente_compra: VehicleFinancials['fuente_compra']
+  if (precio_compra > 0)      { compra = precio_compra; fuente_compra = 'precio_compra' }
+  else if (compra_movs > 0)   { compra = compra_movs;   fuente_compra = 'vehicle_purchase' }
+  else                        { compra = 0;             fuente_compra = 'ninguna' }
+  const advertencia_compra =
+    precio_compra > 0 && compra_movs > 0 && Math.abs(precio_compra - compra_movs) >= 0.01
+      ? `La compra está anotada dos veces y no coincide: precio_compra=${precio_compra} vs movimientos vehicle_purchase=${compra_movs}. Se usa precio_compra.`
+      : null
+
+  const costo_total = round2(compra + gastos_total)
+  const egresos_totales = round2(compra + gastos_total + otros_egresos)
   const margen_esperado = es_consignacion
     ? null
-    : precio_publicado != null ? precio_publicado - costo_total : null
-  const prestamos_asociados = prestamos.filter(p => p.vehicle_id === vehicleId)
+    : precio_publicado != null ? round2(precio_publicado - costo_total) : null
+  const prestamos_asociados = prestamos.filter(p => coerceId(p.vehicle_id) === vid)
 
   return {
+    compra: round2(compra),
+    fuente_compra,
+    advertencia_compra,
     precio_compra,
     gastos_por_categoria,
-    gastos_total,
+    gastos_total: round2(gastos_total),
+    otros_egresos: round2(otros_egresos),
+    gastos_cliente: round2(gastos_cliente),
     costo_total,
+    egresos_totales,
     precio_publicado,
+    precio_venta_objetivo,
     margen_esperado,
     prestamos_asociados,
     es_consignacion,
   }
 }
 
-export type PrestamoStatus = {
-  capital: number
-  tasa_anual_pct: number
-  dias_transcurridos: number
-  interes_acumulado: number
-  saldo_pendiente: number
-  monto_a_devolver_vto: number
-  dias_vencimiento: number | null
-  vencido: boolean
-  proximo: boolean
+function round2(n: number) { return Math.round(n * 100) / 100 }
+
+// Tasa anual as PERCENT (15). The canonical unit is percent; the legacy
+// fractional encoding (0.15) is tolerated here and ONLY here — same contract
+// as the backend's _tasa_pct.
+export function tasaPct(raw: any): number {
+  const t = Number(raw ?? 0)
+  if (!Number.isFinite(t)) return 0
+  return t > 0 && t <= 1 ? t * 100 : t
 }
 
-export function computePrestamoStatus(prestamo: any, today: Date = new Date()): PrestamoStatus {
-  const capital = Number(prestamo.monto_original ?? 0)
-  const tasaRaw = Number(prestamo.tasa_interes_anual ?? 0)
-  const tasa_anual_pct = tasaRaw > 1 ? tasaRaw : tasaRaw * 100
-  const tasa_anual = tasa_anual_pct / 100
+export type LoanPosition = {
+  id: number | null
+  acreedor_id: number | null
+  modalidad: 'mensual' | 'al_final'
+  estado: string | null
+  tasa_pct: number
+  fecha_inicio: string | null
+  capital_original: number
+  capital_vivo: number
+  interes_mensual: number
+  interes_devengado: number
+  interes_pagado_total: number
+  interes_adeudado: number
+  deuda_total: number
+  interes_mes_pagado: boolean | null
+  proximo_vencimiento: string | null
+  vencido: boolean
+}
 
-  // Date-only strings parse as UTC midnight → AR day-diffs off by one near
-  // midnight; anchor them to local noon (same rule as lib/date.ts parseAny).
-  const inicioStr = prestamo.fecha_inicio || prestamo.created_at
-  const inicio = inicioStr
-    ? new Date(String(inicioStr).includes('T') ? inicioStr : inicioStr + 'T12:00:00')
-    : today
-  const dias_transcurridos = Math.max(0, Math.floor((today.getTime() - inicio.getTime()) / 86400000))
-  const interes_acumulado = capital * tasa_anual * (dias_transcurridos / 365)
+function dayDiff(fromIso: string, toIso: string): number {
+  const [fy, fm, fd] = fromIso.split('-').map(Number)
+  const [ty, tm, td] = toIso.split('-').map(Number)
+  return Math.max(0, Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000))
+}
 
-  const pagado = Number(prestamo.monto_pagado ?? 0)
-  const saldo_pendiente = Math.max(0, capital + interes_acumulado - pagado)
+// Mirror of the backend's _loan_position — a loan's COMPLETE position derived
+// from the ledger. Two modalidades:
+//   mensual  — fixed cuota capital_vivo × tasa/12 due the 1st of each month,
+//              never capitalises. Devengado = elapsed month-firsts since
+//              fecha_inicio × cuota.
+//   al_final — accrues by real days over the outstanding capital, per-segment
+//              between repayments; settled together with the capital.
+// Both: capital_vivo = monto_original − Σ loan_repayment (matched by
+// prestamo_id); interes_adeudado = devengado − Σ loan_interest (floor 0);
+// deuda_total = capital_vivo + interes_adeudado. prestamos.monto_pagado is a
+// CACHE — never an input here.
+export function computeLoanPosition(
+  prestamo: any,
+  movimientos: any[],
+  hoyIso?: string,
+): LoanPosition {
+  const pid = coerceId(prestamo.id)
+  const capital_original = Number(prestamo.monto_original ?? 0)
+  const tasa = tasaPct(prestamo.tasa_interes_anual)
+  const modalidad: LoanPosition['modalidad'] = prestamo.modalidad === 'al_final' ? 'al_final' : 'mensual'
+  const inicio = arDay(prestamo.fecha_inicio || prestamo.created_at) || null
+  const hoy = hoyIso ?? arDay(new Date().toISOString())
 
-  let dias_vencimiento: number | null = null
-  if (prestamo.fecha_vencimiento) {
-    const v = new Date(String(prestamo.fecha_vencimiento).includes('T')
-      ? prestamo.fecha_vencimiento
-      : prestamo.fecha_vencimiento + 'T12:00:00')
-    dias_vencimiento = Math.ceil((v.getTime() - today.getTime()) / 86400000)
+  const delPrestamo = movimientos.filter(m => coerceId(m.prestamo_id) === pid && pid !== null)
+  const repagos = delPrestamo
+    .filter(m => m.categoria === 'loan_repayment' && m.tipo === 'egreso')
+    .sort((a, b) => (arDay(a.created_at) || '').localeCompare(arDay(b.created_at) || ''))
+  const interesesPagados = delPrestamo.filter(m => m.categoria === 'loan_interest' && m.tipo === 'egreso')
+
+  const capital_vivo = Math.max(0, round2(capital_original - repagos.reduce((s, m) => s + Number(m.monto ?? 0), 0)))
+  const interes_pagado_total = round2(interesesPagados.reduce((s, m) => s + Number(m.monto ?? 0), 0))
+
+  let interes_mensual = 0
+  let interes_devengado = 0
+  let interes_mes_pagado: boolean | null = null
+  let proximo_vencimiento: string | null = null
+
+  if (modalidad === 'mensual') {
+    interes_mensual = round2(capital_vivo * tasa / 100 / 12)
+    if (inicio) {
+      const [iy, im] = inicio.split('-').map(Number)
+      const [hy, hm] = hoy.split('-').map(Number)
+      const mesesVencidos = Math.max(0, (hy - iy) * 12 + (hm - im))
+      interes_devengado = round2(mesesVencidos * interes_mensual)
+    }
+    const mesActual = hoy.slice(0, 7)
+    interes_mes_pagado = interesesPagados.some(m => (arDay(m.created_at) || '').slice(0, 7) === mesActual)
+    const [hy, hm] = hoy.split('-').map(Number)
+    proximo_vencimiento = hm === 12 ? `${hy + 1}-01-01` : `${hy}-${String(hm + 1).padStart(2, '0')}-01`
+  } else if (inicio) {
+    let capital = capital_original
+    let prev = inicio
+    let devengado = 0
+    for (const m of repagos) {
+      const d = arDay(m.created_at) || prev
+      devengado += capital * tasa / 100 * dayDiff(prev, d) / 365
+      capital = Math.max(0, capital - Number(m.monto ?? 0))
+      prev = d > prev ? d : prev
+    }
+    devengado += capital * tasa / 100 * dayDiff(prev, hoy) / 365
+    interes_devengado = round2(devengado)
   }
-  const vencido = prestamo.estado === 'vencido' || (dias_vencimiento != null && dias_vencimiento < 0)
-  const proximo = dias_vencimiento != null && dias_vencimiento >= 0 && dias_vencimiento <= 30
 
+  const interes_adeudado = round2(Math.max(0, interes_devengado - interes_pagado_total))
   return {
-    capital,
-    tasa_anual_pct,
-    dias_transcurridos,
-    interes_acumulado: Math.round(interes_acumulado * 100) / 100,
-    saldo_pendiente: Math.round(saldo_pendiente * 100) / 100,
-    monto_a_devolver_vto: Number(prestamo.monto_a_devolver ?? 0),
-    dias_vencimiento,
-    vencido,
-    proximo,
+    id: pid,
+    acreedor_id: coerceId(prestamo.acreedor_id),
+    modalidad,
+    estado: prestamo.estado ?? null,
+    tasa_pct: tasa,
+    fecha_inicio: inicio,
+    capital_original,
+    capital_vivo,
+    interes_mensual,
+    interes_devengado,
+    interes_pagado_total,
+    interes_adeudado,
+    deuda_total: round2(capital_vivo + interes_adeudado),
+    interes_mes_pagado,
+    proximo_vencimiento,
+    vencido: prestamo.estado === 'vencido',
+  }
+}
+
+export type PatrimonioAuto = { vehicle_id: number | null; label: string; costo: number; valor: number }
+
+export type Patrimonio = {
+  cajas: { cash: number; nexo: number; fiwind: number; total: number }
+  stock: {
+    total: number
+    costo_invertido: number
+    ganancia_esperada: number
+    autos: PatrimonioAuto[]
+  }
+  en_uso: { total: number; autos: PatrimonioAuto[] }
+  por_cobrar: {
+    total: number
+    clientes: { cliente_id: number | null; nombre: string; adelantado: number; devuelto: number; saldo: number }[]
+  }
+  deuda_total: number
+  interes_mensual_total: number
+  capital_propio: number
+  capital_propio_disponible: number
+  posiciones: LoanPosition[]
+}
+
+// Mirror of the backend's analisis_db(patrimonio): the real money picture.
+// cajas (derived from the ledger) + stock (autos PROPIOS sin vender, valued at
+// what we expect to get: precio_venta_objetivo → precio_publicado → costo —
+// never an invented valuation) + cuentas por cobrar (client_expense −
+// client_repayment: our money currently in clients' hands) − deudas (capital
+// vivo + interés adeudado of every active loan).
+export function computePatrimonio(
+  movimientos: any[],
+  vehicles: any[],
+  prestamos: any[],
+  clientes: any[],
+  hoyIso?: string,
+): Patrimonio {
+  const cajas = { cash: 0, nexo: 0, fiwind: 0 }
+  for (const m of movimientos) {
+    if (!affectsBalance(m)) continue
+    const c = m.cuenta as keyof typeof cajas
+    if (!(c in cajas)) continue
+    cajas[c] += Number(m.monto ?? 0) * (m.tipo === 'ingreso' ? 1 : -1)
+  }
+  const cajasOut = {
+    cash: round2(cajas.cash), nexo: round2(cajas.nexo), fiwind: round2(cajas.fiwind),
+    total: round2(cajas.cash + cajas.nexo + cajas.fiwind),
+  }
+
+  const autos: PatrimonioAuto[] = []
+  const enUso: PatrimonioAuto[] = []
+  for (const v of vehicles) {
+    if (v.tipo_operacion !== 'propio' || v.estado === 'vendido') continue
+    const costo = computeVehicleFinancials(v.id, vehicles, movimientos, prestamos).costo_total
+    const valor = Number(v.precio_venta_objetivo ?? 0) || Number(v.precio_publicado ?? 0) || costo
+    if (costo <= 0 && valor <= 0) continue
+    const label = `${v.marca ?? ''} ${v.modelo ?? ''}`.trim() + (v.dominio ? ` (${v.dominio})` : '')
+    const fila = { vehicle_id: coerceId(v.id), label, costo, valor: round2(valor) }
+    // uso_personal=1: el auto que usamos — patrimonio, pero NO a la venta.
+    if (Number(v.uso_personal ?? 0)) enUso.push(fila)
+    else autos.push(fila)
+  }
+  autos.sort((a, b) => b.valor - a.valor)
+  const stockTotal = round2(autos.reduce((s, a) => s + a.valor, 0))
+  const stockCosto = round2(autos.reduce((s, a) => s + a.costo, 0))
+  const enUsoTotal = round2(enUso.reduce((s, a) => s + a.valor, 0))
+
+  const porCliente = new Map<number, { adelantado: number; devuelto: number }>()
+  for (const m of movimientos) {
+    const cid = coerceId(m.cliente_id)
+    if (cid === null) continue
+    const entry = porCliente.get(cid) ?? { adelantado: 0, devuelto: 0 }
+    if (m.categoria === 'client_expense' && m.tipo === 'egreso') {
+      entry.adelantado += Number(m.monto ?? 0)
+    } else if (m.categoria === 'client_repayment' && m.tipo === 'ingreso') {
+      entry.devuelto += Number(m.monto ?? 0)
+    } else continue
+    porCliente.set(cid, entry)
+  }
+  const clientesCobrar = Array.from(porCliente.entries())
+    .filter(([, e]) => e.adelantado - e.devuelto > 0.005)
+    .map(([cid, e]) => ({
+      cliente_id: cid,
+      nombre: clientes.find(c => coerceId(c.id) === cid)?.nombre ?? `id=${cid}`,
+      adelantado: round2(e.adelantado),
+      devuelto: round2(e.devuelto),
+      saldo: round2(e.adelantado - e.devuelto),
+    }))
+    .sort((a, b) => b.saldo - a.saldo)
+  const porCobrarTotal = round2(clientesCobrar.reduce((s, c) => s + c.saldo, 0))
+
+  const posiciones = prestamos
+    .filter(p => p.estado === 'activo')
+    .map(p => computeLoanPosition(p, movimientos, hoyIso))
+  const deudaTotal = round2(posiciones.reduce((s, p) => s + p.deuda_total, 0))
+  const interesMensualTotal = round2(posiciones
+    .filter(p => p.modalidad === 'mensual')
+    .reduce((s, p) => s + p.interes_mensual, 0))
+
+  const capitalPropio = round2(cajasOut.total + stockTotal + enUsoTotal + porCobrarTotal - deudaTotal)
+  return {
+    cajas: cajasOut,
+    stock: {
+      total: stockTotal,
+      costo_invertido: stockCosto,
+      ganancia_esperada: round2(stockTotal - stockCosto),
+      autos,
+    },
+    en_uso: { total: enUsoTotal, autos: enUso },
+    por_cobrar: { total: porCobrarTotal, clientes: clientesCobrar },
+    deuda_total: deudaTotal,
+    interes_mensual_total: interesMensualTotal,
+    capital_propio: capitalPropio,
+    capital_propio_disponible: round2(capitalPropio - enUsoTotal),
+    posiciones,
+  }
+}
+
+export type LiquidacionConsignacion = {
+  precio_venta: number
+  fuente_precio: 'precio_venta_final' | 'ledger_venta' | 'precio_publicado' | 'precio_venta_objetivo' | 'sin_precio'
+  estimada: boolean
+  comision_pct: number
+  comision: number
+  gastos_adelantados: number
+  neto_al_cliente: number
+}
+
+// Mirror of analisis_db(liquidacion_consignacion): cuánto le corresponde al
+// dueño de una consignación = precio de venta − comisión (5% default) − gastos
+// adelantados por su cuenta (client_expense del auto). Si el auto no se vendió
+// todavía, se ESTIMA con precio_publicado/objetivo (estimada=true).
+export function computeLiquidacionConsignacion(
+  vehicleId: number,
+  vehicles: any[],
+  movimientos: any[],
+  comisionPct: number = 5,
+): LiquidacionConsignacion {
+  const vid = coerceId(vehicleId)
+  const v = vehicles.find(x => coerceId(x.id) === vid) ?? {}
+  const delAuto = movimientos.filter(m => coerceId(m.vehicle_id) === vid)
+  const gastos_adelantados = round2(delAuto
+    .filter(m => m.categoria === 'client_expense' && m.tipo === 'egreso')
+    .reduce((s, m) => s + Number(m.monto ?? 0), 0))
+
+  let precio_venta = Number(v.precio_venta_final ?? 0)
+  let fuente: LiquidacionConsignacion['fuente_precio'] = 'precio_venta_final'
+  let estimada = false
+  if (precio_venta <= 0) {
+    precio_venta = round2(delAuto
+      .filter(m => m.categoria === 'venta' && m.tipo === 'ingreso')
+      .reduce((s, m) => s + Number(m.monto ?? 0), 0))
+    fuente = 'ledger_venta'
+  }
+  if (precio_venta <= 0 && Number(v.precio_publicado ?? 0) > 0) {
+    precio_venta = Number(v.precio_publicado); fuente = 'precio_publicado'; estimada = true
+  }
+  if (precio_venta <= 0 && Number(v.precio_venta_objetivo ?? 0) > 0) {
+    precio_venta = Number(v.precio_venta_objetivo); fuente = 'precio_venta_objetivo'; estimada = true
+  }
+  if (precio_venta <= 0) fuente = 'sin_precio'
+
+  const comision = round2(precio_venta * comisionPct / 100)
+  return {
+    precio_venta: round2(precio_venta),
+    fuente_precio: fuente,
+    estimada,
+    comision_pct: comisionPct,
+    comision,
+    gastos_adelantados,
+    neto_al_cliente: round2(precio_venta - comision - gastos_adelantados),
   }
 }
