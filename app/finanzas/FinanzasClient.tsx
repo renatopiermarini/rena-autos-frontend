@@ -77,7 +77,6 @@ export default function FinanzasClient({
 }) {
   const [tab, setTab] = useState<Tab>('resumen')
 
-  const total = balances.reduce((s, b) => s + Number(b.saldo ?? 0), 0)
   const clientesById = useMemo(
     () => Object.fromEntries(clientes.map((c: any) => [c.id, c])),
     [clientes],
@@ -108,8 +107,6 @@ export default function FinanzasClient({
 
         <TabsContent value="resumen" className="mt-4">
           <ResumenTab
-            balances={balances}
-            total={total}
             patrimonio={patrimonio}
             movimientos={movimientos}
             clientesById={clientesById}
@@ -175,19 +172,18 @@ function StatCard({
 }
 
 function ResumenTab({
-  balances, total, patrimonio, movimientos, clientesById, vehiclesById,
+  patrimonio, movimientos, clientesById, vehiclesById,
 }: {
-  balances: any[]; total: number; patrimonio: ReturnType<typeof computePatrimonio>;
+  patrimonio: ReturnType<typeof computePatrimonio>;
   movimientos: any[]; clientesById: any; vehiclesById: any
 }) {
   const movRecientes = [...movimientos]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 20)
 
-  const cashBajo = balances.find((b: any) => b.cuenta === 'cash' && Number(b.saldo) < 500)
   const impagos = patrimonio.posiciones.filter(p => p.modalidad === 'mensual' && p.interes_mensual > 0 && p.interes_adeudado > 0)
   const alertas: string[] = []
-  if (cashBajo) alertas.push(`Cash bajo: $${cashBajo.saldo}`)
+  if (patrimonio.cajas.cash < 500) alertas.push(`Cash bajo: ${fmt(patrimonio.cajas.cash)}`)
   for (const p of patrimonio.posiciones.filter(p => p.vencido)) {
     alertas.push(`Préstamo #${p.id} marcado vencido — deuda ${fmt(p.deuda_total)}`)
   }
@@ -199,15 +195,22 @@ function ResumenTab({
   return (
     <div className="space-y-4">
       {/* Patrimonio — la foto real de la plata, derivada del ledger */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <StatCard
           tone="hero"
           label="Capital propio"
           value={fmt(pat.capital_propio)}
-          sub={pat.en_uso.total > 0
-            ? <>disponible sin vender el auto en uso: <b>{fmt(pat.capital_propio_disponible)}</b></>
-            : 'lo que queda si hoy cobrás y pagás todo'}
-          tip={<>La plata que es realmente tuya: <b>cajas {fmt(pat.cajas.total)}</b> + <b>stock {fmt(pat.stock.total)}</b>{pat.en_uso.total > 0 && <> + <b>auto en uso {fmt(pat.en_uso.total)}</b></>} + <b>por cobrar {fmt(pat.por_cobrar.total)}</b> − <b>deudas {fmt(pat.deuda_total)}</b>. Las cajas mezclan plata propia y prestada — este número es el que las separa. El <b>disponible</b> descuenta el auto en uso, que en lo posible no se vende. Todo sale del ledger de movimientos, no hay ningún saldo cargado a mano.</>}
+          sub="lo que queda si hoy cobrás y pagás todo"
+          tip={<>La plata que es realmente tuya: <b>cajas {fmt(pat.cajas.total)}</b> + <b>stock {fmt(pat.stock.total)}</b>{pat.en_uso.total > 0 && <> + <b>auto en uso {fmt(pat.en_uso.total)}</b></>} + <b>por cobrar {fmt(pat.por_cobrar.total)}</b> − <b>deudas {fmt(pat.deuda_total)}</b>. Las cajas mezclan plata propia y prestada — este número es el que las separa. Todo sale del ledger de movimientos, no hay ningún saldo cargado a mano.</>}
+        />
+        <StatCard
+          tone="hero"
+          label="Disponible"
+          value={fmt(pat.capital_propio_disponible)}
+          sub={pat.en_uso.autos.length > 0
+            ? `sin vender el auto en uso (${pat.en_uso.autos.map(a => a.label.split(' (')[0]).join(', ')})`
+            : 'igual al capital propio (no hay auto en uso)'}
+          tip={<>Capital propio <b>sin contar el auto en uso</b> ({fmt(pat.capital_propio)} − {fmt(pat.en_uso.total)}): lo que realmente tenés para operar, porque el auto que usamos en lo posible no se vende. Es la respuesta a &quot;¿cuánto hay sin vender el 130?&quot;.</>}
         />
         <StatCard
           label="Cajas"
@@ -234,26 +237,6 @@ function ResumenTab({
           sub={`interés mensual ${fmt(pat.interes_mensual_total)}/mes`}
           tip={<>Todo lo que debemos a acreedores: <b>capital vivo + interés devengado impago</b> de cada préstamo activo, calculado desde el ledger. Los préstamos con interés mensual pagan capital × tasa ÷ 12 el 1 de cada mes; los &quot;a saldar al final&quot; acumulan interés por día hasta que se cancelan (p. ej. con la venta del auto que financian). El detalle está en la pestaña Préstamos.</>}
         />
-      </div>
-
-      {/* Cuentas */}
-      <div className="grid grid-cols-6 gap-3">
-        {balances.map((b: any) => (
-          <Card key={b.id} size="sm">
-            <CardContent>
-              <p className="text-xs text-muted-foreground capitalize mb-1">{b.cuenta}</p>
-              <p className="text-xl font-light tabular-nums">{fmt(b.saldo)}</p>
-            </CardContent>
-          </Card>
-        ))}
-        <Card size="sm" className="bg-muted/40">
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
-              Total <InfoTip>Suma de las tres cajas. Ojo: acá adentro hay plata prestada — el número que descuenta deudas es <b>Capital propio</b>, arriba.</InfoTip>
-            </p>
-            <p className="text-xl font-semibold tabular-nums">{fmt(total)}</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Alertas */}
