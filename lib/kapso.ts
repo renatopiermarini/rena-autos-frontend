@@ -499,7 +499,9 @@ export function computePatrimonio(
     deuda_total: deudaTotal,
     interes_mensual_total: interesMensualTotal,
     capital_propio: capitalPropio,
-    capital_propio_disponible: round2(capitalPropio - enUsoTotal),
+    // Disponible = sin el auto en uso NI las comisiones esperadas: suman al
+    // patrimonio pero no existen hasta que la consignación se venda.
+    capital_propio_disponible: round2(capitalPropio - enUsoTotal - comisionesTotal),
     posiciones,
   }
 }

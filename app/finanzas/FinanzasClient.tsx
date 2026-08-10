@@ -208,9 +208,9 @@ function ResumenTab({
           label="Disponible"
           value={fmt(pat.capital_propio_disponible)}
           sub={pat.en_uso.autos.length > 0
-            ? `sin vender el auto en uso (${pat.en_uso.autos.map(a => a.label.split(' (')[0]).join(', ')})`
-            : 'igual al capital propio (no hay auto en uso)'}
-          tip={<>Capital propio <b>sin contar el auto en uso</b> ({fmt(pat.capital_propio)} − {fmt(pat.en_uso.total)}): lo que realmente tenés para operar, porque el auto que usamos en lo posible no se vende. Es la respuesta a &quot;¿cuánto hay sin vender el 130?&quot;.</>}
+            ? `sin el auto en uso (${pat.en_uso.autos.map(a => a.label.split(' (')[0]).join(', ')}) ni lo esperado`
+            : 'sin contar la plata esperada'}
+          tip={<>Capital propio <b>sin el auto en uso</b> ({fmt(pat.en_uso.total)}, porque en lo posible no se vende) <b>ni las comisiones esperadas</b> ({fmt(pat.por_cobrar.comisiones_consignaciones.total)}, porque recién existen cuando la consignación se vende): {fmt(pat.capital_propio)} − {fmt(pat.en_uso.total)} − {fmt(pat.por_cobrar.comisiones_consignaciones.total)}. Es la plata con la que realmente contás hoy para operar — la respuesta a &quot;¿cuánto hay sin vender el 130?&quot;.</>}
         />
         <StatCard
           label="Cajas"
