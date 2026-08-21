@@ -32,6 +32,18 @@ const ESTADOS = [
   'a_ingresar', 'en_preparacion', 'publicado', 'reservado', 'vendido',
 ]
 
+// Checklist de papeles por auto — espejo de tools/documentacion_tools.py ITEMS
+// en rena-autos-api (columnas doc_* de vehicles; 0/1). Cambiar ahí y acá.
+const DOC_ITEMS: { key: string; label: string }[] = [
+  { key: 'doc_formulario_08', label: 'Formulario 08 firmado y certificado' },
+  { key: 'doc_cedulas', label: 'Cédulas titular y autorizados' },
+  { key: 'doc_titulo', label: 'Título automotor' },
+  { key: 'doc_informe_dominio', label: 'Informe de dominio' },
+  { key: 'doc_verificacion_policial', label: 'Verificación policial' },
+  { key: 'doc_libre_deudas', label: 'Libre de deudas y patentes' },
+]
+const docOk = (v: any, key: string) => Number(v?.[key] ?? 0) === 1
+
 const nativeSelectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
@@ -193,7 +205,11 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
     fecha_ingreso: v.fecha_ingreso ? v.fecha_ingreso.slice(0, 10) : '',
     fecha_venta: v.fecha_venta ? v.fecha_venta.slice(0, 10) : '',
     notas: v.notas ?? '',
+    drive_url: v.drive_url ?? '',
   })
+  const [docs, setDocs] = useState<Record<string, boolean>>(
+    Object.fromEntries(DOC_ITEMS.map(d => [d.key, docOk(v, d.key)]))
+  )
 
   function set(field: string) {
     return (val: string) => setForm(f => ({ ...f, [field]: val }))
@@ -210,6 +226,8 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
         payload[k] = val
       }
     }
+    // Papeles: D1 guarda 0/1 (INTEGER), nunca booleanos.
+    for (const d of DOC_ITEMS) payload[d.key] = docs[d.key] ? 1 : 0
     const res = await fetch(`/api/db/vehicles?id=${v.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -257,6 +275,25 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
               <Label>Notas</Label>
               <Textarea value={form.notas} onChange={e => set('notas')(e.target.value)} rows={2} />
             </div>
+            <div className="col-span-2 sm:col-span-3 lg:col-span-4 space-y-1.5">
+              <Label>Papeles</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+                {DOC_ITEMS.map(d => (
+                  <label key={d.key} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-primary"
+                      checked={!!docs[d.key]}
+                      onChange={e => setDocs(o => ({ ...o, [d.key]: e.target.checked }))}
+                    />
+                    {d.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="col-span-2 sm:col-span-3 lg:col-span-4">
+              <FInput label="Carpeta de Drive (link)" value={form.drive_url} onChange={set('drive_url')} type="url" />
+            </div>
           </div>
           <div className="flex gap-2 mt-4">
             <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
@@ -299,6 +336,36 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
               <p className="text-sm">{v.notas}</p>
             </div>
           )}
+          <div className="col-span-2 lg:col-span-4 xl:col-span-6">
+            <div className="flex items-center gap-3 mb-1.5">
+              <p className="text-xs text-muted-foreground">
+                Papeles · {DOC_ITEMS.filter(d => docOk(v, d.key)).length}/{DOC_ITEMS.length}
+              </p>
+              {v.drive_url ? (
+                <a
+                  href={v.drive_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary underline underline-offset-2"
+                >
+                  Abrir carpeta de Drive ↗
+                </a>
+              ) : (
+                <span className="text-xs text-muted-foreground/70">sin carpeta de Drive</span>
+              )}
+            </div>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-0.5">
+              {DOC_ITEMS.map(d => {
+                const ok = docOk(v, d.key)
+                return (
+                  <li key={d.key} className={`text-sm flex items-center gap-1.5 ${ok ? '' : 'text-muted-foreground'}`}>
+                    <span className={ok ? 'text-success' : ''}>{ok ? '✓' : '□'}</span>
+                    {d.label}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
         </div>
 
         {(fin.gastos_total > 0 || fin.prestamos_asociados.length > 0) && (
