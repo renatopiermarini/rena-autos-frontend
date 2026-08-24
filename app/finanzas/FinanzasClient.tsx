@@ -198,25 +198,24 @@ function ResumenTab({
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <StatCard
           tone="hero"
+          label="Cajas"
+          value={fmt(pat.cajas.total)}
+          sub={`cash ${fmt(pat.cajas.cash)} · nexo ${fmt(pat.cajas.nexo)} · fiwind ${fmt(pat.cajas.fiwind)}`}
+          tip={<>Dinero físico y en cuentas, derivado como <b>suma de ingresos − egresos</b> del ledger (solo movimientos que afectan saldo). Incluye plata prestada: por eso solo, este número sobreestima lo que es tuyo.</>}
+        />
+        <StatCard
           label="Capital propio"
           value={fmt(pat.capital_propio)}
           sub="lo que queda si hoy cobrás y pagás todo"
           tip={<>La plata que es realmente tuya: <b>cajas {fmt(pat.cajas.total)}</b> + <b>stock {fmt(pat.stock.total)}</b>{pat.en_uso.total > 0 && <> + <b>auto en uso {fmt(pat.en_uso.total)}</b></>} + <b>por cobrar {fmt(pat.por_cobrar.total)}</b> − <b>deudas {fmt(pat.deuda_total)}</b>. Las cajas mezclan plata propia y prestada — este número es el que las separa. Todo sale del ledger de movimientos, no hay ningún saldo cargado a mano.</>}
         />
         <StatCard
-          tone="hero"
           label="Disponible"
           value={fmt(pat.capital_propio_disponible)}
           sub={pat.en_uso.autos.length > 0
             ? `sin el auto en uso (${pat.en_uso.autos.map(a => a.label.split(' (')[0]).join(', ')}) ni lo esperado`
             : 'sin contar la plata esperada'}
           tip={<>Capital propio <b>sin el auto en uso</b> ({fmt(pat.en_uso.total)}, porque en lo posible no se vende) <b>ni las comisiones esperadas</b> ({fmt(pat.por_cobrar.comisiones_consignaciones.total)}, porque recién existen cuando la consignación se vende): {fmt(pat.capital_propio)} − {fmt(pat.en_uso.total)} − {fmt(pat.por_cobrar.comisiones_consignaciones.total)}. Es la plata con la que realmente contás hoy para operar — la respuesta a &quot;¿cuánto hay sin vender el 130?&quot;.</>}
-        />
-        <StatCard
-          label="Cajas"
-          value={fmt(pat.cajas.total)}
-          sub={`cash ${fmt(pat.cajas.cash)} · nexo ${fmt(pat.cajas.nexo)} · fiwind ${fmt(pat.cajas.fiwind)}`}
-          tip={<>Dinero físico y en cuentas, derivado como <b>suma de ingresos − egresos</b> del ledger (solo movimientos que afectan saldo). Incluye plata prestada: por eso solo, este número sobreestima lo que es tuyo.</>}
         />
         <StatCard
           label="Stock a la venta"
