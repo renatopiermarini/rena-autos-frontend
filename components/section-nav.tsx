@@ -7,10 +7,15 @@ import { cn } from '@/lib/utils'
 // stage of being a cliente, not a peer of Finanzas, so it lives under Clientes
 // instead of eating a top-level nav slot.
 
-export function SectionNav({ items }: { items: { href: string; label: string }[] }) {
+export function SectionNav({
+  items, label = 'Secciones de clientes',
+}: {
+  items: { href: string; label: string }[]
+  label?: string
+}) {
   const pathname = usePathname()
   return (
-    <nav className="flex items-center gap-1 border-b border-border -mt-1 mb-4" aria-label="Secciones de clientes">
+    <nav className="flex items-center gap-1 border-b border-border -mt-1 mb-4" aria-label={label}>
       {items.map(i => {
         const active = pathname === i.href
         return (
@@ -36,4 +41,11 @@ export function SectionNav({ items }: { items: { href: string; label: string }[]
 export const CLIENTES_NAV = [
   { href: '/clientes', label: 'Clientes' },
   { href: '/interesados', label: 'Interesados' },
+]
+
+export const CONFIG_NAV = [
+  { href: '/config/negocio', label: 'Negocio' },
+  { href: '/config/cuentas', label: 'Cuentas' },
+  { href: '/config/equipo', label: 'Equipo' },
+  { href: '/config/inversores', label: 'Inversores' },
 ]

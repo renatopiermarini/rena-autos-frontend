@@ -38,6 +38,79 @@ export async function getVisitas()         { return get('visitas', 15) }
 export async function getKbEntries()       { return get('kb_entries', 15) }
 export async function getVerificaciones()  { return get('verificaciones_mecanicas', 30) }
 
+// ── Tablas de configuración (productización multi-instancia) ──────────────────
+//
+// config_negocio / cuentas / equipo PUEDEN NO EXISTIR todavía: el DDL lo corre
+// el usuario a mano por wrangler. Un 404 de Kapso, una red caída o un JSON raro
+// NO pueden tirar la página abajo — cada pantalla cae a los valores hardcodeados
+// de siempre y muestra el banner de "tablas sin crear". get() ya devuelve [] con
+// respuesta !ok, pero un fetch rechazado SÍ tira, así que va envuelto.
+async function getSafe(table: string, revalidate: number): Promise<any[]> {
+  try {
+    return await get(table, revalidate)
+  } catch (e) {
+    console.warn(`[kapso] no se pudo leer ${table} (¿tabla sin crear?):`, e)
+    return []
+  }
+}
+
+// D1 devuelve los booleanos como 1/0, "1"/"0" o true/false según el driver.
+// Boolean('0') es true, así que se coerce siempre. Sin valor = activo (una fila
+// vieja sin la columna no debería desaparecer de la UI).
+export function flagOn(value: any, fallback = true): boolean {
+  if (value === null || value === undefined || value === '') return fallback
+  if (typeof value === 'boolean') return value
+  const n = Number(value)
+  if (Number.isFinite(n)) return n !== 0
+  return String(value).toLowerCase() === 'true'
+}
+
+/** Filas de config_negocio → { clave: valor }. Última fila gana ante duplicados. */
+export function parseConfigNegocio(rows: any[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!Array.isArray(rows)) return out
+  for (const r of rows) {
+    const clave = r?.clave
+    if (typeof clave !== 'string' || clave === '') continue
+    out[clave] = r.valor == null ? '' : String(r.valor)
+  }
+  return out
+}
+
+/** Filas activas ordenadas por `orden` (y por id ante empate/ausencia). */
+export function activasOrdenadas(rows: any[], activeField: string): any[] {
+  if (!Array.isArray(rows)) return []
+  return rows
+    .filter(r => flagOn(r?.[activeField]))
+    .sort((a, b) => {
+      const oa = Number(a?.orden ?? 0), ob = Number(b?.orden ?? 0)
+      const na = Number.isFinite(oa) ? oa : 0, nb = Number.isFinite(ob) ? ob : 0
+      if (na !== nb) return na - nb
+      return (coerceId(a?.id) ?? 0) - (coerceId(b?.id) ?? 0)
+    })
+}
+
+// Filas crudas (con id, activas e inactivas) — las pantallas de configuración
+// necesitan el id para el PATCH y las inactivas para poder reactivarlas.
+export async function getConfigNegocioRows() { return getSafe('config_negocio', 60) }
+export async function getCuentasRows()       { return getSafe('cuentas', 60) }
+export async function getEquipoRows()        { return getSafe('equipo', 60) }
+
+/** Config del negocio como record. `{}` si la tabla no existe todavía. */
+export async function getConfigNegocio(): Promise<Record<string, string>> {
+  return parseConfigNegocio(await getConfigNegocioRows())
+}
+
+/** Cuentas activas, en orden. `[]` si la tabla no existe todavía. */
+export async function getCuentas(): Promise<any[]> {
+  return activasOrdenadas(await getCuentasRows(), 'activa')
+}
+
+/** Equipo activo, en orden. `[]` si la tabla no existe todavía. */
+export async function getEquipo(): Promise<any[]> {
+  return activasOrdenadas(await getEquipoRows(), 'activo')
+}
+
 // ── Client-side mutations (call the /api/db proxy) ────────────────────────────
 
 // The /api/db proxy returns actionable errors (400 "`estado` inválido: …",
