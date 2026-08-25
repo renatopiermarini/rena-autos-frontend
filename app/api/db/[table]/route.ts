@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { visitaConflict } from '@/lib/agenda'
 import { CLAVE_RE, isValidClave, routesError } from '@/lib/routes-catalog'
+import { dbGet, dbPost, dbPatch, dbDelete, dbCount, DbError, matches } from '@/lib/db'
 
-const BASE    = process.env.KAPSO_DB_URL!
-const KEY     = process.env.KAPSO_API_KEY!
-const HEADERS = { 'X-API-Key': KEY, 'Content-Type': 'application/json' }
+// Toda la I/O pasa por lib/db.ts (Kapso REST o Postgres según DATABASE_URL).
+// Las validaciones, el orden de los guards y los códigos de error de acá NO
+// dependen del backend: son las mismas para las dos instancias.
 
 const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'transferencias', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'prestamos'])
 
@@ -57,21 +58,18 @@ async function asignadoValues(): Promise<string[]> {
   }
   let claves: string[] | null = null
   try {
-    const res = await fetch(`${BASE}/equipo?limit=200`, { headers: HEADERS, cache: 'no-store' })
-    if (res.ok) {
-      const rows: any[] = (await res.json()).data ?? []
-      const activas = rows
-        .filter(r => {
-          const a = r?.activo
-          if (a === null || a === undefined || a === '') return true
-          const n = Number(a)
-          return Number.isFinite(n) ? n !== 0 : String(a).toLowerCase() === 'true'
-        })
-        .map(r => r?.clave)
-        .filter(isValidClave) as string[]
-      // Tabla vacía = todavía sin migrar: mejor el fallback que rechazar todo.
-      if (activas.length > 0) claves = Array.from(new Set([...activas, EQUIPO_BUCKET]))
-    }
+    const rows: any[] = await dbGet('equipo')
+    const activas = rows
+      .filter(r => {
+        const a = r?.activo
+        if (a === null || a === undefined || a === '') return true
+        const n = Number(a)
+        return Number.isFinite(n) ? n !== 0 : String(a).toLowerCase() === 'true'
+      })
+      .map(r => r?.clave)
+      .filter(isValidClave) as string[]
+    // Tabla vacía = todavía sin migrar: mejor el fallback que rechazar todo.
+    if (activas.length > 0) claves = Array.from(new Set([...activas, EQUIPO_BUCKET]))
   } catch {
     claves = null
   }
@@ -205,11 +203,19 @@ function enumError(table: string, body: any): NextResponse | null {
 // the bot enforces the same checks on its side).
 async function rowsMatching(table: string, key: string, value: number): Promise<any[] | null> {
   try {
-    const res = await fetch(`${BASE}/${table}?${key}=${value}&limit=200`, { headers: HEADERS, cache: 'no-store' })
-    if (!res.ok) return null
-    const rows: any[] = (await res.json()).data ?? []
+    const rows: any[] = await dbGet(table, { [key]: value })
     // Re-check client-side so an ignored filter param can't fake a match.
-    return rows.filter(r => Number(r?.[key]) === value)
+    return rows.filter(r => matches(r?.[key], value))
+  } catch {
+    return null
+  }
+}
+
+// Cuenta hijos vinculados. Devuelve null cuando la lectura misma falló, que es
+// lo que dispara el fail-open de los guards de borrado.
+async function countMatching(table: string, col: string, value: string | number): Promise<number | null> {
+  try {
+    return await dbCount(table, col, value)
   } catch {
     return null
   }
@@ -231,8 +237,8 @@ async function linkedRows409(table: string, key: string, value: number): Promise
   const links = DELETE_LINKS[table]
   if (!links) return null
   const counts = await Promise.all(links.map(async ([tbl, col, label]) => {
-    const rows = await rowsMatching(tbl, col, value)
-    return rows && rows.length > 0 ? `${rows.length} ${label}` : null
+    const n = await countMatching(tbl, col, value)
+    return n && n > 0 ? `${n} ${label}` : null
   }))
   const found = counts.filter(Boolean)
   if (found.length > 0) {
@@ -247,18 +253,6 @@ async function linkedRows409(table: string, key: string, value: number): Promise
   return null
 }
 
-// Igual que rowsMatching pero comparando TEXTO (cuenta='cash'), no ids.
-async function rowsMatchingText(table: string, col: string, value: string): Promise<any[] | null> {
-  try {
-    const res = await fetch(`${BASE}/${table}?${col}=${encodeURIComponent(value)}&limit=200`, { headers: HEADERS, cache: 'no-store' })
-    if (!res.ok) return null
-    const rows: any[] = (await res.json()).data ?? []
-    return rows.filter(r => String(r?.[col] ?? '') === value)
-  } catch {
-    return null
-  }
-}
-
 async function valueLinked409(table: string, key: string, value: number): Promise<NextResponse | null> {
   if (key !== 'id') return null
   const link = VALUE_DELETE_LINKS[table]
@@ -266,12 +260,13 @@ async function valueLinked409(table: string, key: string, value: number): Promis
   const parent = await rowsMatching(table, key, value)
   const clave = parent?.[0]?.[link.keyField]
   if (typeof clave !== 'string' || clave === '') return null // fail-open, como el resto
-  const children = await rowsMatchingText(link.child, link.childCol, clave)
-  if (children === null || children.length === 0) return null
+  // Se cuenta por TEXTO (cuenta='cash'), no por id.
+  const children = await countMatching(link.child, link.childCol, clave)
+  if (children === null || children === 0) return null
   return NextResponse.json(
     {
       error: 'registros_vinculados',
-      message: `No se puede borrar "${clave}": tiene ${children.length} ${link.label} vinculado(s). ${link.disableHint}.`,
+      message: `No se puede borrar "${clave}": tiene ${children} ${link.label} vinculado(s). ${link.disableHint}.`,
     },
     { status: 409 },
   )
@@ -284,31 +279,36 @@ function bustCache(table?: string) {
   if (table === 'equipo') equipoCache = null
 }
 
-// Kapso responds 204 No Content on DELETE; Response.json() throws on
-// bodyless status codes, so pass those through without a JSON body.
-async function proxyResponse(res: Response) {
-  if (res.status === 204 || res.status === 205 || res.status === 304) {
-    return new NextResponse(null, { status: res.status })
+// Respuesta de una escritura. El envoltorio `{ data }` es el de la REST de
+// Kapso, que es lo que el proxy devolvía tal cual y lo que espera el cliente
+// (KbClient lee `res.data?.data?.id`).
+function writeResponse(data: any) {
+  return NextResponse.json({ data }, { status: 200 })
+}
+
+// Un fallo de la capa de datos se devuelve con SU status y SU body: en modo
+// Kapso es exactamente lo que respondió Kapso (era el passthrough de antes);
+// en modo Postgres, 400 para un error de esquema y 500 para el resto.
+function dbErrorResponse(e: unknown) {
+  if (e instanceof DbError) {
+    return NextResponse.json(e.body ?? {}, { status: e.status })
   }
-  const data = await res.json().catch(() => ({}))
-  return NextResponse.json(data, { status: res.status })
+  const message = e instanceof Error ? e.message : String(e)
+  return NextResponse.json({ error: 'db_error', message }, { status: 500 })
 }
 
 // Defense-in-depth: the dashboard UI already blocks a conflicting visita, but enforce
 // it here too so no client can write a visita on top of a transferencia turno block.
 // Mirrors the bot (rena-autos-api). Fail-open: if we can't read transferencias, allow.
 async function fetchAllTransferencias(): Promise<any[]> {
-  const all: any[] = []
-  let offset = 0
-  for (let i = 0; i < 20; i++) {
-    const res = await fetch(`${BASE}/transferencias?limit=200&offset=${offset}`, { headers: HEADERS, cache: 'no-store' })
-    if (!res.ok) return all
-    const page: any[] = (await res.json()).data ?? []
-    all.push(...page)
-    if (page.length < 200) break
-    offset += page.length
+  try {
+    return await dbGet('transferencias')
+  } catch (e) {
+    // Igual que antes: con una lectura a medias se chequea contra lo que haya
+    // (y visitaConflict409 ya deja pasar la visita si esto falla del todo).
+    if (e instanceof DbError) return e.partial ?? []
+    throw e
   }
-  return all
 }
 
 async function visitaConflict409(table: string, body: any): Promise<NextResponse | null> {
@@ -344,13 +344,14 @@ export async function POST(
   if (badAsignado) return badAsignado
   const conflict = await visitaConflict409(table, body)
   if (conflict) return conflict
-  const res = await fetch(`${BASE}/${table}`, {
-    method: 'POST',
-    headers: HEADERS,
-    body: JSON.stringify(body),
-  })
-  if (res.ok) bustCache(table)
-  return proxyResponse(res)
+
+  try {
+    const row = await dbPost(table, body)
+    bustCache(table)
+    return writeResponse(row)
+  } catch (e) {
+    return dbErrorResponse(e)
+  }
 }
 
 export async function PATCH(
@@ -374,13 +375,13 @@ export async function PATCH(
   const conflict = await visitaConflict409(table, body)
   if (conflict) return conflict
 
-  const res = await fetch(`${BASE}/${table}?${filter.key}=${filter.value}`, {
-    method: 'PATCH',
-    headers: HEADERS,
-    body: JSON.stringify(body),
-  })
-  if (res.ok) bustCache(table)
-  return proxyResponse(res)
+  try {
+    const row = await dbPatch(table, filter.value, body, filter.key)
+    bustCache(table)
+    return writeResponse(row)
+  } catch (e) {
+    return dbErrorResponse(e)
+  }
 }
 
 export async function DELETE(
@@ -399,10 +400,13 @@ export async function DELETE(
   const linkedByValue = await valueLinked409(table, filter.key, filter.value)
   if (linkedByValue) return linkedByValue
 
-  const res = await fetch(`${BASE}/${table}?${filter.key}=${filter.value}`, {
-    method: 'DELETE',
-    headers: HEADERS,
-  })
-  if (res.ok) bustCache(table)
-  return proxyResponse(res)
+  try {
+    await dbDelete(table, filter.value, filter.key)
+    bustCache(table)
+    // 204 sin body, que es lo que respondía Kapso (y lo único que mira el
+    // cliente: res.ok).
+    return new NextResponse(null, { status: 204 })
+  } catch (e) {
+    return dbErrorResponse(e)
+  }
 }

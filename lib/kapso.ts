@@ -1,27 +1,27 @@
-const BASE = process.env.KAPSO_DB_URL!
-const KEY  = process.env.KAPSO_API_KEY!
-const HEADERS = { 'X-API-Key': KEY, 'Content-Type': 'application/json' }
+import { dbGet, DbError } from '@/lib/db'
 
-const PAGE_SIZE = 200 // Kapso caps each request at ~100; ask for 200, paginate beyond.
-
+// Toda la lectura pasa por lib/db.ts, que elige backend por DATABASE_URL. Sin
+// esa variable (la instancia de Renato) hace EXACTAMENTE los mismos fetch
+// paginados de siempre contra la REST de Kapso, con el mismo `revalidate`.
+//
+// Trade-off del modo Postgres: `revalidate` NO aplica. El fetch-cache de Next
+// cachea respuestas HTTP, y en Postgres no hay ninguna — habría que envolver
+// cada lectura en `unstable_cache`, que revalidatePath('/', 'layout') (lo que
+// hacen los writes del proxy para refrescar la UI) no invalida. Preferimos leer
+// siempre fresco: una instancia nueva paga un round-trip a Railway por render y
+// nunca muestra un dato viejo después de guardar. Si algún día molesta la
+// latencia, la solución es unstable_cache + revalidateTag en los writes, no
+// bajar el revalidate.
 async function get(table: string, revalidate: number = 30) {
-  // Paginate until we get a partial page. Kapso's default response is ~50 rows
-  // and capped per-request, so without this loop we silently dropped any row
-  // beyond the first page (the bot was saving expenses correctly but the UI
-  // was pinned to the oldest 50 rows).
-  const all: any[] = []
-  let offset = 0
-  for (let i = 0; i < 50; i++) { // hard cap to avoid runaway loops
-    const url = `${BASE}/${table}?limit=${PAGE_SIZE}&offset=${offset}`
-    const res = await fetch(url, { headers: HEADERS, next: { revalidate } })
-    if (!res.ok) return all
-    const page: any[] = (await res.json()).data ?? []
-    if (page.length === 0) break
-    all.push(...page)
-    if (page.length < PAGE_SIZE) break
-    offset += page.length
+  try {
+    return await dbGet(table, {}, { revalidate })
+  } catch (e) {
+    // Un error HTTP devuelve lo que se alcanzó a leer, igual que antes (el
+    // `return all` del !res.ok). Un fallo de red sigue propagándose: getSafe()
+    // lo atrapa para las tablas que pueden no existir todavía.
+    if (e instanceof DbError) return e.partial ?? []
+    throw e
   }
-  return all
 }
 
 export async function getBalances()        { return get('balances', 60) }

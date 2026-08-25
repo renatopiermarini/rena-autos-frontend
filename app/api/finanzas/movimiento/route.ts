@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { validarMovimiento } from '@/lib/movimiento'
 import { DEFAULT_CUENTAS, cuentaKeys, arDay } from '@/lib/kapso'
+import { dbGet, dbPost, DbError } from '@/lib/db'
 
 /**
  * Alta de movimiento contable desde el dashboard.
@@ -24,19 +25,15 @@ import { DEFAULT_CUENTAS, cuentaKeys, arDay } from '@/lib/kapso'
  *    persona mirando la pantalla, con el botón bloqueado mientras guarda.
  */
 
-const BASE = process.env.KAPSO_DB_URL!
-const KEY = process.env.KAPSO_API_KEY!
-const HEADERS = { 'X-API-Key': KEY, 'Content-Type': 'application/json' }
+// La I/O va por lib/db.ts: Kapso REST o Postgres según DATABASE_URL. Las reglas
+// de validación (y el afecta_balance=1) son las mismas para las dos instancias.
 
 const TABLE = 'movimientos_contabilidad'
 
 /** Claves de cuenta válidas. Sin tabla `cuentas` (o si falla), DEFAULT_CUENTAS. */
 async function cuentasValidas(): Promise<string[]> {
   try {
-    const res = await fetch(`${BASE}/cuentas?limit=200`, { headers: HEADERS, cache: 'no-store' })
-    if (!res.ok) return DEFAULT_CUENTAS
-    const rows: any[] = (await res.json()).data ?? []
-    return cuentaKeys(rows)
+    return cuentaKeys(await dbGet('cuentas'))
   } catch {
     return DEFAULT_CUENTAS
   }
@@ -57,12 +54,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'valor_invalido', message: validado.error }, { status: 400 })
   }
 
-  const res = await fetch(`${BASE}/${TABLE}`, {
-    method: 'POST',
-    headers: HEADERS,
-    body: JSON.stringify(validado.row),
-  })
-  if (res.ok) revalidatePath('/', 'layout')
-  const data = await res.json().catch(() => ({}))
-  return NextResponse.json(data, { status: res.status })
+  try {
+    const row = await dbPost(TABLE, validado.row)
+    revalidatePath('/', 'layout')
+    return NextResponse.json({ data: row }, { status: 200 })
+  } catch (e) {
+    if (e instanceof DbError) return NextResponse.json(e.body ?? {}, { status: e.status })
+    const message = e instanceof Error ? e.message : String(e)
+    return NextResponse.json({ error: 'db_error', message }, { status: 500 })
+  }
 }
