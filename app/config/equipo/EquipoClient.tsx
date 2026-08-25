@@ -29,13 +29,14 @@ type FormState = {
   full_access: boolean
   activo: boolean
   greeting: string
+  deny_message: string
 }
 
 function emptyForm(): FormState {
   return {
     clave: '', display_name: '', phone: '', phone_env: '',
     todasLasRutas: false, routes: [],
-    is_assignee: true, full_access: false, activo: true, greeting: '',
+    is_assignee: true, full_access: false, activo: true, greeting: '', deny_message: '',
   }
 }
 
@@ -52,6 +53,7 @@ function rowToForm(m: any): FormState {
     full_access: flagOn(m.full_access, false),
     activo: flagOn(m.activo),
     greeting: m.greeting ?? '',
+    deny_message: m.deny_message ?? '',
   }
 }
 
@@ -131,6 +133,7 @@ export default function EquipoClient({ equipo }: { equipo: any[] }) {
       full_access: form.full_access ? 1 : 0,
       activo: form.activo ? 1 : 0,
       greeting: form.greeting.trim() || null,
+      deny_message: form.deny_message.trim() || null,
     }
     setSaving(true)
     const res = editing
@@ -310,6 +313,13 @@ export default function EquipoClient({ equipo }: { equipo: any[] }) {
               onChange={v => setForm(f => ({ ...f, greeting: v }))}
               rows={2}
               hint="Cómo lo saluda el bot al empezar una conversación."
+            />
+
+            <FTextarea
+              label="Negativa" value={form.deny_message}
+              onChange={v => setForm(f => ({ ...f, deny_message: v }))}
+              rows={2}
+              hint="Qué responde el bot cuando pide algo fuera de sus rutas. Vacío = lista genérica de lo que sí puede."
             />
           </div>
           <DialogFooter>
