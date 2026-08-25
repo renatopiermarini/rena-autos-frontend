@@ -1,4 +1,9 @@
-import { getTareas, getVehicles, getPrestamos, getVisitas, getTransferencias, getTurnos, getInteresados, getBalances } from '@/lib/kapso'
+import {
+  getTareas, getVehicles, getPrestamos, getVisitas, getTransferencias, getTurnos,
+  getInteresados, getBalances, getCuentas, getEquipo, getConfigNegocio,
+  cuentasInfo, umbralAlertaCaja, capFirst,
+} from '@/lib/kapso'
+import { destacadosClaves, equipoFromRows, resolveDefaultAssignee, seccionesEquipo, miembroPorClave } from '@/lib/equipo'
 import TableroClient from './TableroClient'
 import { transferenciaBlocks, turnosBlocks, blockConflicts, eventConflicts } from '@/lib/agenda'
 import { parseInstant, localDayKey } from '@/lib/date'
@@ -7,9 +12,21 @@ import type { BoardItem } from '@/components/calendar/MonthBoard'
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
 export default async function Tablero() {
-  const [tareas, vehicles, prestamos, visitas, transferencias, turnos, interesados, balances] = await Promise.all([
+  const [
+    tareas, vehicles, prestamos, visitas, transferencias, turnos, interesados, balances,
+    cuentasRows, equipoRows, config,
+  ] = await Promise.all([
     getTareas(), getVehicles(), getPrestamos(), getVisitas(), getTransferencias(), getTurnos(), getInteresados(), getBalances(),
+    getCuentas(), getEquipo(), getConfigNegocio(),
   ])
+
+  // Perfil de la instancia. Sin las tablas de config esto es exactamente lo que
+  // el tablero tenía escrito a mano: cuentas cash/nexo/fiwind, asignado por
+  // defecto rena, y una sola sección destacada (Marshiot).
+  const cuentas = cuentasInfo(cuentasRows)
+  const equipo = equipoFromRows(equipoRows)
+  const defAssignee = resolveDefaultAssignee(config, equipo)
+  const destacados = seccionesEquipo(equipo, defAssignee, destacadosClaves(config, equipo, defAssignee))
 
   const vehLabel = (id: any) => {
     const v = vehicles.find((x: any) => x.id === id)
@@ -81,10 +98,12 @@ export default async function Tablero() {
     }
   }
 
-  // Las tareas de Marshiot van en su propia sección arriba del tablero; las que
-  // tienen fecha igual quedan en el calendario, pero no repetidas en "Sin fecha".
-  const esMarshiot = (t: any) => String(t?.asignado ?? '').toLowerCase() === 'marshiot'
-  const marshiot: { id: number; titulo: string; urgent: boolean; fecha: string | null }[] = []
+  // Las tareas de los miembros destacados (asignables que NO son el asignado por
+  // defecto — con el perfil de Renato, Marshiot) van en su propia sección arriba
+  // del tablero; las que tienen fecha igual quedan en el calendario, pero no
+  // repetidas en "Sin fecha".
+  type TareaDestacada = { id: number; titulo: string; urgent: boolean; fecha: string | null }
+  const porMiembro = new Map<string, TareaDestacada[]>(destacados.map(m => [m.clave, []]))
 
   const sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[] = []
   for (const t of tareas) {
@@ -95,11 +114,12 @@ export default async function Tablero() {
     // date-only value never gets pulled a day backwards through UTC.
     const rawFecha = t.fecha_vencimiento ? String(t.fecha_vencimiento).slice(0, 10) : null
     const raw = rawFecha && /^\d{4}-\d{2}-\d{2}$/.test(rawFecha) ? rawFecha : null
-    if (esMarshiot(t)) {
-      marshiot.push({ id: t.id, titulo: t.titulo || 'Sin título', urgent, fecha: raw })
+    const destacado = miembroPorClave(destacados, t.asignado)
+    if (destacado) {
+      porMiembro.get(destacado.clave)!.push({ id: t.id, titulo: t.titulo || 'Sin título', urgent, fecha: raw })
     }
     if (!raw) {
-      if (!esMarshiot(t)) {
+      if (!destacado) {
         sinFecha.push({ id: t.id, titulo: t.titulo || 'Sin título', asignado: t.asignado, urgent })
       }
       continue
@@ -117,13 +137,26 @@ export default async function Tablero() {
   }
   sinFecha.sort((a, b) => Number(b.urgent) - Number(a.urgent))
   // Urgentes primero, después por fecha; las sin fecha al final.
-  marshiot.sort((a, b) =>
-    Number(b.urgent) - Number(a.urgent) || (a.fecha ?? '9999').localeCompare(b.fecha ?? '9999'))
+  const secciones = destacados
+    .map(m => ({
+      clave: m.clave,
+      label: m.label,
+      badgeCls: m.badge,
+      tareas: porMiembro.get(m.clave)!.sort((a, b) =>
+        Number(b.urgent) - Number(a.urgent) || (a.fecha ?? '9999').localeCompare(b.fecha ?? '9999')),
+    }))
+    .filter(s => s.tareas.length > 0)
 
   const hoy = new Date()
   const alertas: string[] = []
-  const cash = balances.find((b: any) => b.cuenta === 'cash')
-  if (cash && Number(cash.saldo ?? 0) < 500) alertas.push(`Cash bajo: $${cash.saldo ?? 0}`)
+  // La caja principal del perfil (la primera por `orden`) y su umbral. Sin las
+  // tablas de config: cash y 500, la alerta de siempre.
+  const cajaPrincipal = cuentas[0]
+  const umbral = umbralAlertaCaja(config)
+  const saldoPrincipal = balances.find((b: any) => b.cuenta === cajaPrincipal.clave)
+  if (saldoPrincipal && Number(saldoPrincipal.saldo ?? 0) < umbral) {
+    alertas.push(`${capFirst(cajaPrincipal.label)} bajo: $${saldoPrincipal.saldo ?? 0}`)
+  }
   prestamos.filter((p: any) => p.estado === 'activo').forEach((p: any) => {
     if (!p.fecha_vencimiento) return
     const dias = Math.ceil((new Date(p.fecha_vencimiento).getTime() - hoy.getTime()) / 86400000)
@@ -147,5 +180,5 @@ export default async function Tablero() {
     }))
     .filter((v: { faltan: string[] }) => v.faltan.length > 0)
 
-  return <TableroClient items={items} alertas={alertas} sinFecha={sinFecha} datosFaltantes={datosFaltantes} marshiot={marshiot} />
+  return <TableroClient items={items} alertas={alertas} sinFecha={sinFecha} datosFaltantes={datosFaltantes} secciones={secciones} />
 }

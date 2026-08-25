@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { computeVehicleFinancials, computeLoanPosition } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
+import { DEFAULT_ASSIGNEE } from '@/lib/equipo'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -56,9 +57,10 @@ const TIPO_FOR_FIELD: Record<string, string> = {
 }
 
 function ToggleCheck({
-  vehicleId, field, value, pendingTareaIds = [],
+  vehicleId, field, value, pendingTareaIds = [], defAssignee,
 }: {
   vehicleId: number; field: string; value: boolean; pendingTareaIds?: number[]
+  defAssignee: string
 }) {
   const router = useRouter()
   const [val, setVal] = useState(value)
@@ -89,7 +91,7 @@ function ToggleCheck({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             estado: 'completada',
-            completado_por: 'rena',
+            completado_por: defAssignee,
             fecha_completado: now,
             updated_at: now,
           }),
@@ -488,10 +490,10 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
 }
 
 function VehicleTable({
-  vehicles, tareas, clientes, movimientos, prestamos, expanded, onToggle,
+  vehicles, tareas, clientes, movimientos, prestamos, expanded, onToggle, defAssignee,
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos: any[]; prestamos: any[]
-  expanded: Set<number>; onToggle: (id: number) => void
+  expanded: Set<number>; onToggle: (id: number) => void; defAssignee: string
 }) {
   function tareasAuto(vid: number) {
     return tareas.filter(t => t.vehicle_id === vid && t.estado !== 'completada')
@@ -558,9 +560,9 @@ function VehicleTable({
                       : '—'}
                   </td>
                   <td className="py-2.5 px-3 text-muted-foreground hidden md:table-cell">{diasEnStock(v.fecha_ingreso)}</td>
-                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} /></td>
-                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} /></td>
-                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} /></td>
+                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} defAssignee={defAssignee} /></td>
+                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} defAssignee={defAssignee} /></td>
+                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} defAssignee={defAssignee} /></td>
                 </tr>
                 {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} />}
               </Fragment>
@@ -598,9 +600,12 @@ const ESTADO_ORDER = [
 // could sit under "Propios" with a badge reading "Consignación".
 
 export default function StockClient({
-  vehicles, tareas, clientes, movimientos = [], prestamos = [],
+  vehicles, tareas, clientes, movimientos = [], prestamos = [], defAssignee = DEFAULT_ASSIGNEE,
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos?: any[]; prestamos?: any[]
+  // A quién se le anota haber completado una tarea al tildar el check. Sale de
+  // config_negocio.default_assignee; sin la tabla, 'rena' como siempre.
+  defAssignee?: string
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
@@ -727,6 +732,7 @@ export default function StockClient({
               prestamos={prestamos}
               expanded={expanded}
               onToggle={toggle}
+              defAssignee={defAssignee}
             />
           </CardContent>
         </Card>
@@ -745,6 +751,7 @@ export default function StockClient({
                     prestamos={prestamos}
                     expanded={expanded}
                     onToggle={toggle}
+                    defAssignee={defAssignee}
                   />
                 </CardContent>
               </Card>

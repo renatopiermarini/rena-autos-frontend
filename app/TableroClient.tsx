@@ -11,14 +11,23 @@ import { localDayKey } from '@/lib/date'
 // El tablero: qué pinta el día. Nada de plata, nada de stock — eso vive en Finanzas
 // y en Stock. Acá sólo va lo que pasa y lo que hay que hacer.
 
+/** Una sección de tareas destacadas: un miembro asignable que no es el asignado
+ *  por defecto. Con el perfil de Renato hay exactamente una, la de Marshiot. */
+export type SeccionEquipo = {
+  clave: string
+  label: string
+  badgeCls: string   // clases del pill; salen de lib/equipo.ts
+  tareas: { id: number; titulo: string; urgent: boolean; fecha: string | null }[]
+}
+
 export default function TableroClient({
-  items, alertas, sinFecha, datosFaltantes = [], marshiot = [],
+  items, alertas, sinFecha, datosFaltantes = [], secciones = [],
 }: {
   items: BoardItem[]
   alertas: string[]
   sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[]
   datosFaltantes?: { label: string; faltan: string[] }[]
-  marshiot?: { id: number; titulo: string; urgent: boolean; fecha: string | null }[]
+  secciones?: SeccionEquipo[]
 }) {
   const router = useRouter()
   const [done, setDone] = useState<Record<string, boolean>>({})
@@ -60,15 +69,17 @@ export default function TableroClient({
         </p>
       </div>
 
-      {/* Tareas de Marshiot — arriba del todo, pedido del usuario 2026-08-13.
-          Violeta = su color de badge en /tareas. */}
-      {marshiot.length > 0 && (
-        <section className="rounded-lg border border-violet-300 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30 overflow-hidden">
+      {/* Tareas destacadas — arriba del todo, pedido del usuario 2026-08-13 (era
+          la sección fija de Marshiot). El acento violeta es el de la sección, no
+          el de la persona: identifica "tareas del equipo" y queda igual que
+          siempre. Quién es cada uno lo dice el pill, que sí usa su color. */}
+      {secciones.map(seccion => (
+        <section key={seccion.clave} className="rounded-lg border border-violet-300 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30 overflow-hidden">
           <header className="flex items-center justify-between px-3 py-2 border-b border-violet-200/60 dark:border-violet-900/60">
             <div className="flex items-center gap-2">
-              <span className="bg-violet-600 text-white rounded-full px-2 py-0.5 text-xs font-medium">Marshiot</span>
+              <span className={`${seccion.badgeCls} rounded-full px-2 py-0.5 text-xs font-medium`}>{seccion.label}</span>
               <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
-                {(() => { const n = marshiot.filter(t => !done[String(t.id)]).length; return n === 0 ? 'Todo listo' : `${n} tarea${n === 1 ? '' : 's'}` })()}
+                {(() => { const n = seccion.tareas.filter(t => !done[String(t.id)]).length; return n === 0 ? 'Todo listo' : `${n} tarea${n === 1 ? '' : 's'}` })()}
               </h2>
             </div>
             <Link href="/tareas" className="text-xs text-violet-700 dark:text-violet-300 hover:underline underline-offset-2">
@@ -76,7 +87,7 @@ export default function TableroClient({
             </Link>
           </header>
           <ul className="divide-y divide-violet-200/60 dark:divide-violet-900/60">
-            {marshiot.map(t => {
+            {seccion.tareas.map(t => {
               const isDone = done[String(t.id)] ?? false
               return (
                 <li key={t.id} className="flex items-center gap-2.5 px-3 py-2">
@@ -108,7 +119,7 @@ export default function TableroClient({
             })}
           </ul>
         </section>
-      )}
+      ))}
 
       {alertas.length > 0 && (
         <section className="rounded-lg border border-destructive/30 bg-destructive/5 overflow-hidden">

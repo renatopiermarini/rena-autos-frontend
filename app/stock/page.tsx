@@ -1,9 +1,14 @@
-import { getVehicles, getTareas, getClientes, getMovimientos, getPrestamos } from '@/lib/kapso'
+import {
+  getVehicles, getTareas, getClientes, getMovimientos, getPrestamos,
+  getEquipo, getConfigNegocio,
+} from '@/lib/kapso'
+import { equipoFromRows, resolveDefaultAssignee } from '@/lib/equipo'
 import StockClient from './StockClient'
 
 export default async function Stock() {
-  const [vehicles, tareas, clientes, movimientos, prestamos] = await Promise.all([
+  const [vehicles, tareas, clientes, movimientos, prestamos, equipoRows, config] = await Promise.all([
     getVehicles(), getTareas(), getClientes(), getMovimientos(), getPrestamos(),
+    getEquipo(), getConfigNegocio(),
   ])
   return (
     <StockClient
@@ -12,6 +17,7 @@ export default async function Stock() {
       clientes={clientes}
       movimientos={movimientos}
       prestamos={prestamos}
+      defAssignee={resolveDefaultAssignee(config, equipoFromRows(equipoRows))}
     />
   )
 }

@@ -106,6 +106,61 @@ export async function getCuentas(): Promise<any[]> {
   return activasOrdenadas(await getCuentasRows(), 'activa')
 }
 
+// ── Cuentas (las cajas de la contabilidad) ────────────────────────────────────
+//
+// Las cajas dejaron de ser tres literales: salen de la tabla `cuentas`. Sin
+// tabla —o con la tabla vacía— se cae a estas tres, que son EXACTAMENTE
+// BUSINESS.accounts del backend (customer_profile.py), así el dashboard de
+// Renato muestra y suma lo mismo de siempre.
+export const DEFAULT_CUENTAS: string[] = ['cash', 'nexo', 'fiwind']
+
+/**
+ * Claves de cuenta activas, en orden. Acepta tanto las filas crudas de la tabla
+ * (getCuentasRows) como las ya filtradas (getCuentas): activasOrdenadas es
+ * idempotente. Lista vacía ⇒ DEFAULT_CUENTAS.
+ */
+export function cuentaKeys(cuentasRows: any[]): string[] {
+  const claves = activasOrdenadas(cuentasRows, 'activa')
+    .map(c => (typeof c?.clave === 'string' ? c.clave.trim() : ''))
+    .filter(Boolean)
+  const unicas = Array.from(new Set(claves))
+  return unicas.length > 0 ? unicas : DEFAULT_CUENTAS
+}
+
+export type CuentaInfo = { clave: string; label: string }
+
+/**
+ * Cuentas para mostrar: clave (la que viaja a movimientos_contabilidad.cuenta)
+ * + label. Sin tabla el label ES la clave en minúscula, que es el texto literal
+ * que el dashboard ya mostraba ("cash · nexo · fiwind"). Donde la UI capitaliza
+ * (los `<option>` del filtro) lo hace en el render con capFirst, no acá.
+ */
+export function cuentasInfo(cuentasRows: any[]): CuentaInfo[] {
+  const activas = activasOrdenadas(cuentasRows, 'activa')
+  const porClave = new Map<string, CuentaInfo>()
+  for (const c of activas) {
+    const clave = typeof c?.clave === 'string' ? c.clave.trim() : ''
+    if (!clave || porClave.has(clave)) continue
+    const label = typeof c?.label === 'string' && c.label.trim() ? c.label.trim() : clave
+    porClave.set(clave, { clave, label })
+  }
+  if (porClave.size === 0) return DEFAULT_CUENTAS.map(clave => ({ clave, label: clave }))
+  return Array.from(porClave.values())
+}
+
+/** "cash" → "Cash"; "Caja Chica" queda igual. Para los labels de los selects. */
+export function capFirst(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+}
+
+/** Umbral de la alerta "caja baja". Sin config_negocio, los 500 de siempre. */
+export const UMBRAL_ALERTA_CAJA_DEFAULT = 500
+
+export function umbralAlertaCaja(cfg: Record<string, string> | undefined): number {
+  const raw = Number(cfg?.umbral_alerta_caja)
+  return Number.isFinite(raw) && raw >= 0 ? raw : UMBRAL_ALERTA_CAJA_DEFAULT
+}
+
 /** Equipo activo, en orden. `[]` si la tabla no existe todavía. */
 export async function getEquipo(): Promise<any[]> {
   return activasOrdenadas(await getEquipoRows(), 'activo')
@@ -441,8 +496,13 @@ export function computeLoanPosition(
 
 export type PatrimonioAuto = { vehicle_id: number | null; label: string; costo: number; valor: number }
 
+// Una caja por cada cuenta del perfil, más el total. Era {cash,nexo,fiwind,total}
+// fijo; ahora las claves salen de la tabla `cuentas`. `total` es una clave
+// RESERVADA: si alguien crea una cuenta llamada "total", el total gana.
+export type Cajas = Record<string, number> & { total: number }
+
 export type Patrimonio = {
-  cajas: { cash: number; nexo: number; fiwind: number; total: number }
+  cajas: Cajas
   stock: {
     total: number
     costo_invertido: number
@@ -477,18 +537,30 @@ export function computePatrimonio(
   prestamos: any[],
   clientes: any[],
   hoyIso?: string,
+  // Las cuentas del perfil (tabla `cuentas`). Va última y con default para que
+  // ningún llamador viejo cambie de comportamiento: con DEFAULT_CUENTAS el
+  // resultado es idéntico al de la versión hardcodeada (lo fija el snapshot de
+  // lib/kapso.test.ts). Lo que suma NO cambió — sólo la forma del contenedor.
+  cuentas: string[] = DEFAULT_CUENTAS,
 ): Patrimonio {
-  const cajas = { cash: 0, nexo: 0, fiwind: 0 }
+  const claves = Array.from(new Set(cuentas.filter(Boolean)))
+  const cajas: Record<string, number> = {}
+  for (const c of claves) cajas[c] = 0
   for (const m of movimientos) {
     if (!affectsBalance(m)) continue
-    const c = m.cuenta as keyof typeof cajas
+    const c = String(m.cuenta ?? '')
+    // Un movimiento de una cuenta que no está en el perfil no se cuenta —
+    // misma regla que antes, cuando el `in cajas` filtraba contra los 3 fijos.
     if (!(c in cajas)) continue
     cajas[c] += Number(m.monto ?? 0) * (m.tipo === 'ingreso' ? 1 : -1)
   }
-  const cajasOut = {
-    cash: round2(cajas.cash), nexo: round2(cajas.nexo), fiwind: round2(cajas.fiwind),
-    total: round2(cajas.cash + cajas.nexo + cajas.fiwind),
+  const cajasOut = { total: 0 } as Cajas
+  let totalCrudo = 0
+  for (const c of claves) {
+    cajasOut[c] = round2(cajas[c])
+    totalCrudo += cajas[c]   // el total redondea la suma CRUDA, no las partes
   }
+  cajasOut.total = round2(totalCrudo)
 
   const autos: PatrimonioAuto[] = []
   const enUso: PatrimonioAuto[] = []

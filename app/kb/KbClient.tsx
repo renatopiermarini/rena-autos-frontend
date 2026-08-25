@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecord, postRecord, deleteRecord } from '@/lib/kapso'
+import { DEFAULT_EQUIPO, DEFAULT_ASSIGNEE, placeholderAutores, type MiembroEquipo } from '@/lib/equipo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { KbBody } from '@/components/kb-body'
 import { Button } from '@/components/ui/button'
@@ -55,8 +56,8 @@ type FormState = {
   autor: string
 }
 
-function emptyForm(): FormState {
-  return { tipo: 'faq', titulo: '', resumen: '', contenido: '', tags: '', autor: 'rena' }
+function emptyForm(autor: string): FormState {
+  return { tipo: 'faq', titulo: '', resumen: '', contenido: '', tags: '', autor }
 }
 
 function entryToForm(e: Entry): FormState {
@@ -84,7 +85,14 @@ function cleanPayload(f: FormState) {
 const nativeSelectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
-export default function KbClient({ entries }: { entries: Entry[] }) {
+export default function KbClient({
+  entries, equipo = DEFAULT_EQUIPO, defAssignee = DEFAULT_ASSIGNEE,
+}: {
+  entries: Entry[]
+  // Quién firma una entrada nueva y qué nombres sugiere el placeholder: salen
+  // de la tabla `equipo` / config_negocio. Sin ellas, 'rena' y "rena / fran".
+  equipo?: MiembroEquipo[]; defAssignee?: string
+}) {
   const router = useRouter()
   const [selectedId, setSelectedId] = useState<number | null>(entries[0]?.id ?? null)
   const [query, setQuery] = useState('')
@@ -93,7 +101,7 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [form, setForm] = useState<FormState>(emptyForm())
+  const [form, setForm] = useState<FormState>(emptyForm(defAssignee))
 
   const selected = useMemo(
     () => entries.find(e => e.id === selectedId) ?? null,
@@ -123,7 +131,7 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
   }
 
   function startCreate() {
-    setForm(emptyForm())
+    setForm(emptyForm(defAssignee))
     setCreating(true)
     setFormOpen(true)
   }
@@ -320,7 +328,7 @@ export default function KbClient({ entries }: { entries: Entry[] }) {
                 <Input
                   value={form.autor}
                   onChange={e => setForm({ ...form, autor: e.target.value })}
-                  placeholder="rena / fran"
+                  placeholder={placeholderAutores(equipo)}
                 />
               </div>
             </div>

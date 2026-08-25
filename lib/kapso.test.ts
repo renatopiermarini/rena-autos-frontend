@@ -10,9 +10,119 @@ import { describe, expect, it } from 'vitest'
 import {
   affectsBalance, arDay, coerceId, tasaPct,
   computeVehicleFinancials, computeLoanPosition, computePatrimonio, computeLiquidacionConsignacion,
+  DEFAULT_CUENTAS, cuentaKeys, cuentasInfo, capFirst, umbralAlertaCaja,
 } from './kapso'
 
 const HOY = '2026-08-10'
+
+// ── Snapshot numérico del patrimonio con las cuentas por defecto ──────────────
+//
+// Escrito ANTES de volver dinámicas las cuentas (`cajas` pasó de
+// {cash,nexo,fiwind} a Record<string, number>): estos números son los que
+// devolvía la versión hardcodeada. Si el refactor mueve un centavo, este test se
+// pone rojo. Es el contrato de "sin tablas de config, el dashboard de Renato
+// calcula exactamente igual que siempre".
+const SNAPSHOT_MOVS = [
+  { cuenta: 'cash',   tipo: 'ingreso', monto: 20000.55, afecta_balance: 1 },
+  { cuenta: 'cash',   tipo: 'egreso',  monto: 1234.33,  afecta_balance: 1 },
+  { cuenta: 'cash',   tipo: 'egreso',  monto: 9999,     afecta_balance: 0 },   // no afecta saldo
+  { cuenta: 'nexo',   tipo: 'ingreso', monto: 5094.33,  saldo_post: 5094.33 }, // pre-DDL
+  { cuenta: 'nexo',   tipo: 'egreso',  monto: 0.01,     afecta_balance: 1 },
+  { cuenta: 'fiwind', tipo: 'ingreso', monto: 777.77,   afecta_balance: 1 },
+  { cuenta: 'inventada', tipo: 'ingreso', monto: 50000, afecta_balance: 1 },   // cuenta fuera del perfil: se ignora
+  { tipo: 'egreso',  categoria: 'client_expense',   monto: 3118, cliente_id: 9, vehicle_id: 7, cuenta: 'cash', afecta_balance: 0 },
+  { tipo: 'ingreso', categoria: 'client_repayment', monto: 400,  cliente_id: 9, cuenta: 'cash', afecta_balance: 0 },
+]
+const SNAPSHOT_VEHICLES = [
+  { id: 37, marca: 'Porsche', modelo: 'Cayenne', tipo_operacion: 'propio', estado: 'en_preparacion', precio_compra: 11000, precio_venta_objetivo: 22000 },
+  { id: 6, marca: 'BMW', modelo: '130i', tipo_operacion: 'propio', estado: 'en_preparacion', precio_compra: 16000, precio_venta_objetivo: 18000, uso_personal: 1 },
+  { id: 31, marca: 'Chevrolet', modelo: 'Cruze', tipo_operacion: 'consignacion', estado: 'publicado', precio_venta_objetivo: 14000 },
+]
+const SNAPSHOT_PRESTAMOS = [
+  { id: 1, acreedor_id: 2, monto_original: 10000, tasa_interes_anual: 15, modalidad: 'mensual', fecha_inicio: '2026-07-20', estado: 'activo' },
+]
+const SNAPSHOT_CLIENTES = [{ id: 2, nombre: 'Luciano' }, { id: 9, nombre: 'Nico' }]
+
+describe('computePatrimonio · snapshot con las cuentas por defecto', () => {
+  it('los números no se mueven al volver dinámicas las cuentas', () => {
+    const pat = computePatrimonio(SNAPSHOT_MOVS, SNAPSHOT_VEHICLES, SNAPSHOT_PRESTAMOS, SNAPSHOT_CLIENTES, HOY)
+    expect(pat.cajas.cash).toBe(18766.22)
+    expect(pat.cajas.nexo).toBe(5094.32)
+    expect(pat.cajas.fiwind).toBe(777.77)
+    expect(pat.cajas.total).toBe(24638.31)
+    expect(pat.stock.total).toBe(22000)
+    expect(pat.stock.costo_invertido).toBe(11000)
+    expect(pat.stock.ganancia_esperada).toBe(11000)
+    expect(pat.en_uso.total).toBe(18000)
+    expect(pat.por_cobrar.total).toBe(3418)
+    expect(pat.por_cobrar.comisiones_consignaciones.total).toBe(700)
+    expect(pat.deuda_total).toBe(10125)
+    expect(pat.interes_mensual_total).toBe(125)
+    expect(pat.capital_propio).toBe(57931.31)
+    expect(pat.capital_propio_disponible).toBe(39231.31)
+  })
+})
+
+describe('cuentaKeys / cuentasInfo', () => {
+  it('sin tabla (o tabla vacía) devuelve las tres de siempre', () => {
+    expect(cuentaKeys([])).toEqual(DEFAULT_CUENTAS)
+    expect(cuentaKeys([{ clave: 'cash', activa: 0 }])).toEqual(DEFAULT_CUENTAS)
+    expect(cuentasInfo([])).toEqual([
+      { clave: 'cash', label: 'cash' },
+      { clave: 'nexo', label: 'nexo' },
+      { clave: 'fiwind', label: 'fiwind' },
+    ])
+  })
+  it('con tabla: sólo activas, en orden, con su label', () => {
+    const rows = [
+      { id: 2, clave: 'mp', label: 'Mercado Pago', orden: 2, activa: 1 },
+      { id: 1, clave: 'caja_chica', label: 'Caja Chica', orden: 1, activa: 1 },
+      { id: 3, clave: 'vieja', label: 'Vieja', orden: 3, activa: 0 },
+    ]
+    expect(cuentaKeys(rows)).toEqual(['caja_chica', 'mp'])
+    expect(cuentasInfo(rows).map(c => c.label)).toEqual(['Caja Chica', 'Mercado Pago'])
+  })
+  it('sin label, el label es la clave (y capFirst la muestra capitalizada)', () => {
+    expect(cuentasInfo([{ id: 1, clave: 'usdt', activa: 1 }])).toEqual([{ clave: 'usdt', label: 'usdt' }])
+    expect(capFirst('usdt')).toBe('Usdt')
+    expect(capFirst('Caja Chica')).toBe('Caja Chica')
+    expect(capFirst('')).toBe('')
+  })
+})
+
+describe('umbralAlertaCaja', () => {
+  it('sin config, los 500 de siempre; con config, el número cargado', () => {
+    expect(umbralAlertaCaja({})).toBe(500)
+    expect(umbralAlertaCaja(undefined)).toBe(500)
+    expect(umbralAlertaCaja({ umbral_alerta_caja: 'no es un número' })).toBe(500)
+    expect(umbralAlertaCaja({ umbral_alerta_caja: '1200' })).toBe(1200)
+    expect(umbralAlertaCaja({ umbral_alerta_caja: '0' })).toBe(0)
+  })
+})
+
+describe('computePatrimonio · cuentas custom', () => {
+  it('suma las cuentas del perfil e ignora las que no están', () => {
+    const movs = [
+      { cuenta: 'caja_chica', tipo: 'ingreso', monto: 1000.5, afecta_balance: 1 },
+      { cuenta: 'caja_chica', tipo: 'egreso',  monto: 250.25, afecta_balance: 1 },
+      { cuenta: 'mp',         tipo: 'ingreso', monto: 3000,   afecta_balance: 1 },
+      { cuenta: 'cash',       tipo: 'ingreso', monto: 99999,  afecta_balance: 1 }, // fuera del perfil
+    ]
+    const pat = computePatrimonio(movs, [], [], [], HOY, ['caja_chica', 'mp'])
+    expect(pat.cajas.caja_chica).toBe(750.25)
+    expect(pat.cajas.mp).toBe(3000)
+    expect(pat.cajas.cash).toBeUndefined()
+    expect(pat.cajas.total).toBe(3750.25)
+    expect(pat.capital_propio).toBe(3750.25)
+  })
+  it('el default sigue siendo cash/nexo/fiwind', () => {
+    const movs = [{ cuenta: 'fiwind', tipo: 'ingreso', monto: 10, afecta_balance: 1 }]
+    const explicito = computePatrimonio(movs, [], [], [], HOY, DEFAULT_CUENTAS)
+    const implicito = computePatrimonio(movs, [], [], [], HOY)
+    expect(implicito.cajas).toEqual(explicito.cajas)
+    expect(implicito.cajas).toEqual({ cash: 0, nexo: 0, fiwind: 10, total: 10 })
+  })
+})
 
 describe('affectsBalance', () => {
   it('explicit column wins over saldo_post, both directions', () => {

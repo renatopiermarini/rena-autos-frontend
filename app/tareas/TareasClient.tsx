@@ -1,7 +1,11 @@
 'use client'
-import { useState } from 'react'
+import { createContext, useContext, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecordDetailed, postRecord } from '@/lib/kapso'
+import {
+  DEFAULT_EQUIPO, DEFAULT_ASSIGNEE, DEFAULT_DESTACADOS, ordenSecciones, miembroPorClave,
+  type MiembroEquipo,
+} from '@/lib/equipo'
 import { fmtDM as fmtFecha, fmtHora, localDayKey, parseAny } from '@/lib/date'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,32 +20,23 @@ import { toast } from 'sonner'
 import { CheckIcon, PlusIcon } from 'lucide-react'
 
 // ── Team config ───────────────────────────────────────────────────────────────
-// Single source of truth for who can be assigned a task. Adding a teammate
-// (e.g. Marshiot) is one line here — badge / avatar / section / dropdown all
-// read from this. Keys MUST match the lowercase strings stored in the DB's
-// `asignado` column (also the buckets the backend reactor uses).
-type Persona = 'rena' | 'fran' | 'marshiot'
+// Quién existe, cómo se lo pinta y en qué orden: sale de la tabla `equipo`
+// (lib/equipo.ts), que cae a DEFAULT_EQUIPO —los mismos rena/fran/marshiot que
+// estaban acá escritos a mano— cuando la tabla no existe. Las claves son las que
+// guarda la columna `asignado` de la DB.
+//
+// Viaja por contexto y no por prop: el equipo lo necesitan hojas hondas del
+// árbol (el badge de cada tarea, la inicial de cada chip del calendario) y
+// enhebrar la prop por cada nivel era todo ruido.
+type EquipoCtxValue = { equipo: MiembroEquipo[]; defAssignee: string; destacados: string[] }
 
-type PersonaConfig = {
-  label:  string   // shown in section headers and dropdown
-  badge:  string   // tailwind classes for the rounded "Rena"-style pill
-  avatar: string   // tailwind classes for the small initial circle in cards
-}
+const EquipoCtx = createContext<EquipoCtxValue>({
+  equipo: DEFAULT_EQUIPO,
+  defAssignee: DEFAULT_ASSIGNEE,
+  destacados: DEFAULT_DESTACADOS,
+})
 
-const TEAM: Record<Persona, PersonaConfig> = {
-  rena:     { label: 'Rena',     badge: 'bg-foreground text-background',  avatar: 'bg-foreground text-background' },
-  fran:     { label: 'Fran',     badge: 'bg-blue-600 text-white',         avatar: 'bg-blue-600 text-white' },
-  marshiot: { label: 'Marshiot', badge: 'bg-violet-600 text-white',       avatar: 'bg-violet-600 text-white' },
-}
-const TEAM_ORDER: Persona[] = ['rena', 'fran', 'marshiot']
-// Ordering for the "Por persona" sections only — Marshiot's tasks go arriba del
-// todo (user request 2026-08-13). TEAM_ORDER still rules the assign dropdown.
-const SECTION_ORDER: Persona[] = ['marshiot', 'rena', 'fran']
-
-function personaFor(asignado: string | null | undefined): Persona | null {
-  const a = (asignado ?? '').toLowerCase()
-  return (TEAM_ORDER as string[]).includes(a) ? (a as Persona) : null
-}
+const useEquipo = () => useContext(EquipoCtx)
 
 const PRIORIDAD_RANK: Record<string, number> = { urgente: 0, alta: 1, media: 2, baja: 3 }
 
@@ -94,21 +89,21 @@ function horaDeTarea(t: any): string {
 }
 
 function AsignadoBadge({ nombre, size = 'sm' }: { nombre: string; size?: 'sm' | 'xs' }) {
+  const { equipo } = useEquipo()
   if (!nombre) return null
-  const persona = personaFor(nombre)
-  const style = persona
-    ? TEAM[persona].badge
-    : 'bg-muted text-muted-foreground'
+  const persona = miembroPorClave(equipo, nombre)
+  const style = persona ? persona.badge : 'bg-muted text-muted-foreground'
   const pad = size === 'xs' ? 'px-1.5 py-0 text-[10px]' : 'px-2 py-0.5 text-xs'
   return (
     <span className={`${style} ${pad} rounded-full font-medium capitalize leading-tight whitespace-nowrap`}>
-      {persona ? TEAM[persona].label : nombre}
+      {persona ? persona.label : nombre}
     </span>
   )
 }
 
 function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) => string | null }) {
   const router = useRouter()
+  const { defAssignee } = useEquipo()
   const [completing, setCompleting] = useState(false)
 
   const auto   = autoNombre(t.vehicle_id)
@@ -121,7 +116,7 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
     setCompleting(true)
     const { ok, error } = await patchRecordDetailed('tareas', t.id, {
       estado: 'completada',
-      completado_por: 'rena',
+      completado_por: defAssignee,
       fecha_completado: new Date().toISOString(),
     })
     setCompleting(false)
@@ -177,10 +172,15 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
 type SortMode = 'prioridad' | 'vence' | 'auto' | 'persona'
 
 function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
-  // Grouped by person by default. Three people share this dashboard with no per-user
+  // Grouped by person by default. The team shares this dashboard with no per-user
   // login, so "whose is it" is the question being asked; priority is a filter you
   // reach for, not the shape of the list.
   const [sort, setSort] = useState<SortMode>('persona')
+  const { equipo, defAssignee, destacados } = useEquipo()
+  const seccionOrden = useMemo(
+    () => ordenSecciones(equipo, defAssignee, destacados),
+    [equipo, defAssignee, destacados],
+  )
 
   function autoNombre(id: number | null) {
     if (!id) return null
@@ -227,15 +227,15 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
     // Initialize a bucket for every teammate so the section ordering stays
     // stable even when a person has no open tasks.
     const grupos: Record<string, any[]> = { sin_asignar: [] }
-    for (const p of SECTION_ORDER) grupos[p] = []
+    for (const p of seccionOrden) grupos[p] = []
 
     for (const t of activas) {
-      const persona = personaFor(t.asignado)
-      if (persona) grupos[persona].push(t)
+      const persona = miembroPorClave(equipo, t.asignado)
+      if (persona) grupos[persona.clave].push(t)
       else grupos['sin_asignar'].push(t)
     }
 
-    const entries = SECTION_ORDER
+    const entries = seccionOrden
       .filter(k => grupos[k].length > 0)
       .map(k => [k, grupos[k]] as [string, any[]])
     if (grupos['sin_asignar'].length > 0) entries.push(['sin_asignar', grupos['sin_asignar']])
@@ -361,11 +361,10 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
 // ── Calendar ──────────────────────────────────────────────────────────────────
 
 function TaskCard({ t }: { t: any }) {
+  const { equipo } = useEquipo()
   const style   = PRIORIDAD_CARD[t.prioridad] ?? PRIORIDAD_CARD['baja']
-  const persona = personaFor(t.asignado)
-  const initStyle = persona
-    ? TEAM[persona].avatar
-    : 'bg-background/60 text-muted-foreground'
+  const persona = miembroPorClave(equipo, t.asignado)
+  const initStyle = persona ? persona.avatar : 'bg-background/60 text-muted-foreground'
 
   const hora = horaDeTarea(t)
   return (
@@ -418,16 +417,18 @@ function NuevaTareaDialog({
   open, onOpenChange, vehicles,
 }: { open: boolean; onOpenChange: (o: boolean) => void; vehicles: any[] }) {
   const router = useRouter()
+  const { equipo, defAssignee } = useEquipo()
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
+  const vacio = {
     titulo: '',
     descripcion: '',
     tipo: 'otro',
     prioridad: 'media',
-    asignado: 'rena',
+    asignado: defAssignee,
     vehicle_id: '',
     fecha_vencimiento: '',
-  })
+  }
+  const [form, setForm] = useState(vacio)
 
   function set(field: string, value: string) {
     setForm(f => ({ ...f, [field]: value }))
@@ -451,7 +452,7 @@ function NuevaTareaDialog({
     if (res.ok) {
       toast.success('Tarea creada')
       onOpenChange(false)
-      setForm({ titulo: '', descripcion: '', tipo: 'otro', prioridad: 'media', asignado: 'rena', vehicle_id: '', fecha_vencimiento: '' })
+      setForm(vacio)
       router.refresh()
     } else {
       toast.error('Error al guardar.')
@@ -492,8 +493,8 @@ function NuevaTareaDialog({
           <div className="space-y-1.5">
             <Label>Asignado</Label>
             <select className={nativeSelectCls} value={form.asignado} onChange={e => set('asignado', e.target.value)}>
-              {TEAM_ORDER.map(p => (
-                <option key={p} value={p}>{TEAM[p].label}</option>
+              {equipo.map(m => (
+                <option key={m.clave} value={m.clave}>{m.label}</option>
               ))}
               <option value="">Sin asignar</option>
             </select>
@@ -531,14 +532,27 @@ function NuevaTareaDialog({
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export default function TareasClient({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
+export default function TareasClient({
+  tareas, vehicles, equipo = DEFAULT_EQUIPO, defAssignee = DEFAULT_ASSIGNEE,
+  destacados = DEFAULT_DESTACADOS,
+}: {
+  tareas: any[]; vehicles: any[]
+  // Vienen del server (tabla `equipo` + config_negocio). Los defaults son la red
+  // de seguridad: si la page no los pasa, se ve lo de siempre.
+  equipo?: MiembroEquipo[]; defAssignee?: string; destacados?: string[]
+}) {
   const [view, setView] = useState<'lista' | 'calendario'>('lista')
   const [showNueva, setShowNueva] = useState(false)
+  const ctx = useMemo(
+    () => ({ equipo, defAssignee, destacados }),
+    [equipo, defAssignee, destacados],
+  )
 
   const pendientes  = tareas.filter(t => t.estado === 'pendiente' || t.estado === 'en_curso')
   const completadas = tareas.filter(t => t.estado === 'completada')
 
   return (
+    <EquipoCtx.Provider value={ctx}>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-3">
@@ -565,5 +579,6 @@ export default function TareasClient({ tareas, vehicles }: { tareas: any[]; vehi
         : <CalendarView tareas={tareas} vehicles={vehicles} />
       }
     </div>
+    </EquipoCtx.Provider>
   )
 }

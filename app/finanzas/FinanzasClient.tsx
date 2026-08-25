@@ -1,18 +1,29 @@
 'use client'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   computeVehicleFinancials, computeLoanPosition, computePatrimonio,
-  computeLiquidacionConsignacion, affectsBalance,
+  computeLiquidacionConsignacion, affectsBalance, postRecord, capFirst,
+  type CuentaInfo,
 } from '@/lib/kapso'
-import { fmtDMY as fmtFecha } from '@/lib/date'
+import {
+  validarMovimiento, CATEGORIAS_ELEGIBLES, CAT_VEHICLE_LINKED, CAT_LOAN_TIPO,
+  CAT_CLIENTE_LINKED,
+} from '@/lib/movimiento'
+import { fmtDMY as fmtFecha, todayKey } from '@/lib/date'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TooltipProvider, InfoTip } from '@/components/ui/tooltip'
-import { ChevronDownIcon, ChevronUpIcon, AlertTriangleIcon } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
+import { FField, FInput, FTextarea, nativeSelectCls as fieldSelectCls } from '@/components/form-fields'
+import { toast } from 'sonner'
+import { ChevronDownIcon, ChevronUpIcon, AlertTriangleIcon, PlusIcon } from 'lucide-react'
 
 type Tab = 'resumen' | 'patrimonio' | 'prestamos' | 'por_vehiculo' | 'movimientos'
 
@@ -71,11 +82,17 @@ function TipoAmount({ tipo, monto, size = 'sm' }: { tipo: string; monto: any; si
 }
 
 export default function FinanzasClient({
-  balances, movimientos, prestamos, clientes, vehicles,
+  balances, movimientos, prestamos, clientes, vehicles, cuentas, umbralCaja = 500,
 }: {
   balances: any[]; movimientos: any[]; prestamos: any[]; clientes: any[]; vehicles: any[]
+  // Las cajas del perfil (tabla `cuentas`) y el umbral de la alerta. Sin las
+  // tablas de config llegan cash/nexo/fiwind y 500: lo de siempre.
+  cuentas: CuentaInfo[]; umbralCaja?: number
 }) {
   const [tab, setTab] = useState<Tab>('resumen')
+  const [nuevoMov, setNuevoMov] = useState(false)
+  const [nuevoPrestamo, setNuevoPrestamo] = useState(false)
+  const cuentaKeys = useMemo(() => cuentas.map(c => c.clave), [cuentas])
 
   const clientesById = useMemo(
     () => Object.fromEntries(clientes.map((c: any) => [c.id, c])),
@@ -89,14 +106,39 @@ export default function FinanzasClient({
   // Una sola pasada deriva TODO el patrimonio del ledger (misma matemática que
   // el bot: analisis_db(patrimonio) del backend).
   const patrimonio = useMemo(
-    () => computePatrimonio(movimientos, vehicles, prestamos, clientes),
-    [movimientos, vehicles, prestamos, clientes],
+    () => computePatrimonio(movimientos, vehicles, prestamos, clientes, undefined, cuentaKeys),
+    [movimientos, vehicles, prestamos, clientes, cuentaKeys],
   )
 
   return (
     <TooltipProvider>
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Finanzas</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Finanzas</h1>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setNuevoMov(true)}>
+            <PlusIcon className="size-4" /> Nuevo movimiento
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setNuevoPrestamo(true)}>
+            <PlusIcon className="size-4" /> Nuevo préstamo
+          </Button>
+        </div>
+      </div>
+
+      <NuevoMovimientoDialog
+        open={nuevoMov}
+        onOpenChange={setNuevoMov}
+        cuentas={cuentas}
+        vehicles={vehicles}
+        clientes={clientes}
+        prestamos={prestamos}
+      />
+      <NuevoPrestamoDialog
+        open={nuevoPrestamo}
+        onOpenChange={setNuevoPrestamo}
+        clientes={clientes}
+        vehicles={vehicles}
+      />
 
       <Tabs value={tab} onValueChange={(v: any) => setTab(v as Tab)}>
         <TabsList variant="line">
@@ -111,10 +153,12 @@ export default function FinanzasClient({
             movimientos={movimientos}
             clientesById={clientesById}
             vehiclesById={vehiclesById}
+            cuentas={cuentas}
+            umbralCaja={umbralCaja}
           />
         </TabsContent>
         <TabsContent value="patrimonio" className="mt-4">
-          <PatrimonioTab patrimonio={patrimonio} clientesById={clientesById} />
+          <PatrimonioTab patrimonio={patrimonio} clientesById={clientesById} cuentas={cuentas} />
         </TabsContent>
         <TabsContent value="prestamos" className="mt-4">
           <PrestamosTab
@@ -137,6 +181,7 @@ export default function FinanzasClient({
           <MovimientosTab
             movimientos={movimientos}
             vehiclesById={vehiclesById}
+            cuentas={cuentas}
           />
         </TabsContent>
       </Tabs>
@@ -172,10 +217,11 @@ function StatCard({
 }
 
 function ResumenTab({
-  patrimonio, movimientos, clientesById, vehiclesById,
+  patrimonio, movimientos, clientesById, vehiclesById, cuentas, umbralCaja,
 }: {
   patrimonio: ReturnType<typeof computePatrimonio>;
   movimientos: any[]; clientesById: any; vehiclesById: any
+  cuentas: CuentaInfo[]; umbralCaja: number
 }) {
   const movRecientes = [...movimientos]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -183,7 +229,13 @@ function ResumenTab({
 
   const impagos = patrimonio.posiciones.filter(p => p.modalidad === 'mensual' && p.interes_mensual > 0 && p.interes_adeudado > 0)
   const alertas: string[] = []
-  if (patrimonio.cajas.cash < 500) alertas.push(`Cash bajo: ${fmt(patrimonio.cajas.cash)}`)
+  // La caja principal es la PRIMERA del perfil (la tabla `cuentas` manda el
+  // orden) y el umbral sale de config_negocio. Sin config: cash y 500.
+  const principal = cuentas[0]
+  const saldoPrincipal = principal ? (patrimonio.cajas[principal.clave] ?? 0) : 0
+  if (principal && saldoPrincipal < umbralCaja) {
+    alertas.push(`${capFirst(principal.label)} bajo: ${fmt(saldoPrincipal)}`)
+  }
   for (const p of patrimonio.posiciones.filter(p => p.vencido)) {
     alertas.push(`Préstamo #${p.id} marcado vencido — deuda ${fmt(p.deuda_total)}`)
   }
@@ -200,7 +252,7 @@ function ResumenTab({
           tone="hero"
           label="Cajas"
           value={fmt(pat.cajas.total)}
-          sub={`cash ${fmt(pat.cajas.cash)} · nexo ${fmt(pat.cajas.nexo)} · fiwind ${fmt(pat.cajas.fiwind)}`}
+          sub={cuentas.map(c => `${c.label} ${fmt(pat.cajas[c.clave] ?? 0)}`).join(' · ')}
           tip={<>Dinero físico y en cuentas, derivado como <b>suma de ingresos − egresos</b> del ledger (solo movimientos que afectan saldo). Incluye plata prestada: por eso solo, este número sobreestima lo que es tuyo.</>}
         />
         <StatCard
@@ -308,11 +360,13 @@ function SectionTable({
 }
 
 function PatrimonioTab({
-  patrimonio: pat, clientesById,
-}: { patrimonio: ReturnType<typeof computePatrimonio>; clientesById: any }) {
+  patrimonio: pat, clientesById, cuentas,
+}: {
+  patrimonio: ReturnType<typeof computePatrimonio>; clientesById: any; cuentas: CuentaInfo[]
+}) {
   const terms: { label: string; monto: number; sign: '+' | '−'; tip: React.ReactNode }[] = [
     { label: 'Cajas', monto: pat.cajas.total, sign: '+',
-      tip: <>Suma de ingresos − egresos del ledger por cuenta: cash {fmt(pat.cajas.cash)}, nexo {fmt(pat.cajas.nexo)}, fiwind {fmt(pat.cajas.fiwind)}.</> },
+      tip: <>Suma de ingresos − egresos del ledger por cuenta: {cuentas.map(c => `${c.label} ${fmt(pat.cajas[c.clave] ?? 0)}`).join(', ')}.</> },
     { label: 'Stock a la venta', monto: pat.stock.total, sign: '+',
       tip: <>Autos propios sin vender, a valor esperado de venta (precio objetivo de la ficha; sin dato, el costo invertido).</> },
     ...(pat.en_uso.total > 0 ? [{
@@ -885,8 +939,8 @@ function VehicleFinancialDetail({
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const
 
 function MovimientosTab({
-  movimientos, vehiclesById,
-}: { movimientos: any[]; vehiclesById: any }) {
+  movimientos, vehiclesById, cuentas,
+}: { movimientos: any[]; vehiclesById: any; cuentas: CuentaInfo[] }) {
   const [cats, setCats]         = useState<Set<string>>(new Set())
   const [cuenta, setCuenta]     = useState<string>('')
   const [tipo, setTipo]         = useState<string>('')
@@ -978,9 +1032,9 @@ function MovimientosTab({
             </select>
             <select className={nativeSelectCls} value={cuenta} onChange={e => { setCuenta(e.target.value); setPage(1) }}>
               <option value="">Cuenta: todas</option>
-              <option value="cash">Cash</option>
-              <option value="nexo">Nexo</option>
-              <option value="fiwind">Fiwind</option>
+              {cuentas.map(c => (
+                <option key={c.clave} value={c.clave}>{capFirst(c.label)}</option>
+              ))}
             </select>
             <select className={nativeSelectCls} value={vehId} onChange={e => { setVehId(e.target.value); setPage(1) }}>
               <option value="">Auto: todos</option>
@@ -1096,5 +1150,316 @@ function MovimientosTab({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+// ── Altas: movimiento y préstamo ──────────────────────────────────────────────
+//
+// Hasta ahora todo lo de plata se cargaba por WhatsApp. Estos dos diálogos son
+// la MISMA escritura desde el dashboard: el movimiento va por una route propia
+// (/api/finanzas/movimiento) que valida como el bot y setea afecta_balance=1; el
+// préstamo va por el proxy genérico, que ya tiene `prestamos` con sus enums.
+
+const TIPO_OPTIONS = [
+  { value: 'egreso', label: 'Egreso (sale plata)' },
+  { value: 'ingreso', label: 'Ingreso (entra plata)' },
+]
+
+function NuevoMovimientoDialog({
+  open, onOpenChange, cuentas, vehicles, clientes, prestamos,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void
+  cuentas: CuentaInfo[]; vehicles: any[]; clientes: any[]; prestamos: any[]
+}) {
+  const router = useRouter()
+  const [saving, setSaving] = useState(false)
+  const vacio = {
+    tipo: 'egreso', cuenta: cuentas[0]?.clave ?? '', monto: '',
+    categoria: 'general_expense', fecha: '', descripcion: '',
+    vehicle_id: '', cliente_id: '', prestamo_id: '',
+  }
+  const [form, setForm] = useState(vacio)
+  const set = (campo: keyof typeof vacio, valor: string) => setForm(f => ({ ...f, [campo]: valor }))
+
+  // Qué vínculos pide cada categoría: las mismas reglas que valida la route y
+  // que valida el bot. Los selects que la categoría no necesita no se muestran.
+  const pideAuto = CAT_VEHICLE_LINKED.has(form.categoria) || form.categoria === 'client_expense'
+  const pideCliente = CAT_CLIENTE_LINKED.has(form.categoria)
+  const pidePrestamo = form.categoria in CAT_LOAN_TIPO
+
+  function setCategoria(valor: string) {
+    setForm(f => ({
+      ...f,
+      categoria: valor,
+      // Una categoría de préstamo tiene dirección fija (un pago de interés es
+      // un egreso, siempre): se acomoda sola en vez de rebotar al guardar.
+      tipo: CAT_LOAN_TIPO[valor] ?? f.tipo,
+      // Y se limpian los vínculos que la categoría nueva ya no usa.
+      vehicle_id: CAT_VEHICLE_LINKED.has(valor) || valor === 'client_expense' ? f.vehicle_id : '',
+      cliente_id: CAT_CLIENTE_LINKED.has(valor) ? f.cliente_id : '',
+      prestamo_id: valor in CAT_LOAN_TIPO ? f.prestamo_id : '',
+    }))
+  }
+
+  async function guardar() {
+    const body: Record<string, any> = {
+      tipo: form.tipo,
+      cuenta: form.cuenta,
+      monto: form.monto === '' ? null : Number(form.monto),
+      categoria: form.categoria,
+      fecha: form.fecha || null,
+      descripcion: form.descripcion,
+      vehicle_id: form.vehicle_id || null,
+      cliente_id: form.cliente_id || null,
+      prestamo_id: form.prestamo_id || null,
+    }
+    // Pre-chequeo con la MISMA función pura que corre en el server: el error
+    // sale al toque y con el mismo texto, sin ida y vuelta.
+    const check = validarMovimiento(body, cuentas.map(c => c.clave), todayKey(), new Date().toISOString())
+    if (!check.ok) { toast.error(check.error); return }
+
+    setSaving(true)
+    const res = await fetch('/api/finanzas/movimiento', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json().catch(() => ({} as any))
+    setSaving(false)
+    if (res.ok) {
+      toast.success('Movimiento registrado')
+      onOpenChange(false)
+      setForm(vacio)
+      router.refresh()
+    } else {
+      toast.error(json.message || json.error || 'No se pudo registrar el movimiento')
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Nuevo movimiento</DialogTitle>
+          <DialogDescription>
+            Se guarda en el mismo ledger que escribe el bot y mueve el saldo de la cuenta.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FField label="Tipo">
+            <select value={form.tipo} onChange={e => set('tipo', e.target.value)} className={fieldSelectCls}>
+              {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </FField>
+          <FField label="Cuenta">
+            <select value={form.cuenta} onChange={e => set('cuenta', e.target.value)} className={fieldSelectCls}>
+              {cuentas.map(c => <option key={c.clave} value={c.clave}>{capFirst(c.label)}</option>)}
+            </select>
+          </FField>
+          <FField label="Categoría">
+            <select value={form.categoria} onChange={e => setCategoria(e.target.value)} className={fieldSelectCls}>
+              {CATEGORIAS_ELEGIBLES.map(c => (
+                <option key={c} value={c}>{CAT_LABEL[c] ?? c}</option>
+              ))}
+            </select>
+          </FField>
+          <FInput
+            label="Monto (USD)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.monto}
+            onChange={v => set('monto', v)}
+          />
+          {pideAuto && (
+            <FField label="Auto *" hint="La categoría lo exige: sin el auto, el costo del vehículo queda mal.">
+              <select value={form.vehicle_id} onChange={e => set('vehicle_id', e.target.value)} className={fieldSelectCls}>
+                <option value="">—</option>
+                {vehicles.map((v: any) => (
+                  <option key={v.id} value={v.id}>{autoLabel(v)}</option>
+                ))}
+              </select>
+            </FField>
+          )}
+          {pideCliente && (
+            <FField label="Cliente *" hint="Queda como cuenta corriente del cliente.">
+              <select value={form.cliente_id} onChange={e => set('cliente_id', e.target.value)} className={fieldSelectCls}>
+                <option value="">—</option>
+                {clientes.map((c: any) => (
+                  <option key={c.id} value={c.id}>{c.nombre}</option>
+                ))}
+              </select>
+            </FField>
+          )}
+          {pidePrestamo && (
+            <FField label="Préstamo *" hint="Los pagos bajan solos el capital vivo y el interés adeudado.">
+              <select value={form.prestamo_id} onChange={e => set('prestamo_id', e.target.value)} className={fieldSelectCls}>
+                <option value="">—</option>
+                {prestamos
+                  .filter((p: any) => p.estado !== 'pagado')
+                  .map((p: any) => (
+                    <option key={p.id} value={p.id}>
+                      {clientes.find((c: any) => c.id === p.acreedor_id)?.nombre ?? `Préstamo #${p.id}`} · {fmt(p.monto_original)}
+                    </option>
+                  ))}
+              </select>
+            </FField>
+          )}
+          <FInput
+            label="Fecha"
+            type="date"
+            value={form.fecha}
+            onChange={v => set('fecha', v)}
+            hint="Vacío = hoy."
+          />
+          <FTextarea
+            label="Descripción"
+            className="md:col-span-2"
+            rows={2}
+            value={form.descripcion}
+            onChange={v => set('descripcion', v)}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+const MODALIDAD_OPTIONS = [
+  { value: 'mensual', label: 'Mensual (cuota fija el 1 de cada mes)' },
+  { value: 'al_final', label: 'Al final (devenga por día, se salda con el capital)' },
+]
+
+function NuevoPrestamoDialog({
+  open, onOpenChange, clientes, vehicles,
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void; clientes: any[]; vehicles: any[]
+}) {
+  const router = useRouter()
+  const [saving, setSaving] = useState(false)
+  // fecha_inicio arranca vacía y se completa con hoy AL GUARDAR: todayKey() usa
+  // la hora local, y en el prerender del server (UTC) daría el día de mañana
+  // después de las 21 AR.
+  const vacio = {
+    acreedor_id: '', monto_original: '', tasa_interes_anual: '',
+    modalidad: 'mensual', fecha_inicio: '', vehicle_id: '', notas: '',
+  }
+  const [form, setForm] = useState(vacio)
+  const set = (campo: keyof typeof vacio, valor: string) => setForm(f => ({ ...f, [campo]: valor }))
+
+  // Los acreedores son los clientes marcados como tales. Si nadie está marcado
+  // (o la marca vive sólo en `tipo`), se ofrece la lista completa antes que un
+  // desplegable vacío.
+  const acreedores = clientes.filter((c: any) => c.es_acreedor || c.tipo === 'acreedor')
+  const opcionesAcreedor = acreedores.length > 0 ? acreedores : clientes
+
+  async function guardar() {
+    const acreedor_id = Number(form.acreedor_id)
+    if (!Number.isInteger(acreedor_id) || acreedor_id <= 0) { toast.error('Elegí el acreedor.'); return }
+    const monto = Number(form.monto_original)
+    if (!Number.isFinite(monto) || monto <= 0) { toast.error('El monto debe ser mayor que 0.'); return }
+    const tasa = form.tasa_interes_anual === '' ? 0 : Number(form.tasa_interes_anual)
+    if (!Number.isFinite(tasa) || tasa < 0) { toast.error('La tasa debe ser un número.'); return }
+
+    setSaving(true)
+    const payload: Record<string, any> = {
+      acreedor_id,
+      monto_original: monto,
+      // La tasa canónica es en PORCENTAJE (15 = 15% anual), igual que en el bot.
+      tasa_interes_anual: tasa,
+      modalidad: form.modalidad,
+      estado: 'activo',
+      fecha_inicio: form.fecha_inicio || todayKey(),
+    }
+    if (form.vehicle_id) payload.vehicle_id = Number(form.vehicle_id)
+    if (form.notas.trim()) payload.notas = form.notas.trim()
+    // `monto_pagado` NO se manda: es un cache derivado del ledger. Los pagos se
+    // registran como movimientos loan_repayment / loan_interest.
+    const res = await postRecord('prestamos', payload)
+    setSaving(false)
+    if (res.ok) {
+      toast.success('Préstamo registrado')
+      onOpenChange(false)
+      setForm(vacio)
+      router.refresh()
+    } else {
+      toast.error(res.error || 'No se pudo registrar el préstamo')
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Nuevo préstamo</DialogTitle>
+          <DialogDescription>
+            Sólo el préstamo. La plata que entra se registra aparte, como movimiento
+            &quot;Préstamo recibido&quot; vinculado a él.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FField label="Acreedor">
+            <select value={form.acreedor_id} onChange={e => set('acreedor_id', e.target.value)} className={fieldSelectCls}>
+              <option value="">—</option>
+              {opcionesAcreedor.map((c: any) => (
+                <option key={c.id} value={c.id}>{c.nombre}</option>
+              ))}
+            </select>
+          </FField>
+          <FInput
+            label="Monto (USD)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.monto_original}
+            onChange={v => set('monto_original', v)}
+          />
+          <FInput
+            label="Tasa anual (%)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={form.tasa_interes_anual}
+            onChange={v => set('tasa_interes_anual', v)}
+            hint="En porcentaje: 15 = 15% anual, nunca 0,15."
+          />
+          <FField label="Modalidad">
+            <select value={form.modalidad} onChange={e => set('modalidad', e.target.value)} className={fieldSelectCls}>
+              {MODALIDAD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </FField>
+          <FInput
+            label="Fecha de inicio"
+            type="date"
+            value={form.fecha_inicio}
+            onChange={v => set('fecha_inicio', v)}
+            hint="La fecha real del desembolso: de ahí arranca el interés. Vacío = hoy."
+          />
+          <FField label="Auto que financia (opcional)">
+            <select value={form.vehicle_id} onChange={e => set('vehicle_id', e.target.value)} className={fieldSelectCls}>
+              <option value="">Capital general</option>
+              {vehicles.map((v: any) => (
+                <option key={v.id} value={v.id}>{autoLabel(v)}</option>
+              ))}
+            </select>
+          </FField>
+          <FTextarea
+            label="Notas"
+            className="md:col-span-2"
+            rows={2}
+            value={form.notas}
+            onChange={v => set('notas', v)}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

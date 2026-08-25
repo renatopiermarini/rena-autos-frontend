@@ -49,6 +49,7 @@ const GRUPOS: { titulo: string; descripcion: string; campos: Campo[] }[] = [
       { clave: 'ciudad_contratos', label: 'Ciudad de los contratos' },
       { clave: 'comision_consignacion_pct', label: 'Comisión consignación (%)', kind: 'number', hint: 'Porcentaje, no fracción: 5 = 5%.' },
       { clave: 'umbral_alerta_caja', label: 'Umbral alerta de caja', kind: 'number', hint: 'Por debajo de este saldo salta la alerta en el tablero.' },
+      { clave: 'tablero_destacados', label: 'Destacados del tablero', hint: 'Claves del equipo con sección propia arriba del tablero, separadas por coma.' },
       {
         clave: 'stock_keywords', label: 'Palabras clave de stock', kind: 'lines',
         className: 'md:col-span-2',
