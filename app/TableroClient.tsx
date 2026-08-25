@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { CircleAlertIcon } from 'lucide-react'
+import { CheckIcon, CircleAlertIcon } from 'lucide-react'
 import { patchRecordDetailed } from '@/lib/kapso'
 import { MonthBoard, type BoardItem } from '@/components/calendar/MonthBoard'
 import { localDayKey } from '@/lib/date'
@@ -12,12 +12,13 @@ import { localDayKey } from '@/lib/date'
 // y en Stock. Acá sólo va lo que pasa y lo que hay que hacer.
 
 export default function TableroClient({
-  items, alertas, sinFecha, datosFaltantes = [],
+  items, alertas, sinFecha, datosFaltantes = [], marshiot = [],
 }: {
   items: BoardItem[]
   alertas: string[]
   sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[]
   datosFaltantes?: { label: string; faltan: string[] }[]
+  marshiot?: { id: number; titulo: string; urgent: boolean; fecha: string | null }[]
 }) {
   const router = useRouter()
   const [done, setDone] = useState<Record<string, boolean>>({})
@@ -58,6 +59,56 @@ export default function TableroClient({
           {fecha} · {hoyCount === 0 ? 'nada pendiente hoy' : `${hoyCount} pendiente${hoyCount === 1 ? '' : 's'} hoy`}
         </p>
       </div>
+
+      {/* Tareas de Marshiot — arriba del todo, pedido del usuario 2026-08-13.
+          Violeta = su color de badge en /tareas. */}
+      {marshiot.length > 0 && (
+        <section className="rounded-lg border border-violet-300 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30 overflow-hidden">
+          <header className="flex items-center justify-between px-3 py-2 border-b border-violet-200/60 dark:border-violet-900/60">
+            <div className="flex items-center gap-2">
+              <span className="bg-violet-600 text-white rounded-full px-2 py-0.5 text-xs font-medium">Marshiot</span>
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                {(() => { const n = marshiot.filter(t => !done[String(t.id)]).length; return n === 0 ? 'Todo listo' : `${n} tarea${n === 1 ? '' : 's'}` })()}
+              </h2>
+            </div>
+            <Link href="/tareas" className="text-xs text-violet-700 dark:text-violet-300 hover:underline underline-offset-2">
+              Ver tareas →
+            </Link>
+          </header>
+          <ul className="divide-y divide-violet-200/60 dark:divide-violet-900/60">
+            {marshiot.map(t => {
+              const isDone = done[String(t.id)] ?? false
+              return (
+                <li key={t.id} className="flex items-center gap-2.5 px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleTarea(t.id, !isDone)}
+                    disabled={busy[String(t.id)]}
+                    title={isDone ? 'Reabrir tarea' : 'Marcar como completada'}
+                    aria-label={isDone ? 'Reabrir tarea' : 'Marcar como completada'}
+                    className={`size-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
+                      isDone
+                        ? 'bg-violet-600 border-violet-600 text-white'
+                        : 'border-violet-400 dark:border-violet-700 hover:border-violet-600 text-transparent'
+                    }`}
+                  >
+                    <CheckIcon className="size-3" aria-hidden />
+                  </button>
+                  {t.urgent && !isDone && <span className="size-1.5 rounded-full bg-destructive shrink-0" aria-hidden />}
+                  <span className={`text-sm truncate flex-1 ${isDone ? 'text-muted-foreground line-through' : ''}`}>
+                    {t.titulo}
+                  </span>
+                  {t.fecha && (
+                    <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+                      {Number(t.fecha.slice(8, 10))}/{Number(t.fecha.slice(5, 7))}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      )}
 
       {alertas.length > 0 && (
         <section className="rounded-lg border border-destructive/30 bg-destructive/5 overflow-hidden">

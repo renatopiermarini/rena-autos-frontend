@@ -34,6 +34,9 @@ const TEAM: Record<Persona, PersonaConfig> = {
   marshiot: { label: 'Marshiot', badge: 'bg-violet-600 text-white',       avatar: 'bg-violet-600 text-white' },
 }
 const TEAM_ORDER: Persona[] = ['rena', 'fran', 'marshiot']
+// Ordering for the "Por persona" sections only — Marshiot's tasks go arriba del
+// todo (user request 2026-08-13). TEAM_ORDER still rules the assign dropdown.
+const SECTION_ORDER: Persona[] = ['marshiot', 'rena', 'fran']
 
 function personaFor(asignado: string | null | undefined): Persona | null {
   const a = (asignado ?? '').toLowerCase()
@@ -224,7 +227,7 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
     // Initialize a bucket for every teammate so the section ordering stays
     // stable even when a person has no open tasks.
     const grupos: Record<string, any[]> = { sin_asignar: [] }
-    for (const p of TEAM_ORDER) grupos[p] = []
+    for (const p of SECTION_ORDER) grupos[p] = []
 
     for (const t of activas) {
       const persona = personaFor(t.asignado)
@@ -232,7 +235,7 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
       else grupos['sin_asignar'].push(t)
     }
 
-    const entries = TEAM_ORDER
+    const entries = SECTION_ORDER
       .filter(k => grupos[k].length > 0)
       .map(k => [k, grupos[k]] as [string, any[]])
     if (grupos['sin_asignar'].length > 0) entries.push(['sin_asignar', grupos['sin_asignar']])

@@ -81,6 +81,11 @@ export default async function Tablero() {
     }
   }
 
+  // Las tareas de Marshiot van en su propia sección arriba del tablero; las que
+  // tienen fecha igual quedan en el calendario, pero no repetidas en "Sin fecha".
+  const esMarshiot = (t: any) => String(t?.asignado ?? '').toLowerCase() === 'marshiot'
+  const marshiot: { id: number; titulo: string; urgent: boolean; fecha: string | null }[] = []
+
   const sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[] = []
   for (const t of tareas) {
     if (t.estado === 'completada') continue
@@ -88,9 +93,15 @@ export default async function Tablero() {
     const urgent = t.prioridad === 'alta'
     // `fecha_vencimiento` is a DATE column. Slice it rather than parsing, so a
     // date-only value never gets pulled a day backwards through UTC.
-    const raw = t.fecha_vencimiento ? String(t.fecha_vencimiento).slice(0, 10) : null
-    if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      sinFecha.push({ id: t.id, titulo: t.titulo || 'Sin título', asignado: t.asignado, urgent })
+    const rawFecha = t.fecha_vencimiento ? String(t.fecha_vencimiento).slice(0, 10) : null
+    const raw = rawFecha && /^\d{4}-\d{2}-\d{2}$/.test(rawFecha) ? rawFecha : null
+    if (esMarshiot(t)) {
+      marshiot.push({ id: t.id, titulo: t.titulo || 'Sin título', urgent, fecha: raw })
+    }
+    if (!raw) {
+      if (!esMarshiot(t)) {
+        sinFecha.push({ id: t.id, titulo: t.titulo || 'Sin título', asignado: t.asignado, urgent })
+      }
       continue
     }
     items.push({
@@ -105,6 +116,9 @@ export default async function Tablero() {
     })
   }
   sinFecha.sort((a, b) => Number(b.urgent) - Number(a.urgent))
+  // Urgentes primero, después por fecha; las sin fecha al final.
+  marshiot.sort((a, b) =>
+    Number(b.urgent) - Number(a.urgent) || (a.fecha ?? '9999').localeCompare(b.fecha ?? '9999'))
 
   const hoy = new Date()
   const alertas: string[] = []
@@ -133,5 +147,5 @@ export default async function Tablero() {
     }))
     .filter((v: { faltan: string[] }) => v.faltan.length > 0)
 
-  return <TableroClient items={items} alertas={alertas} sinFecha={sinFecha} datosFaltantes={datosFaltantes} />
+  return <TableroClient items={items} alertas={alertas} sinFecha={sinFecha} datosFaltantes={datosFaltantes} marshiot={marshiot} />
 }
