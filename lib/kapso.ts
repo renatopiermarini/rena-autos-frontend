@@ -494,7 +494,8 @@ export function computeLoanPosition(
   }
 }
 
-export type PatrimonioAuto = { vehicle_id: number | null; label: string; costo: number; valor: number }
+export type PatrimonioAuto = { vehicle_id: number | null; label: string; costo: number; valor: number; sena_cobrada: number }
+export type ParteSocio = { vehicle_id: number | null; label: string; socio_cliente_id: number | null; socio: string | null; pct: number; margen: number; parte: number }
 
 // Una caja por cada cuenta del perfil, más el total. Era {cash,nexo,fiwind,total}
 // fijo; ahora las claves salen de la tabla `cuentas`. `total` es una clave
@@ -519,6 +520,7 @@ export type Patrimonio = {
     }
   }
   deuda_total: number
+  parte_socios: { total: number; autos: ParteSocio[] }
   interes_mensual_total: number
   capital_propio: number
   capital_propio_disponible: number
@@ -562,19 +564,52 @@ export function computePatrimonio(
   }
   cajasOut.total = round2(totalCrudo)
 
+  // Señas ya cobradas por auto: son parte del precio que YA está en la caja, así
+  // que el auto vale en el stock lo que FALTA cobrar. Sin esto los mismos pesos
+  // se cuentan dos veces (en cajas y en stock).
+  const senasPorAuto = new Map<number, number>()
+  for (const m of movimientos) {
+    if (m.categoria !== 'down_payment') continue
+    const vid = coerceId(m.vehicle_id)
+    if (vid === null) continue
+    senasPorAuto.set(vid, (senasPorAuto.get(vid) ?? 0) + Number(m.monto ?? 0))
+  }
+
   const autos: PatrimonioAuto[] = []
   const enUso: PatrimonioAuto[] = []
+  const socios: ParteSocio[] = []
   for (const v of vehicles) {
     if (v.tipo_operacion !== 'propio' || v.estado === 'vendido') continue
     const costo = computeVehicleFinancials(v.id, vehicles, movimientos, prestamos).costo_total
-    const valor = Number(v.precio_venta_objetivo ?? 0) || Number(v.precio_publicado ?? 0) || costo
-    if (costo <= 0 && valor <= 0) continue
+    const precio = Number(v.precio_venta_objetivo ?? 0) || Number(v.precio_publicado ?? 0) || costo
+    if (costo <= 0 && precio <= 0) continue
+    const vid = coerceId(v.id)
     const label = `${v.marca ?? ''} ${v.modelo ?? ''}`.trim() + (v.dominio ? ` (${v.dominio})` : '')
-    const fila = { vehicle_id: coerceId(v.id), label, costo, valor: round2(valor) }
+    const sena = round2(Math.min(vid === null ? 0 : (senasPorAuto.get(vid) ?? 0), precio))
+    const valor = round2(precio - sena)
+    // Parte del socio: su % del margen (venta esperada − costo). Su capital ya
+    // vive como préstamo; esto es sólo la ganancia que no es nuestra. Sin la
+    // columna cargada (o pre-DDL) el pct es 0 y no resta.
+    const pct = Number(v.socio_pct ?? 0)
+    if (pct > 0) {
+      const margen = precio - costo
+      const parte = round2(Math.max(0, margen) * pct / 100)
+      if (parte > 0) {
+        const socioId = coerceId(v.socio_cliente_id)
+        socios.push({
+          vehicle_id: vid, label, socio_cliente_id: socioId,
+          socio: clientes.find(c => coerceId(c.id) === socioId)?.nombre ?? null,
+          pct: round2(pct), margen: round2(margen), parte,
+        })
+      }
+    }
+    const fila = { vehicle_id: vid, label, costo, valor, sena_cobrada: sena }
     // uso_personal=1: el auto que usamos — patrimonio, pero NO a la venta.
     if (Number(v.uso_personal ?? 0)) enUso.push(fila)
     else autos.push(fila)
   }
+  socios.sort((a, b) => b.parte - a.parte)
+  const sociosTotal = round2(socios.reduce((s, a) => s + a.parte, 0))
   autos.sort((a, b) => b.valor - a.valor)
   const stockTotal = round2(autos.reduce((s, a) => s + a.valor, 0))
   const stockCosto = round2(autos.reduce((s, a) => s + a.costo, 0))
@@ -626,7 +661,9 @@ export function computePatrimonio(
     .filter(p => p.modalidad === 'mensual')
     .reduce((s, p) => s + p.interes_mensual, 0))
 
-  const capitalPropio = round2(cajasOut.total + stockTotal + enUsoTotal + porCobrarTotal - deudaTotal)
+  // La parte del socio NO es nuestra: su capital ya está en deudaTotal como
+  // préstamo, pero su ganancia vivía adentro del stock.
+  const capitalPropio = round2(cajasOut.total + stockTotal + enUsoTotal + porCobrarTotal - deudaTotal - sociosTotal)
   return {
     cajas: cajasOut,
     stock: {
@@ -642,6 +679,7 @@ export function computePatrimonio(
       comisiones_consignaciones: { total: comisionesTotal, autos: comisionesAutos },
     },
     deuda_total: deudaTotal,
+    parte_socios: { total: sociosTotal, autos: socios },
     interes_mensual_total: interesMensualTotal,
     capital_propio: capitalPropio,
     // Disponible = sin el auto en uso NI las comisiones esperadas: suman al

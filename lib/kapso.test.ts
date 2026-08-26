@@ -325,3 +325,40 @@ describe('computePatrimonio · comisiones esperadas de consignaciones', () => {
     expect(pat.capital_propio).toBe(3700)
   })
 })
+
+describe('computePatrimonio · socios y señas', () => {
+  it('descuenta la seña ya cobrada del valor del auto', () => {
+    // La seña está en la caja: el auto vale en el stock lo que FALTA cobrar.
+    const pat = computePatrimonio(
+      [{ cuenta: 'cash', tipo: 'ingreso', monto: 300, saldo_post: 300, categoria: 'down_payment', vehicle_id: 1 }],
+      [{ id: 1, tipo_operacion: 'propio', estado: 'reservado', marca: 'VW', modelo: 'Taos', precio_venta_objetivo: 22000 }],
+      [], [],
+    )
+    expect(pat.cajas.total).toBe(300)
+    expect(pat.stock.total).toBe(21700)
+    expect(pat.stock.autos[0].sena_cobrada).toBe(300)
+    expect(pat.capital_propio).toBe(22000)   // el precio del auto, no precio + seña
+  })
+
+  it('resta la parte del margen que le toca al socio', () => {
+    const pat = computePatrimonio(
+      [{ cuenta: 'cash', tipo: 'egreso', monto: 20000, saldo_post: 0, categoria: 'vehicle_purchase', vehicle_id: 1 }],
+      [{ id: 1, tipo_operacion: 'propio', estado: 'publicado', marca: 'VW', modelo: 'Amarok',
+         precio_venta_objetivo: 30000, socio_cliente_id: 7, socio_pct: 50 }],
+      [], [{ id: 7, nombre: 'Tincho' }],
+    )
+    expect(pat.stock.total).toBe(30000)
+    expect(pat.parte_socios.total).toBe(5000)   // margen 10000, mitad del socio
+    expect(pat.parte_socios.autos[0].socio).toBe('Tincho')
+    expect(pat.capital_propio).toBe(5000)
+  })
+
+  it('sin socio cargado no cambia nada (pre-DDL la columna no existe)', () => {
+    const pat = computePatrimonio(
+      [], [{ id: 1, tipo_operacion: 'propio', estado: 'publicado', marca: 'VW', modelo: 'Amarok', precio_venta_objetivo: 30000 }],
+      [], [],
+    )
+    expect(pat.parte_socios).toEqual({ total: 0, autos: [] })
+    expect(pat.capital_propio).toBe(30000)
+  })
+})

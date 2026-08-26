@@ -369,6 +369,10 @@ function PatrimonioTab({
       tip: <>Plata nuestra en manos de clientes: gastos adelantados por su cuenta menos lo devuelto.</> },
     { label: 'Deudas', monto: pat.deuda_total, sign: '−',
       tip: <>Capital vivo + interés devengado impago de cada préstamo activo.</> },
+    ...(pat.parte_socios.total > 0 ? [{
+      label: 'Parte de socios', monto: pat.parte_socios.total, sign: '−' as const,
+      tip: <>Autos comprados a medias: el <b>capital</b> del socio ya está arriba en Deudas (entró como préstamo), pero la <b>mitad de la ganancia</b> tampoco es nuestra y antes se contaba como propia.<br /><br />{pat.parte_socios.autos.map(a => `${a.label}: ${a.pct}% de ${fmt(a.margen)} = ${fmt(a.parte)}${a.socio ? ` (${a.socio})` : ''}`).join(' · ')}</>,
+    }] : []),
   ]
 
   return (
