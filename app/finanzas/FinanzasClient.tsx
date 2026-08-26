@@ -262,14 +262,6 @@ function ResumenTab({
           tip={<>La plata que es realmente tuya: <b>cajas {fmt(pat.cajas.total)}</b> + <b>stock {fmt(pat.stock.total)}</b>{pat.en_uso.total > 0 && <> + <b>auto en uso {fmt(pat.en_uso.total)}</b></>} + <b>por cobrar {fmt(pat.por_cobrar.total)}</b> − <b>deudas {fmt(pat.deuda_total)}</b>. Las cajas mezclan plata propia y prestada — este número es el que las separa. Todo sale del ledger de movimientos, no hay ningún saldo cargado a mano.</>}
         />
         <StatCard
-          label="Disponible"
-          value={fmt(pat.capital_propio_disponible)}
-          sub={pat.en_uso.autos.length > 0
-            ? `sin el auto en uso (${pat.en_uso.autos.map(a => a.label.split(' (')[0]).join(', ')}) ni lo esperado`
-            : 'sin contar la plata esperada'}
-          tip={<>Capital propio <b>sin el auto en uso</b> ({fmt(pat.en_uso.total)}, porque en lo posible no se vende) <b>ni las comisiones esperadas</b> ({fmt(pat.por_cobrar.comisiones_consignaciones.total)}, porque recién existen cuando la consignación se vende): {fmt(pat.capital_propio)} − {fmt(pat.en_uso.total)} − {fmt(pat.por_cobrar.comisiones_consignaciones.total)}. Es la plata con la que realmente contás hoy para operar — la respuesta a &quot;¿cuánto hay sin vender el 130?&quot;.</>}
-        />
-        <StatCard
           label="Stock a la venta"
           value={fmt(pat.stock.total)}
           sub={<>invertido {fmt(pat.stock.costo_invertido)} · <span className={pat.stock.ganancia_esperada >= 0 ? 'text-success' : 'text-destructive'}>ganancia esp. {pat.stock.ganancia_esperada >= 0 ? '+' : ''}{fmt(pat.stock.ganancia_esperada)}</span>{pat.en_uso.autos.length > 0 && <> · en uso: {pat.en_uso.autos.map(a => `${a.label} ${fmt(a.valor)}`).join(', ')}</>}</>}
