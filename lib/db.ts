@@ -46,6 +46,7 @@
  */
 import postgres from 'postgres'
 import type { Sql } from 'postgres'
+import { unstable_noStore as noStore } from 'next/cache'
 
 const PAGE_SIZE = 200 // Kapso topea cada request en ~200; más que eso se pagina.
 const MAX_PAGES = 50  // guarda anti-loop; llegar al tope es una ALERTA, no un corte silencioso.
@@ -414,7 +415,14 @@ export async function dbGet(
   params: Record<string, any> = {},
   opts: GetOptions = {},
 ): Promise<any[]> {
-  if (usingPostgres()) return pgGet(table, params)
+  if (usingPostgres()) {
+    // Sin esto, las pages que leen por acá no hacen ningún fetch y Next las
+    // PRERENDERIZA al build: el dashboard quedaba congelado con los datos del
+    // momento del deploy (visto en vivo con TM Motors, 2026-08-26). noStore()
+    // marca la request como dinámica — en modo pg cada carga lee la DB fresca.
+    noStore()
+    return pgGet(table, params)
+  }
   const init: RequestInit =
     opts.revalidate === undefined
       ? { cache: 'no-store' }
