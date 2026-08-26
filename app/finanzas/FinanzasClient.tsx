@@ -259,13 +259,13 @@ function ResumenTab({
           label="Capital propio"
           value={fmt(pat.capital_propio)}
           sub="lo que queda si hoy cobrás y pagás todo"
-          tip={<>La plata que es realmente tuya: <b>cajas {fmt(pat.cajas.total)}</b> + <b>stock {fmt(pat.stock.total)}</b>{pat.en_uso.total > 0 && <> + <b>auto en uso {fmt(pat.en_uso.total)}</b></>} + <b>por cobrar {fmt(pat.por_cobrar.total)}</b> − <b>deudas {fmt(pat.deuda_total)}</b>. Las cajas mezclan plata propia y prestada — este número es el que las separa. Todo sale del ledger de movimientos, no hay ningún saldo cargado a mano.</>}
+          tip={<>La plata que es realmente tuya: <b>cajas {fmt(pat.cajas.total)}</b> + <b>stock {fmt(pat.stock.total)}</b> + <b>por cobrar {fmt(pat.por_cobrar.total)}</b> − <b>deudas {fmt(pat.deuda_total)}</b>. Las cajas mezclan plata propia y prestada — este número es el que las separa. Todo sale del ledger de movimientos, no hay ningún saldo cargado a mano.</>}
         />
         <StatCard
           label="Stock a la venta"
           value={fmt(pat.stock.total)}
-          sub={<>invertido {fmt(pat.stock.costo_invertido)} · <span className={pat.stock.ganancia_esperada >= 0 ? 'text-success' : 'text-destructive'}>ganancia esp. {pat.stock.ganancia_esperada >= 0 ? '+' : ''}{fmt(pat.stock.ganancia_esperada)}</span>{pat.en_uso.autos.length > 0 && <> · en uso: {pat.en_uso.autos.map(a => `${a.label} ${fmt(a.valor)}`).join(', ')}</>}</>}
-          tip={<>Autos <b>propios sin vender</b> que están a la venta, valuados a lo que se espera obtener por cada uno (precio objetivo cargado en la ficha; sin dato, el costo invertido — nunca se inventa una valuación). Las consignaciones no cuentan (no son nuestras) y el <b>auto en uso</b> va aparte: es patrimonio pero no está a la venta. <b>Ganancia esperada</b> = valor de venta esperado − costo invertido (compra + gastos según el ledger): la ganancia que ya está &quot;adentro&quot; de los autos si se venden al precio previsto.{pat.stock.autos.length > 0 && <><br /><br />{pat.stock.autos.map(a => `${a.label}: ${fmt(a.valor)} (costo ${fmt(a.costo)})`).join(' · ')}</>}</>}
+          sub={<>invertido {fmt(pat.stock.costo_invertido)} · <span className={pat.stock.ganancia_esperada >= 0 ? 'text-success' : 'text-destructive'}>ganancia esp. {pat.stock.ganancia_esperada >= 0 ? '+' : ''}{fmt(pat.stock.ganancia_esperada)}</span></>}
+          tip={<>Autos <b>propios sin vender</b> que están a la venta, valuados a lo que se espera obtener por cada uno (precio objetivo cargado en la ficha; sin dato, el costo invertido — nunca se inventa una valuación). Las consignaciones no cuentan (no son nuestras). <b>Ganancia esperada</b> = valor de venta esperado − costo invertido (compra + gastos según el ledger): la ganancia que ya está &quot;adentro&quot; de los autos si se venden al precio previsto.{pat.stock.autos.length > 0 && <><br /><br />{pat.stock.autos.map(a => `${a.label}: ${fmt(a.valor)} (costo ${fmt(a.costo)})`).join(' · ')}</>}</>}
         />
         <StatCard
           label="Por cobrar"
@@ -361,10 +361,6 @@ function PatrimonioTab({
       tip: <>Suma de ingresos − egresos del ledger por cuenta: {cuentas.map(c => `${c.label} ${fmt(pat.cajas[c.clave] ?? 0)}`).join(', ')}.</> },
     { label: 'Stock a la venta', monto: pat.stock.total, sign: '+',
       tip: <>Autos propios sin vender, a valor esperado de venta (precio objetivo de la ficha; sin dato, el costo invertido).</> },
-    ...(pat.en_uso.total > 0 ? [{
-      label: 'Auto en uso', monto: pat.en_uso.total, sign: '+' as const,
-      tip: <>El auto que usamos ({pat.en_uso.autos.map(a => a.label).join(', ')}): es patrimonio, pero no está a la venta — el &quot;disponible&quot; lo descuenta.</>,
-    }] : []),
     { label: 'Por cobrar', monto: pat.por_cobrar.total, sign: '+',
       tip: <>Plata nuestra en manos de clientes: gastos adelantados por su cuenta menos lo devuelto.</> },
     { label: 'Deudas', monto: pat.deuda_total, sign: '−',
@@ -400,17 +396,12 @@ function PatrimonioTab({
               <p className="text-xl font-semibold tabular-nums">{fmt(pat.capital_propio)}</p>
             </div>
           </div>
-          {pat.en_uso.total > 0 && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Disponible sin vender el auto en uso: <span className="font-medium text-foreground tabular-nums">{fmt(pat.capital_propio_disponible)}</span>
-            </p>
-          )}
         </CardContent>
       </Card>
 
-      {/* Stock a la venta + en uso, auto por auto */}
+      {/* Stock, auto por auto */}
       <SectionTable
-        title={`Stock (${pat.stock.autos.length + pat.en_uso.autos.length})`}
+        title={`Stock (${pat.stock.autos.length})`}
         tip={<>Cada auto propio sin vender, con su <b>costo invertido</b> (compra + gastos según el ledger), su <b>valor esperado</b> de venta y la <b>ganancia esperada</b> (valor − costo) que queda &quot;adentro&quot; si se vende al precio previsto.</>}
       >
         <div className="overflow-x-auto">
@@ -424,12 +415,9 @@ function PatrimonioTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {[...pat.stock.autos, ...pat.en_uso.autos.map(a => ({ ...a, enUso: true }))].map((a: any) => (
+              {pat.stock.autos.map(a => (
                 <tr key={a.vehicle_id}>
-                  <td className="px-3 py-2.5 font-medium">
-                    {a.label}
-                    {a.enUso && <Badge variant="outline" className="ml-2" title="Es patrimonio pero no está a la venta">en uso</Badge>}
-                  </td>
+                  <td className="px-3 py-2.5 font-medium">{a.label}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(a.costo)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmt(a.valor)}</td>
                   <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${a.valor - a.costo >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -438,11 +426,11 @@ function PatrimonioTab({
                 </tr>
               ))}
               <tr className="bg-muted/40 font-medium">
-                <td className="px-3 py-2.5">Total (a la venta {fmt(pat.stock.total)}{pat.en_uso.total > 0 ? ` · en uso ${fmt(pat.en_uso.total)}` : ''})</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.stock.costo_invertido + pat.en_uso.autos.reduce((s, a) => s + a.costo, 0))}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.stock.total + pat.en_uso.total)}</td>
+                <td className="px-3 py-2.5">Total</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.stock.costo_invertido)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.stock.total)}</td>
                 <td className={`px-3 py-2.5 text-right tabular-nums ${pat.stock.ganancia_esperada >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  {pat.stock.ganancia_esperada >= 0 ? '+' : ''}{fmt(pat.stock.ganancia_esperada + pat.en_uso.autos.reduce((s, a) => s + (a.valor - a.costo), 0))}
+                  {pat.stock.ganancia_esperada >= 0 ? '+' : ''}{fmt(pat.stock.ganancia_esperada)}
                 </td>
               </tr>
             </tbody>

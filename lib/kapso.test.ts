@@ -50,16 +50,15 @@ describe('computePatrimonio · snapshot con las cuentas por defecto', () => {
     expect(pat.cajas.nexo).toBe(5094.32)
     expect(pat.cajas.fiwind).toBe(777.77)
     expect(pat.cajas.total).toBe(24638.31)
-    expect(pat.stock.total).toBe(22000)
-    expect(pat.stock.costo_invertido).toBe(11000)
-    expect(pat.stock.ganancia_esperada).toBe(11000)
-    expect(pat.en_uso.total).toBe(18000)
+    // el 130i (uso_personal=1) es stock como cualquier otro
+    expect(pat.stock.total).toBe(40000)
+    expect(pat.stock.costo_invertido).toBe(27000)
+    expect(pat.stock.ganancia_esperada).toBe(13000)
     expect(pat.por_cobrar.total).toBe(3418)
     expect(pat.por_cobrar.comisiones_consignaciones.total).toBe(700)
     expect(pat.deuda_total).toBe(10125)
     expect(pat.interes_mensual_total).toBe(125)
     expect(pat.capital_propio).toBe(57931.31)
-    expect(pat.capital_propio_disponible).toBe(39231.31)
   })
 })
 
@@ -274,18 +273,16 @@ describe('coerceId', () => {
 })
 
 describe('computePatrimonio · auto en uso', () => {
-  it('uso_personal=1 cuenta en capital_propio pero fuera del stock a la venta', () => {
+  it('uso_personal=1 ya no separa nada: es stock como cualquier otro', () => {
     const vehicles = [
       { id: 6, marca: 'BMW', modelo: '130i', tipo_operacion: 'propio', estado: 'en_preparacion', precio_compra: 16000, precio_venta_objetivo: 18000, uso_personal: 1 },
       { id: 37, marca: 'Porsche', modelo: 'Cayenne', tipo_operacion: 'propio', estado: 'en_preparacion', precio_compra: 11000, precio_venta_objetivo: 22000 },
     ]
     const movs = [{ cuenta: 'cash', tipo: 'ingreso', monto: 1000, afecta_balance: 1 }]
     const pat = computePatrimonio(movs, vehicles, [], [], HOY)
-    expect(pat.stock.total).toBe(22000)          // solo la Cayenne
-    expect(pat.en_uso.total).toBe(18000)
-    expect(pat.en_uso.autos[0].label).toContain('130i')
-    expect(pat.capital_propio).toBe(1000 + 22000 + 18000)
-    expect(pat.capital_propio_disponible).toBe(1000 + 22000)
+    expect(pat.stock.total).toBe(40000)          // 130i + Cayenne
+    expect(pat.stock.autos.map(a => a.vehicle_id).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([6, 37])
+    expect(pat.capital_propio).toBe(1000 + 40000)
   })
 })
 

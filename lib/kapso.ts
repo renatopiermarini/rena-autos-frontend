@@ -510,7 +510,6 @@ export type Patrimonio = {
     ganancia_esperada: number
     autos: PatrimonioAuto[]
   }
-  en_uso: { total: number; autos: PatrimonioAuto[] }
   por_cobrar: {
     total: number
     clientes: { cliente_id: number | null; nombre: string; adelantado: number; devuelto: number; saldo: number }[]
@@ -523,7 +522,6 @@ export type Patrimonio = {
   parte_socios: { total: number; autos: ParteSocio[] }
   interes_mensual_total: number
   capital_propio: number
-  capital_propio_disponible: number
   posiciones: LoanPosition[]
 }
 
@@ -576,7 +574,6 @@ export function computePatrimonio(
   }
 
   const autos: PatrimonioAuto[] = []
-  const enUso: PatrimonioAuto[] = []
   const socios: ParteSocio[] = []
   for (const v of vehicles) {
     if (v.tipo_operacion !== 'propio' || v.estado === 'vendido') continue
@@ -603,17 +600,15 @@ export function computePatrimonio(
         })
       }
     }
-    const fila = { vehicle_id: vid, label, costo, valor, sena_cobrada: sena }
-    // uso_personal=1: el auto que usamos — patrimonio, pero NO a la venta.
-    if (Number(v.uso_personal ?? 0)) enUso.push(fila)
-    else autos.push(fila)
+    // Todos los propios sin vender van al mismo stock: `uso_personal` ya no
+    // separa nada acá (decisión del usuario 2026-08-26).
+    autos.push({ vehicle_id: vid, label, costo, valor, sena_cobrada: sena })
   }
   socios.sort((a, b) => b.parte - a.parte)
   const sociosTotal = round2(socios.reduce((s, a) => s + a.parte, 0))
   autos.sort((a, b) => b.valor - a.valor)
   const stockTotal = round2(autos.reduce((s, a) => s + a.valor, 0))
   const stockCosto = round2(autos.reduce((s, a) => s + a.costo, 0))
-  const enUsoTotal = round2(enUso.reduce((s, a) => s + a.valor, 0))
 
   const porCliente = new Map<number, { adelantado: number; devuelto: number }>()
   for (const m of movimientos) {
@@ -663,7 +658,7 @@ export function computePatrimonio(
 
   // La parte del socio NO es nuestra: su capital ya está en deudaTotal como
   // préstamo, pero su ganancia vivía adentro del stock.
-  const capitalPropio = round2(cajasOut.total + stockTotal + enUsoTotal + porCobrarTotal - deudaTotal - sociosTotal)
+  const capitalPropio = round2(cajasOut.total + stockTotal + porCobrarTotal - deudaTotal - sociosTotal)
   return {
     cajas: cajasOut,
     stock: {
@@ -672,7 +667,6 @@ export function computePatrimonio(
       ganancia_esperada: round2(stockTotal - stockCosto),
       autos,
     },
-    en_uso: { total: enUsoTotal, autos: enUso },
     por_cobrar: {
       total: porCobrarTotal,
       clientes: clientesCobrar,
@@ -682,9 +676,6 @@ export function computePatrimonio(
     parte_socios: { total: sociosTotal, autos: socios },
     interes_mensual_total: interesMensualTotal,
     capital_propio: capitalPropio,
-    // Disponible = sin el auto en uso NI las comisiones esperadas: suman al
-    // patrimonio pero no existen hasta que la consignación se venda.
-    capital_propio_disponible: round2(capitalPropio - enUsoTotal - comisionesTotal),
     posiciones,
   }
 }
