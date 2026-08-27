@@ -8,7 +8,9 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { FField, FInput, FSelect, FTextarea, nativeSelectCls } from '@/components/form-fields'
 import { toast } from 'sonner'
 
@@ -35,21 +37,28 @@ export default function NuevaOfertaDialog({
 }) {
   const router = useRouter()
   const [form, setForm] = useState<AltaOfertaForm>(OFERTA_FORM_VACIO)
+  // El form tal cual quedó sembrado al abrir (ver lib/dirty.ts).
+  const [inicial, setInicial] = useState<AltaOfertaForm>(OFERTA_FORM_VACIO)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!open) return
-    setForm({
+    const sembrado: AltaOfertaForm = {
       ...OFERTA_FORM_VACIO,
       // El auto que ya venía mirando el interesado, si tiene uno.
       vehicle_id: interesado?.vehicle_id ? String(interesado.vehicle_id) : '',
-    })
+    }
+    setForm(sembrado)
+    setInicial(sembrado)
   }, [open, interesado?.id])
 
   const set = (campo: keyof AltaOfertaForm, valor: string) =>
     setForm(f => ({ ...f, [campo]: valor }))
 
-  function cerrar() { onOpenChange(false) }
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio: formSucio(form, inicial),
+    onOpenChange,
+  })
 
   async function crear() {
     const validado = validarAltaOferta(form, interesado?.id, new Date().toISOString())
@@ -73,7 +82,7 @@ export default function NuevaOfertaDialog({
   )
 
   return (
-    <Dialog open={open} onOpenChange={o => (o ? onOpenChange(true) : cerrar())}>
+    <Dialog open={open} {...dialogProps}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Registrar oferta</DialogTitle>

@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { FInput, FTextarea, FCheckbox, FField } from '@/components/form-fields'
 import { ConfigMissingBanner, RestartNotice } from '@/components/config-banner'
 import { EmptyState } from '@/components/empty-state'
@@ -77,8 +79,15 @@ export default function EquipoClient({ equipo }: { equipo: any[] }) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm())
+  // Con qué contenido abrió el diálogo (alta vacía o la fila que se edita):
+  // contra eso se mide si hay algo sin guardar antes de cerrar.
+  const [inicial, setInicial] = useState<FormState>(emptyForm())
   const [saving, setSaving] = useState(false)
   const [borrar, setBorrar] = useState<any | null>(null)
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio: formSucio(form, inicial),
+    onOpenChange: setOpen,
+  })
 
   const ordenados = useMemo(() => {
     const activos = activasOrdenadas(equipo, 'activo')
@@ -89,12 +98,14 @@ export default function EquipoClient({ equipo }: { equipo: any[] }) {
   function abrirAlta() {
     setEditing(null)
     setForm(emptyForm())
+    setInicial(emptyForm())
     setOpen(true)
   }
 
   function abrirEdicion(m: any) {
     setEditing(m)
     setForm(rowToForm(m))
+    setInicial(rowToForm(m))
     setOpen(true)
   }
 
@@ -232,7 +243,7 @@ export default function EquipoClient({ equipo }: { equipo: any[] }) {
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} {...dialogProps}>
         <DialogContent className="sm:max-w-2xl max-h-[calc(100vh-4rem)] flex flex-col">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar integrante' : 'Nuevo integrante'}</DialogTitle>
@@ -323,7 +334,7 @@ export default function EquipoClient({ equipo }: { equipo: any[] }) {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button variant="outline" onClick={cerrar} disabled={saving}>Cancelar</Button>
             <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
           </DialogFooter>
         </DialogContent>

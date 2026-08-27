@@ -8,7 +8,9 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { FInput, FSelect, FTextarea } from '@/components/form-fields'
 import { toast } from 'sonner'
 
@@ -39,8 +41,12 @@ export default function NuevoClienteDialog({
   const set = (campo: keyof AltaClienteForm, valor: string) =>
     setForm(f => ({ ...f, [campo]: valor }))
 
-  // Cerrar es cerrar, por el botón o por Escape: el form vuelve a cero.
-  function cerrar() { onOpenChange(false); setForm(CLIENTE_FORM_VACIO) }
+  // Cerrar es cerrar, por el botón o por Escape: el form vuelve a cero — pero
+  // antes se pregunta si había algo tipeado (ver lib/dirty.ts).
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio: formSucio(form, CLIENTE_FORM_VACIO),
+    onOpenChange: o => { onOpenChange(o); if (!o) setForm(CLIENTE_FORM_VACIO) },
+  })
 
   async function crear() {
     const validado = validarAltaCliente(form, new Date().toISOString())
@@ -60,7 +66,7 @@ export default function NuevoClienteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={o => (o ? onOpenChange(true) : cerrar())}>
+    <Dialog open={open} {...dialogProps}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nuevo cliente</DialogTitle>

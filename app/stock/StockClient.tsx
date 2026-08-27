@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { computeVehicleFinancials, computeLoanPosition, type CuentaInfo } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
+import { diasEnStock, tarjetaVehiculo } from '@/lib/stock'
 import { DEFAULT_ASSIGNEE } from '@/lib/equipo'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -120,10 +121,9 @@ function ToggleCheck({
   )
 }
 
-function diasEnStock(fecha: string) {
-  if (!fecha) return '—'
-  const dias = Math.floor((Date.now() - new Date(fecha).getTime()) / 86400000)
-  return `${dias}d`
+function diasEnStockCorto(fecha: string) {
+  const dias = diasEnStock(fecha)
+  return dias === null ? '—' : `${dias}d`
 }
 
 function fmt(n: any) {
@@ -189,13 +189,22 @@ function FSelect({ label, value, onChange, options }: {
   )
 }
 
-function VehicleDetail({
-  v, clientes, vehicles, movimientos, prestamos, tareas = [],
-  cuentas = [], comisionPct = COMISION_PCT_DEFAULT,
-}: {
+type VehicleDetailProps = {
   v: any; clientes: any[]; vehicles: any[]; movimientos: any[]; prestamos: any[]; tareas?: any[]
   cuentas?: CuentaInfo[]; comisionPct?: number
-}) {
+}
+
+/**
+ * El detalle expandible de un auto, SIN envoltorio de tabla.
+ *
+ * Se separó del `<tr>` porque en móvil el stock ya no es una tabla sino una
+ * lista de tarjetas (un `<tr>` adentro de un `<li>` no es HTML válido): el mismo
+ * detalle, exactamente igual, se usa desde los dos lados.
+ */
+function VehicleDetailBody({
+  v, clientes, vehicles, movimientos, prestamos, tareas = [],
+  cuentas = [], comisionPct = COMISION_PCT_DEFAULT,
+}: VehicleDetailProps) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -264,8 +273,7 @@ function VehicleDetail({
 
   if (editing) {
     return (
-      <tr>
-        <td colSpan={9} className="px-4 pb-5 pt-3 bg-muted/30 border-b border-border">
+      <div className="px-4 pb-5 pt-3">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
             <div className="col-span-2 sm:col-span-3 lg:col-span-4">
               <FSelect label="Estado" value={form.estado} onChange={set('estado')} options={ESTADOS} />
@@ -309,14 +317,12 @@ function VehicleDetail({
             <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
             <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
           </div>
-        </td>
-      </tr>
+      </div>
     )
   }
 
   return (
-    <tr>
-      <td colSpan={9} className="px-4 pb-4 pt-0 bg-muted/30 border-b border-border">
+    <div className="px-4 pb-4 pt-0">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-8 gap-y-3 pt-3">
           <Field label="Tipo operación" value={v.tipo_operacion} />
           <Field label="Color" value={v.color} />
@@ -514,6 +520,16 @@ function VehicleDetail({
           cuentas={cuentas}
           comisionPct={comisionPct}
         />
+    </div>
+  )
+}
+
+/** El mismo detalle, envuelto en la fila que necesita la tabla de escritorio. */
+function VehicleDetailRow(props: VehicleDetailProps) {
+  return (
+    <tr>
+      <td colSpan={9} className="p-0 bg-muted/30 border-b border-border">
+        <VehicleDetailBody {...props} />
       </td>
     </tr>
   )
@@ -536,7 +552,65 @@ function VehicleTable({
   }
 
   return (
-    <div className="overflow-x-auto">
+    <>
+    {/* Móvil (< md): tarjetas. En 375px la tabla cortaba el precio a la mitad y
+        escondía patente y días — justo los tres datos por los que se abre esta
+        pantalla. Cada auto es ahora una tarjeta de tres líneas: qué es, cómo se
+        identifica, y cuánto vale / en qué estado / hace cuánto está parado.
+        Tocarla abre EL MISMO detalle expandible de siempre. */}
+    <ul className="divide-y divide-border md:hidden">
+      {vehicles.map(v => {
+        const pendientes = tareasAuto(v.id)
+        const isOpen = expanded.has(v.id)
+        const t = tarjetaVehiculo(v)
+        return (
+          <li key={v.id} className={isOpen ? 'bg-muted/50' : undefined}>
+            <button
+              type="button"
+              onClick={() => onToggle(v.id)}
+              aria-expanded={isOpen}
+              className="w-full px-3 py-3 text-left"
+            >
+              <span className="flex items-start justify-between gap-2">
+                {/* spans y no <p>/<div>: adentro de un <button> sólo va contenido
+                    de frase, y este botón es toda la tarjeta (el área de toque). */}
+                <span className="min-w-0">
+                  <span className="block truncate font-medium leading-snug">{t.titulo}</span>
+                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">{t.detalle}</span>
+                </span>
+                {isOpen
+                  ? <ChevronUpIcon className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                  : <ChevronDownIcon className="mt-1 size-4 shrink-0 text-muted-foreground" />}
+              </span>
+              <span className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                <span className={`text-lg font-semibold tabular-nums ${t.precioEstimado ? 'text-muted-foreground' : ''}`}>
+                  {t.precio}
+                </span>
+                <Badge variant={t.estadoVariant}>{t.estadoLabel}</Badge>
+                {t.diasLabel && (
+                  <span className={`text-xs tabular-nums ${t.diasAlerta ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>
+                    {t.diasLabel} en stock
+                  </span>
+                )}
+                {Number(v.uso_personal ?? 0) > 0 && <Badge variant="outline">en uso</Badge>}
+                {pendientes.length > 0 && (
+                  <Badge variant="destructive">{pendientes.length} tarea{pendientes.length > 1 ? 's' : ''}</Badge>
+                )}
+              </span>
+            </button>
+            {isOpen && (
+              <VehicleDetailBody
+                v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos}
+                prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct}
+              />
+            )}
+          </li>
+        )
+      })}
+    </ul>
+
+    {/* Escritorio (md+): la tabla de siempre, sin cambios. */}
+    <div className="hidden md:block overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left">
@@ -591,18 +665,19 @@ function VehicleTable({
                       ? <span className="text-muted-foreground">${Number(v.precio_venta_objetivo).toLocaleString('es-AR')}</span>
                       : '—'}
                   </td>
-                  <td className="py-2.5 px-3 text-muted-foreground hidden md:table-cell">{diasEnStock(v.fecha_ingreso)}</td>
+                  <td className="py-2.5 px-3 text-muted-foreground hidden md:table-cell">{diasEnStockCorto(v.fecha_ingreso)}</td>
                   <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} defAssignee={defAssignee} /></td>
                   <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} defAssignee={defAssignee} /></td>
                   <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} defAssignee={defAssignee} /></td>
                 </tr>
-                {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} />}
+                {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} />}
               </Fragment>
             )
           })}
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 
@@ -853,7 +928,7 @@ export default function StockClient({
                             {fmtFecha(v.fecha_venta)}
                           </td>
                         </tr>
-                        {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} />}
+                        {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} />}
                       </Fragment>
                     )
                   })}

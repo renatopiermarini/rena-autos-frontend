@@ -20,14 +20,25 @@ export type SeccionEquipo = {
   tareas: { id: number; titulo: string; urgent: boolean; fecha: string | null }[]
 }
 
+/** Un número del strip de arriba. Ya viene formateado del server (app/page.tsx),
+ *  que lo saca de computePatrimonio — la misma cuenta que dibuja /finanzas. */
+export type NumeroResumen = {
+  label: string
+  valor: string
+  sub?: string
+  href: string
+  tone?: 'default' | 'positive' | 'negative'
+}
+
 export default function TableroClient({
-  items, alertas, sinFecha, datosFaltantes = [], secciones = [],
+  items, alertas, sinFecha, datosFaltantes = [], secciones = [], resumen = [],
 }: {
   items: BoardItem[]
   alertas: string[]
   sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[]
-  datosFaltantes?: { label: string; faltan: string[] }[]
+  datosFaltantes?: { label: string; faltan: string[]; dias?: number | null }[]
   secciones?: SeccionEquipo[]
+  resumen?: NumeroResumen[]
 }) {
   const router = useRouter()
   const [done, setDone] = useState<Record<string, boolean>>({})
@@ -68,6 +79,34 @@ export default function TableroClient({
           {fecha} · {hoyCount === 0 ? 'nada pendiente hoy' : `${hoyCount} pendiente${hoyCount === 1 ? '' : 's'} hoy`}
         </p>
       </div>
+
+      {/* "¿Cómo vengo?" — lo primero que se ve. El tablero arrancaba con datos
+          faltantes y el calendario: información de trabajo, no de negocio. Cuatro
+          números y nada más (sin gráficos), cada uno linkeando a la pantalla
+          donde se sigue mirando; en el celular quedan de a dos. */}
+      {resumen.length > 0 && (
+        <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          {resumen.map(n => (
+            <Link
+              key={n.label}
+              href={n.href}
+              className="rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:bg-muted/40"
+            >
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{n.label}</p>
+              <p className={`text-lg font-semibold tabular-nums leading-tight ${
+                n.tone === 'positive' ? 'text-success'
+                : n.tone === 'negative' ? 'text-destructive'
+                : ''
+              }`}>
+                {n.valor}
+              </p>
+              {n.sub && (
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={n.sub}>{n.sub}</p>
+              )}
+            </Link>
+          ))}
+        </section>
+      )}
 
       {/* Tareas destacadas — arriba del todo, pedido del usuario 2026-08-13 (era
           la sección fija de Marshiot). El acento violeta es el de la sección, no
@@ -156,6 +195,13 @@ export default function TableroClient({
             {datosFaltantes.map((v, i) => (
               <li key={i} className="px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
                 <span className="font-medium">{v.label}</span>
+                {/* Días en stock: el auto que lleva demasiado parado se marca acá
+                    mismo — es plata quieta, no sólo un campo sin llenar. */}
+                {v.dias != null && (
+                  <span className="ml-1.5 rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">
+                    hace {v.dias} días
+                  </span>
+                )}
                 <span className="text-amber-700/80 dark:text-amber-300/80"> — falta: {v.faltan.join(', ')}</span>
               </li>
             ))}

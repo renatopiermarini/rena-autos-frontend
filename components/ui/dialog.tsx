@@ -5,10 +5,72 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { MENSAJE_DESCARTAR } from "@/lib/dirty"
 import { XIcon } from "lucide-react"
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
+}
+
+/**
+ * Guardia "confirmar si está sucio" para CUALQUIER diálogo con formulario.
+ *
+ * Se adopta en dos líneas y no hay que tocar botón por botón:
+ *
+ *   const { dialogProps, cerrar } = useDirtyClose({
+ *     sucio: formSucio(form, inicial),
+ *     onOpenChange,
+ *   })
+ *   <Dialog open={open} {...dialogProps}>       // Escape, click afuera y la X
+ *     ...
+ *     <Button variant="outline" onClick={cerrar}>Cancelar</Button>
+ *   </Dialog>
+ *
+ * Por qué también "Cancelar" y la X: ver la nota de decisión en lib/dirty.ts.
+ * Las rutas de guardado exitoso siguen llamando al `onOpenChange` crudo, así que
+ * cerrar después de guardar NUNCA pregunta.
+ *
+ * El aviso es un `confirm()` nativo a propósito: no agrega layout (el modal ya
+ * está ocupando la pantalla del celular), es síncrono — lo que permite abortar
+ * el cierre en el mismo handler — y en un teléfono sale como diálogo del sistema,
+ * imposible de no ver.
+ */
+function useDirtyClose({
+  sucio,
+  onOpenChange,
+  mensaje = MENSAJE_DESCARTAR,
+}: {
+  /** ¿Hay algo tipeado que se perdería? Normalmente `formSucio(form, inicial)`. */
+  sucio: boolean
+  /** El setter del padre: el mismo que se le pasaba antes a `<Dialog onOpenChange>`. */
+  onOpenChange: (open: boolean) => void
+  mensaje?: string
+}) {
+  const puedeCerrar = React.useCallback(() => {
+    if (!sucio) return true
+    // En SSR no hay window; este código sólo corre desde handlers del browser.
+    if (typeof window === "undefined") return true
+    return window.confirm(mensaje)
+  }, [sucio, mensaje])
+
+  // Para <Dialog {...dialogProps}>: cubre Escape, click afuera y la X del header.
+  // `details.cancel()` corta el manejo interno de Base UI (DialogStore.setOpen
+  // sale antes de propagar el cierre), así que el diálogo queda abierto tal cual.
+  const handleOpenChange = React.useCallback(
+    (open: boolean, details?: { cancel?: () => void }) => {
+      if (open) { onOpenChange(true); return }
+      if (puedeCerrar()) { onOpenChange(false); return }
+      details?.cancel?.()
+    },
+    [onOpenChange, puedeCerrar],
+  )
+
+  // Para el botón "Cancelar", que no pasa por Base UI (llama al setter del padre).
+  const cerrar = React.useCallback(() => {
+    if (puedeCerrar()) onOpenChange(false)
+  }, [onOpenChange, puedeCerrar])
+
+  return { dialogProps: { onOpenChange: handleOpenChange }, cerrar, puedeCerrar }
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
@@ -157,4 +219,5 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
+  useDirtyClose,
 }

@@ -13,7 +13,9 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { PlusIcon, PencilIcon, Trash2Icon } from 'lucide-react'
@@ -102,6 +104,13 @@ export default function KbClient({
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm(defAssignee))
+  // Con qué contenido abrió el diálogo: al editar es la entrada tal cual está en
+  // la DB, al crear el form vacío. Contra eso se mide si hay algo sin guardar.
+  const [inicial, setInicial] = useState<FormState>(emptyForm(defAssignee))
+  const { dialogProps: formDialogProps, cerrar: cerrarForm } = useDirtyClose({
+    sucio: formSucio(form, inicial),
+    onOpenChange: setFormOpen,
+  })
 
   const selected = useMemo(
     () => entries.find(e => e.id === selectedId) ?? null,
@@ -125,13 +134,17 @@ export default function KbClient({
 
   function startEdit() {
     if (!selected) return
-    setForm(entryToForm(selected))
+    const abierto = entryToForm(selected)
+    setForm(abierto)
+    setInicial(abierto)
     setCreating(false)
     setFormOpen(true)
   }
 
   function startCreate() {
-    setForm(emptyForm(defAssignee))
+    const abierto = emptyForm(defAssignee)
+    setForm(abierto)
+    setInicial(abierto)
     setCreating(true)
     setFormOpen(true)
   }
@@ -180,7 +193,18 @@ export default function KbClient({
   }
 
   return (
-    <div className="grid grid-cols-[320px_1fr] gap-6">
+    <div className="space-y-4">
+      {/* La pantalla no tenía título propio, y la palabra que la nombraba en el
+          nav era "KB": no le dice nada a nadie que no sea técnico. La ruta /kb y
+          la tabla kb_entries NO cambian — sólo la palabra que se lee. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-xl font-semibold">Guía</h1>
+        <p className="text-sm text-muted-foreground">
+          Cómo se hacen las cosas acá: procesos, preguntas frecuentes, plantillas.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
       <aside className="space-y-3">
         <Button onClick={startCreate} className="w-full">
           <PlusIcon /> Nueva entrada
@@ -212,7 +236,9 @@ export default function KbClient({
           ))}
         </div>
 
-        <div className="space-y-4 max-h-[calc(100vh-18rem)] overflow-y-auto pr-1">
+        {/* El alto fijo con scroll propio sólo tiene sentido con el sidebar al
+            costado; apilado arriba del contenido dejaría un scrollbox enano. */}
+        <div className="space-y-4 lg:max-h-[calc(100vh-18rem)] lg:overflow-y-auto lg:pr-1">
           {TIPOS.map(tipo => {
             const items = grouped[tipo]
             if (!items.length) return null
@@ -242,7 +268,7 @@ export default function KbClient({
             )
           })}
           {entries.length === 0 && (
-            <p className="text-sm text-muted-foreground">KB vacía. Creá tu primera entrada.</p>
+            <p className="text-sm text-muted-foreground">La guía está vacía. Creá tu primera entrada.</p>
           )}
         </div>
       </aside>
@@ -303,14 +329,15 @@ export default function KbClient({
           </Card>
         )}
       </section>
+      </div>
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog open={formOpen} {...formDialogProps}>
         <DialogContent className="sm:max-w-2xl max-h-[calc(100vh-4rem)] flex flex-col">
           <DialogHeader>
             <DialogTitle>{creating ? 'Nueva entrada' : 'Editar entrada'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 overflow-y-auto flex-1 pr-1 -mr-1">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Tipo</Label>
                 <select
@@ -365,7 +392,7 @@ export default function KbClient({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)} disabled={saving}>
+            <Button variant="outline" onClick={cerrarForm} disabled={saving}>
               Cancelar
             </Button>
             <Button onClick={save} disabled={saving}>

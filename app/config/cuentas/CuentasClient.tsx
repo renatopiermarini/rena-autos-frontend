@@ -12,7 +12,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { FInput, FCheckbox } from '@/components/form-fields'
 import { ConfigMissingBanner, RestartNotice } from '@/components/config-banner'
 import { EmptyState } from '@/components/empty-state'
@@ -64,6 +66,8 @@ export default function CuentasClient({
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm(0))
+  // Con qué contenido abrió el diálogo (alta vacía o la fila que se edita).
+  const [inicial, setInicial] = useState<FormState>(emptyForm(0))
   const [saving, setSaving] = useState(false)
   const [borrar, setBorrar] = useState<any | null>(null)
   // Ajuste de saldo: la cuenta que se está cuadrando y el saldo real tipeado.
@@ -86,12 +90,14 @@ export default function CuentasClient({
   function abrirAlta() {
     setEditing(null)
     setForm(emptyForm(proximoOrden))
+    setInicial(emptyForm(proximoOrden))
     setOpen(true)
   }
 
   function abrirEdicion(c: any) {
     setEditing(c)
     setForm(rowToForm(c))
+    setInicial(rowToForm(c))
     setOpen(true)
   }
 
@@ -196,6 +202,17 @@ export default function CuentasClient({
   const derivadoAjuste = ajustando ? saldoDeCuenta(movimientos, String(ajustando.clave ?? '')) : 0
   const previewAjuste = ajustando ? planAjuste(String(ajustando.clave ?? ''), derivadoAjuste, saldoReal) : null
 
+  // Las dos puertas de "cerrar sin guardar": el form de la cuenta y el ajuste de
+  // saldo. Ver lib/dirty.ts — el confirm sale también por Escape y por la X.
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio: formSucio(form, inicial),
+    onOpenChange: setOpen,
+  })
+  const { dialogProps: ajusteDialogProps, cerrar: cerrarAjuste } = useDirtyClose({
+    sucio: formSucio({ saldoReal }, { saldoReal: String(derivadoAjuste) }),
+    onOpenChange: o => { if (!o) setAjustando(null) },
+  })
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -270,7 +287,7 @@ export default function CuentasClient({
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} {...dialogProps}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar cuenta' : 'Nueva cuenta'}</DialogTitle>
@@ -322,13 +339,13 @@ export default function CuentasClient({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button variant="outline" onClick={cerrar} disabled={saving}>Cancelar</Button>
             <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={ajustando !== null} onOpenChange={o => !o && setAjustando(null)}>
+      <Dialog open={ajustando !== null} {...ajusteDialogProps}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Ajustar el saldo de &quot;{ajustando?.clave}&quot;</DialogTitle>
@@ -374,7 +391,7 @@ export default function CuentasClient({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAjustando(null)} disabled={saving}>
+            <Button variant="outline" onClick={cerrarAjuste} disabled={saving}>
               Cancelar
             </Button>
             <Button onClick={confirmarAjuste} disabled={saving}>

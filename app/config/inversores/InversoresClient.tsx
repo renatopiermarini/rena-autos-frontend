@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { FInput, FTextarea } from '@/components/form-fields'
 import { EmptyState } from '@/components/empty-state'
 import { toast } from 'sonner'
@@ -43,8 +45,13 @@ export default function InversoresClient({
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({
+  const VACIO = {
     nombre: '', telefono: '', email: '', dni: '', cuil: '', direccion: '', notas: '',
+  }
+  const [form, setForm] = useState(VACIO)
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio: formSucio(form, VACIO),
+    onOpenChange: setOpen,
   })
 
   const acreedores = useMemo(() => clientes.filter(esAcreedor), [clientes])
@@ -88,7 +95,7 @@ export default function InversoresClient({
       return
     }
     toast.success('Inversor creado')
-    setForm({ nombre: '', telefono: '', email: '', dni: '', cuil: '', direccion: '', notas: '' })
+    setForm(VACIO)
     setOpen(false)
     router.refresh()
   }
@@ -154,7 +161,7 @@ export default function InversoresClient({
         </CardContent>
       </Card>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} {...dialogProps}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Nuevo inversor</DialogTitle>
@@ -188,7 +195,7 @@ export default function InversoresClient({
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
+            <Button variant="outline" onClick={cerrar} disabled={saving}>Cancelar</Button>
             <Button onClick={crear} disabled={saving}>{saving ? 'Guardando…' : 'Crear'}</Button>
           </DialogFooter>
         </DialogContent>

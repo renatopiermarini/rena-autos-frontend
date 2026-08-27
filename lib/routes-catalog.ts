@@ -30,7 +30,9 @@ export const ROUTE_LABEL: Record<RouteKey, string> = {
   tareas: 'Tareas',
   finanzas: 'Finanzas',
   contratos: 'Contratos',
-  kb: 'KB',
+  // La CLAVE sigue siendo 'kb' (es lo que viaja a equipo.routes y al router del
+  // bot); sólo cambia la palabra que se lee en el form de Configuración.
+  kb: 'Guía',
   research: 'Research',
   tramites: 'Trámites',
   verificaciones: 'Verificaciones',

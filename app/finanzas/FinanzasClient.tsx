@@ -20,7 +20,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TooltipProvider, InfoTip } from '@/components/ui/tooltip'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { FField, FInput, FTextarea, nativeSelectCls as fieldSelectCls } from '@/components/form-fields'
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, AlertTriangleIcon, PlusIcon } from 'lucide-react'
@@ -309,20 +311,25 @@ function ResumenTab({
           {movRecientes.map((m: any) => {
             const veh = m.vehicle_id ? vehiclesById[m.vehicle_id] : null
             return (
-              <div key={m.id} className="flex items-center justify-between px-3 py-2">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Badge variant={m.tipo === 'ingreso' ? 'default' : 'outline'} className="w-16 justify-center">
-                    {m.tipo}
-                  </Badge>
-                  <span className="text-sm truncate">{m.nota || CAT_LABEL[m.categoria] || m.categoria}</span>
-                  <span className="text-xs text-muted-foreground capitalize whitespace-nowrap">{m.cuenta}</span>
-                  {veh && (
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">· {veh.marca} {veh.modelo}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-4 shrink-0">
-                  <TipoAmount tipo={m.tipo} monto={m.monto} />
-                  <span className="text-xs text-muted-foreground tabular-nums">{fmtFecha(m.created_at)}</span>
+              // En 375px la descripción y el monto se encimaban ("Ford$57.500"):
+              // la cuenta y el auto iban con `whitespace-nowrap` dentro del grupo
+              // izquierdo, así que no achicaban y se desbordaban por encima del
+              // bloque derecho. Ahora la fila envuelve: en angosto la descripción
+              // se queda arriba y cuenta/auto/monto/fecha bajan a una segunda
+              // línea completa; desde `sm` vuelve a ser una sola fila.
+              <div key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                <Badge variant={m.tipo === 'ingreso' ? 'default' : 'outline'} className="w-16 shrink-0 justify-center">
+                  {m.tipo}
+                </Badge>
+                <span className="min-w-0 flex-1 truncate text-sm">{m.nota || CAT_LABEL[m.categoria] || m.categoria}</span>
+                <div className="flex w-full items-center justify-between gap-3 pl-[4.75rem] sm:w-auto sm:justify-end sm:pl-0">
+                  <span className="min-w-0 truncate text-xs text-muted-foreground capitalize">
+                    {m.cuenta}{veh ? ` · ${veh.marca} ${veh.modelo}` : ''}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <TipoAmount tipo={m.tipo} monto={m.monto} />
+                    <span className="text-xs text-muted-foreground tabular-nums">{fmtFecha(m.created_at)}</span>
+                  </div>
                 </div>
               </div>
             )
@@ -1164,6 +1171,8 @@ function NuevoMovimientoDialog({
   }
   const [form, setForm] = useState(vacio)
   const set = (campo: keyof typeof vacio, valor: string) => setForm(f => ({ ...f, [campo]: valor }))
+  // Escape / click afuera / X / Cancelar preguntan antes de tirar lo cargado.
+  const { dialogProps, cerrar } = useDirtyClose({ sucio: formSucio(form, vacio), onOpenChange })
 
   // Qué vínculos pide cada categoría: las mismas reglas que valida la route y
   // que valida el bot. Los selects que la categoría no necesita no se muestran.
@@ -1221,7 +1230,7 @@ function NuevoMovimientoDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} {...dialogProps}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Nuevo movimiento</DialogTitle>
@@ -1305,7 +1314,7 @@ function NuevoMovimientoDialog({
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={cerrar}>Cancelar</Button>
           <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</Button>
         </DialogFooter>
       </DialogContent>
@@ -1334,6 +1343,7 @@ function NuevoPrestamoDialog({
   }
   const [form, setForm] = useState(vacio)
   const set = (campo: keyof typeof vacio, valor: string) => setForm(f => ({ ...f, [campo]: valor }))
+  const { dialogProps, cerrar } = useDirtyClose({ sucio: formSucio(form, vacio), onOpenChange })
 
   // Los acreedores son los clientes marcados como tales. Si nadie está marcado
   // (o la marca vive sólo en `tipo`), se ofrece la lista completa antes que un
@@ -1376,7 +1386,7 @@ function NuevoPrestamoDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} {...dialogProps}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Nuevo préstamo</DialogTitle>
@@ -1440,7 +1450,7 @@ function NuevoPrestamoDialog({
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={cerrar}>Cancelar</Button>
           <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</Button>
         </DialogFooter>
       </DialogContent>

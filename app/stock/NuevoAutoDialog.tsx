@@ -12,7 +12,9 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { FField, FInput, FSelect, FCheckbox, nativeSelectCls } from '@/components/form-fields'
 import { toast } from 'sonner'
 
@@ -46,6 +48,9 @@ export default function NuevoAutoDialog({
 }) {
   const router = useRouter()
   const [form, setForm] = useState<AltaVehiculoForm>(VEHICULO_FORM_VACIO)
+  // Cómo quedó el form al ABRIRSE (con la fecha ya sembrada): contra esto se
+  // decide si hay algo tipeado que se perdería al cerrar. Sembrar no es ensuciar.
+  const [inicial, setInicial] = useState<AltaVehiculoForm>(VEHICULO_FORM_VACIO)
   const [registrarCompra, setRegistrarCompra] = useState(true)
   const [cuenta, setCuenta] = useState(cuentas[0]?.clave ?? '')
   const [saving, setSaving] = useState(false)
@@ -53,7 +58,10 @@ export default function NuevoAutoDialog({
   // La fecha de hoy se calcula en el cliente (todayKey usa la hora LOCAL; en el
   // servidor, que corre en UTC, después de las 21:00 AR daría mañana).
   useEffect(() => {
-    if (open) setForm(f => (f.fecha_ingreso ? f : { ...f, fecha_ingreso: todayKey() }))
+    if (!open) return
+    const sembrado = { ...VEHICULO_FORM_VACIO, fecha_ingreso: todayKey() }
+    setForm(f => (f.fecha_ingreso ? f : sembrado))
+    setInicial(f => (f.fecha_ingreso ? f : sembrado))
   }, [open])
 
   const set = (campo: keyof AltaVehiculoForm, valor: string) =>
@@ -63,14 +71,25 @@ export default function NuevoAutoDialog({
   const ofreceCompra = ofreceRegistrarCompra(form)
 
   function reset() {
-    setForm({ ...VEHICULO_FORM_VACIO, fecha_ingreso: todayKey() })
+    const sembrado = { ...VEHICULO_FORM_VACIO, fecha_ingreso: todayKey() }
+    setForm(sembrado)
+    setInicial(sembrado)
     setRegistrarCompra(true)
     setCuenta(cuentas[0]?.clave ?? '')
   }
 
   // Cerrar es cerrar: por el botón, por Escape o clickeando afuera, el form
   // vuelve a cero. Si no, el próximo "Nuevo auto" abre con lo tipeado antes.
-  function cerrar() { onOpenChange(false); reset() }
+  // Pero ANTES se pregunta si había algo cargado: doce campos tipeados no se
+  // tiran por un roce fuera del modal (ver lib/dirty.ts).
+  const sucio = formSucio(
+    { ...form, registrarCompra, cuenta },
+    { ...inicial, registrarCompra: true, cuenta: cuentas[0]?.clave ?? '' },
+  )
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio,
+    onOpenChange: o => { onOpenChange(o); if (!o) reset() },
+  })
 
   async function crear() {
     const validado = validarAltaVehiculo(form, new Date().toISOString())
@@ -131,7 +150,7 @@ export default function NuevoAutoDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={o => (o ? onOpenChange(true) : cerrar())}>
+    <Dialog open={open} {...dialogProps}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nuevo auto</DialogTitle>

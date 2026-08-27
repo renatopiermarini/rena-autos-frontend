@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, useDirtyClose } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, ClipboardCheckIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
@@ -184,6 +185,16 @@ function NuevaVerificacionDialog({
   const [notas, setNotas] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // Los campos no viven en un objeto `form`, así que la comparación se arma acá.
+  // El inicial es el sembrado: mecánico "Maxi" y la fecha de hoy no son cambios.
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio: formSucio(
+      { vehicleId, mecanico, monto, fechaVerificacion, notas },
+      { vehicleId: '', mecanico: 'Maxi', monto: '', fechaVerificacion: today(), notas: '' },
+    ),
+    onOpenChange,
+  })
+
   async function save() {
     if (!vehicleId) { toast.error('Elegí un vehículo'); return }
     setSaving(true)
@@ -209,7 +220,7 @@ function NuevaVerificacionDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} {...dialogProps}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Nueva verificación</DialogTitle>
@@ -241,7 +252,7 @@ function NuevaVerificacionDialog({
           </FField>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={cerrar}>Cancelar</Button>
           <Button onClick={save} disabled={saving}>{saving ? 'Creando…' : 'Crear'}</Button>
         </DialogFooter>
       </DialogContent>

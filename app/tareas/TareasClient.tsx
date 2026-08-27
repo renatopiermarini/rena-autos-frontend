@@ -15,7 +15,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, useDirtyClose } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { toast } from 'sonner'
 import { CheckIcon, PlusIcon } from 'lucide-react'
 
@@ -429,6 +430,8 @@ function NuevaTareaDialog({
     fecha_vencimiento: '',
   }
   const [form, setForm] = useState(vacio)
+  // Escape / click afuera / X / Cancelar preguntan antes de tirar lo cargado.
+  const { dialogProps, cerrar } = useDirtyClose({ sucio: formSucio(form, vacio), onOpenChange })
 
   function set(field: string, value: string) {
     setForm(f => ({ ...f, [field]: value }))
@@ -460,7 +463,7 @@ function NuevaTareaDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} {...dialogProps}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Nueva tarea</DialogTitle>
@@ -522,7 +525,7 @@ function NuevaTareaDialog({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={cerrar}>Cancelar</Button>
           <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
         </DialogFooter>
       </DialogContent>

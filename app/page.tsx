@@ -1,9 +1,10 @@
 import {
   getTareas, getVehicles, getPrestamos, getVisitas,
-  getInteresados, getBalances, getCuentas, getEquipo, getConfigNegocio,
-  cuentasInfo, umbralAlertaCaja, capFirst,
+  getInteresados, getMovimientos, getClientes, getCuentas, getEquipo, getConfigNegocio,
+  cuentasInfo, umbralAlertaCaja, capFirst, computePatrimonio,
 } from '@/lib/kapso'
 import { destacadosClaves, equipoFromRows, resolveDefaultAssignee, seccionesEquipo, miembroPorClave } from '@/lib/equipo'
+import { diasEnStock, DIAS_STOCK_ALERTA } from '@/lib/stock'
 import TableroClient from './TableroClient'
 import { parseInstant, localDayKey } from '@/lib/date'
 import type { BoardItem } from '@/components/calendar/MonthBoard'
@@ -12,10 +13,11 @@ const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.g
 
 export default async function Tablero() {
   const [
-    tareas, vehicles, prestamos, visitas, interesados, balances,
+    tareas, vehicles, prestamos, visitas, interesados, movimientos, clientes,
     cuentasRows, equipoRows, config,
   ] = await Promise.all([
-    getTareas(), getVehicles(), getPrestamos(), getVisitas(), getInteresados(), getBalances(),
+    getTareas(), getVehicles(), getPrestamos(), getVisitas(), getInteresados(),
+    getMovimientos(), getClientes(),
     getCuentas(), getEquipo(), getConfigNegocio(),
   ])
 
@@ -23,6 +25,18 @@ export default async function Tablero() {
   // el tablero tenía escrito a mano: cuentas cash/nexo/fiwind, asignado por
   // defecto rena, y una sola sección destacada (Marshiot).
   const cuentas = cuentasInfo(cuentasRows)
+
+  // "¿Cómo vengo?" — la pregunta con la que se abre el dashboard, que hasta ahora
+  // el tablero no contestaba (arrancaba con datos faltantes y el calendario).
+  // TODA la matemática sale de computePatrimonio, el MISMO helper que dibuja
+  // /finanzas: no hay una segunda cuenta que se pueda desincronizar. Por eso
+  // también el saldo de la alerta de caja pasó a ser el DERIVADO del ledger y ya
+  // no la fila cacheada de `balances`, que es la que hacía que el tablero y
+  // Finanzas mostraran dos números distintos para la misma caja.
+  const patrimonio = computePatrimonio(
+    movimientos, vehicles, prestamos, clientes, undefined, cuentas.map(c => c.clave),
+  )
+
   const equipo = equipoFromRows(equipoRows)
   const defAssignee = resolveDefaultAssignee(config, equipo)
   const destacados = seccionesEquipo(equipo, defAssignee, destacadosClaves(config, equipo, defAssignee))
@@ -115,9 +129,9 @@ export default async function Tablero() {
   // tablas de config: cash y 500, la alerta de siempre.
   const cajaPrincipal = cuentas[0]
   const umbral = umbralAlertaCaja(config)
-  const saldoPrincipal = balances.find((b: any) => b.cuenta === cajaPrincipal.clave)
-  if (saldoPrincipal && Number(saldoPrincipal.saldo ?? 0) < umbral) {
-    alertas.push(`${capFirst(cajaPrincipal.label)} bajo: $${saldoPrincipal.saldo ?? 0}`)
+  const saldoPrincipal = patrimonio.cajas[cajaPrincipal.clave] ?? 0
+  if (saldoPrincipal < umbral) {
+    alertas.push(`${capFirst(cajaPrincipal.label)} bajo: $${saldoPrincipal.toLocaleString('es-AR')}`)
   }
   prestamos.filter((p: any) => p.estado === 'activo').forEach((p: any) => {
     if (!p.fecha_vencimiento) return
@@ -136,11 +150,61 @@ export default async function Tablero() {
   ]
   const datosFaltantes = vehicles
     .filter((v: any) => v.estado !== 'vendido' && v.estado !== 'a_ingresar')
-    .map((v: any) => ({
-      label: `${v.marca ?? ''} ${v.modelo ?? ''}`.trim() + (v.dominio ? ` (${v.dominio})` : ''),
-      faltan: CAMPOS_AUTO.filter(([campo]) => !v[campo]).map(([, nombre]) => nombre),
-    }))
+    .map((v: any) => {
+      // Días en stock: si el auto ya lleva demasiado parado, el dato que falta
+      // deja de ser higiene y pasa a ser urgente. Va como chip en la misma fila
+      // en vez de abrir otra sección.
+      const dias = diasEnStock(v.fecha_ingreso)
+      return {
+        label: `${v.marca ?? ''} ${v.modelo ?? ''}`.trim() + (v.dominio ? ` (${v.dominio})` : ''),
+        faltan: CAMPOS_AUTO.filter(([campo]) => !v[campo]).map(([, nombre]) => nombre),
+        dias: dias !== null && dias > DIAS_STOCK_ALERTA ? dias : null,
+      }
+    })
     .filter((v: { faltan: string[] }) => v.faltan.length > 0)
 
-  return <TableroClient items={items} alertas={alertas} sinFecha={sinFecha} datosFaltantes={datosFaltantes} secciones={secciones} />
+  // Los cuatro números de arriba. `sub` es la letra chica; `href` la pantalla
+  // donde se sigue mirando. Todo derivado del ledger — nada cargado a mano.
+  const money = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
+  const resumen = [
+    {
+      label: 'En caja',
+      valor: money(patrimonio.cajas.total),
+      sub: cuentas.map(c => `${c.label} ${money(patrimonio.cajas[c.clave] ?? 0)}`).join(' · '),
+      href: '/finanzas',
+    },
+    {
+      label: 'Invertido en stock',
+      valor: money(patrimonio.stock.costo_invertido),
+      sub: `${patrimonio.stock.autos.length} auto${patrimonio.stock.autos.length === 1 ? '' : 's'} propios sin vender`,
+      href: '/stock',
+    },
+    {
+      label: 'Ganancia esperada',
+      valor: (patrimonio.stock.ganancia_esperada >= 0 ? '+' : '−') + money(Math.abs(patrimonio.stock.ganancia_esperada)),
+      sub: 'si se venden al precio previsto',
+      href: '/finanzas',
+      tone: patrimonio.stock.ganancia_esperada >= 0 ? 'positive' as const : 'negative' as const,
+    },
+    {
+      label: 'Deudas',
+      valor: money(patrimonio.deuda_total),
+      sub: patrimonio.interes_mensual_total > 0
+        ? `interés ${money(patrimonio.interes_mensual_total)}/mes`
+        : 'sin interés mensual',
+      href: '/finanzas',
+      tone: patrimonio.deuda_total > 0 ? 'negative' as const : 'default' as const,
+    },
+  ]
+
+  return (
+    <TableroClient
+      items={items}
+      alertas={alertas}
+      sinFecha={sinFecha}
+      datosFaltantes={datosFaltantes}
+      secciones={secciones}
+      resumen={resumen}
+    />
+  )
 }

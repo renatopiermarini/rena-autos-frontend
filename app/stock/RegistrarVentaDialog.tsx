@@ -9,7 +9,9 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  useDirtyClose,
 } from '@/components/ui/dialog'
+import { formSucio } from '@/lib/dirty'
 import { FField, FInput, FSelect, FCheckbox, nativeSelectCls } from '@/components/form-fields'
 import { toast } from 'sonner'
 
@@ -46,6 +48,9 @@ export default function RegistrarVentaDialog({
 }) {
   const router = useRouter()
   const [form, setForm] = useState<VentaForm>(VENTA_FORM_VACIO)
+  // El form tal cual quedó sembrado al abrir: es la referencia para saber si hay
+  // algo tipeado que se perdería al cerrar (ver lib/dirty.ts).
+  const [inicial, setInicial] = useState<VentaForm>(VENTA_FORM_VACIO)
   const [saving, setSaving] = useState(false)
 
   const esConsignacion = String(vehiculo?.tipo_operacion ?? '') === 'consignacion'
@@ -60,7 +65,7 @@ export default function RegistrarVentaDialog({
   // daría mañana, así que la fecha se siembra en el cliente al abrir.
   useEffect(() => {
     if (!open) return
-    setForm({
+    const sembrado: VentaForm = {
       ...VENTA_FORM_VACIO,
       fecha_venta: todayKey(),
       // Si el auto ya tenía un precio de venta cargado se respeta; el publicado
@@ -68,7 +73,9 @@ export default function RegistrarVentaDialog({
       precio_venta_final: vehiculo?.precio_venta_final ? String(vehiculo.precio_venta_final) : '',
       comprador_id: vehiculo?.comprador_id ? String(vehiculo.comprador_id) : '',
       cuenta: cuentas[0]?.clave ?? '',
-    })
+    }
+    setForm(sembrado)
+    setInicial(sembrado)
   }, [open, vehiculo?.id])
 
   const set = (campo: keyof VentaForm, valor: string | boolean) =>
@@ -81,7 +88,10 @@ export default function RegistrarVentaDialog({
   const comision = precioOk ? comisionVenta(precioNum, comisionPct) : 0
   const restoDueno = precioOk ? Math.round((precioNum - comision) * 100) / 100 : 0
 
-  function cerrar() { onOpenChange(false) }
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio: formSucio(form, inicial),
+    onOpenChange,
+  })
 
   async function confirmar() {
     const r = planVenta(form, vehiculo, {
@@ -143,7 +153,7 @@ export default function RegistrarVentaDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={o => (o ? onOpenChange(true) : cerrar())}>
+    <Dialog open={open} {...dialogProps}>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Registrar venta</DialogTitle>
