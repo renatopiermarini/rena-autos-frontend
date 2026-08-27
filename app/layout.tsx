@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { getConfigNegocio } from '@/lib/kapso'
 import { brandingFrom } from '@/lib/branding'
 import { mensajesHabilitados } from '@/lib/mensajes'
+import { backendHabilitado } from '@/lib/backend'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
 
@@ -36,6 +37,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             iniciales={branding.iniciales}
             titulo={branding.titulo}
             mensajes={mensajesHabilitados(config)}
+            // El chat y la campana viven del backend del bot. Se lee ACÁ, en el
+            // server, porque BACKEND_API_KEY no puede cruzar al browser — igual
+            // que `documentosHabilitado` en app/stock/page.tsx, y por la misma
+            // razón (ver lib/backend.ts).
+            chat={backendHabilitado()}
           />
           <main className="mx-auto w-full max-w-[1600px] px-4 sm:px-8 py-6">{children}</main>
           <Toaster position="top-right" richColors />

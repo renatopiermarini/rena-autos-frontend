@@ -4,18 +4,24 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { SettingsIcon, MessageSquareTextIcon } from 'lucide-react'
+import { NotificacionesBell } from '@/components/notificaciones-bell'
+import { SettingsIcon, MessageSquareTextIcon, MessageCircleIcon } from 'lucide-react'
 
 // Twelve top-level items was five too many. Interesados lives under Clientes,
 // Ofertas is gone, and the tablero replaced the separate calendario.
 //
 // ORDEN: lo diario primero. En 375px la barra corta cerca del cuarto ítem, así
 // que lo que quede después hay que ir a buscarlo scrolleando — y Finanzas, que
-// se abre todos los días, quedaba fuera de la pantalla. Ahora las cuatro
-// primeras son las de todos los días (Tablero, Stock, Finanzas, Visitas) y lo
-// que se usa de vez en cuando queda atrás. Configuración va última: con el
-// ícono de engranaje se reconoce sin leer la palabra.
+// se abre todos los días, quedaba fuera de la pantalla. Adelante van las de
+// todos los días (Chat, Tablero, Stock, Finanzas, Visitas) y lo que se usa de
+// vez en cuando queda atrás. Configuración va última: con el ícono de engranaje
+// se reconoce sin leer la palabra.
 const NAV: { href: string; label: string; icon?: typeof SettingsIcon }[] = [
+  // Chat va PRIMERO, antes que el Tablero: es la puerta más rápida a todo lo
+  // demás (preguntar en criollo en vez de buscar la pantalla), y en 375px lo
+  // primero es lo único que se ve sin scrollear. Sólo está en las instancias
+  // con backend — ver el prop `chat`.
+  { href: '/chat',           label: 'Chat', icon: MessageCircleIcon },
   { href: '/',               label: 'Tablero'        },
   { href: '/stock',          label: 'Stock'          },
   { href: '/finanzas',       label: 'Finanzas'       },
@@ -37,6 +43,7 @@ export function MainNav({
   iniciales = 'RP',
   titulo = 'Renato Piermarini Autos',
   mensajes = true,
+  chat = false,
 }: {
   iniciales?: string
   titulo?: string
@@ -47,9 +54,18 @@ export function MainNav({
    * config cargada, que es la que hoy la usa.
    */
   mensajes?: boolean
+  /**
+   * ¿Esta instancia tiene backend del bot (BACKEND_URL + BACKEND_API_KEY)?
+   * Enciende el ítem "Chat" Y la campana de avisos, que salen del mismo lugar.
+   * Lo decide el layout en el server: acá `process.env` no existe. El default
+   * `false` es a propósito — sin backend no hay nada del otro lado, y un ítem
+   * que lleva a una pantalla vacía es peor que no tenerlo.
+   */
+  chat?: boolean
 } = {}) {
   const pathname = usePathname()
-  const items = NAV.filter(n => n.href !== '/mensajes' || mensajes)
+  const items = NAV.filter(n =>
+    (n.href !== '/mensajes' || mensajes) && (n.href !== '/chat' || chat))
 
   // Indicador de overflow: en el celular la barra cortaba en "Clie…" sin ninguna
   // señal de que había más ítems a la derecha. El degradé aparece SÓLO del lado
@@ -128,7 +144,8 @@ export function MainNav({
             )}
           />
         </div>
-        <div className="ml-auto shrink-0">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          {chat && <NotificacionesBell />}
           <ThemeToggle />
         </div>
       </div>
