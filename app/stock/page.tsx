@@ -25,6 +25,12 @@ export default async function Stock() {
       defAssignee={resolveDefaultAssignee(config, equipoFromRows(equipoRows))}
       cuentas={cuentasInfo(cuentasRows)}
       comisionPct={comisionConsignacionPct(config)}
+      // Los contratos los genera el backend del bot (POST /api/documentos/generar,
+      // header X-API-Key). La instancia que no tenga las dos env no muestra el
+      // botón: mejor que no exista a que exista y falle. Se lee ACÁ, en el
+      // server component, porque BACKEND_API_KEY no puede cruzar al browser
+      // (ver app/api/documentos/route.ts).
+      documentosHabilitado={Boolean(process.env.BACKEND_URL && process.env.BACKEND_API_KEY)}
     />
   )
 }

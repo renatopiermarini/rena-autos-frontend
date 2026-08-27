@@ -13,10 +13,11 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, CheckIcon, AlertCircleIcon, SearchIcon, XIcon, CarIcon, PlusIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, CheckIcon, AlertCircleIcon, SearchIcon, XIcon, CarIcon, PlusIcon, FileTextIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import NuevoAutoDialog from './NuevoAutoDialog'
 import RegistrarVentaDialog from './RegistrarVentaDialog'
+import DocumentoDialog from './DocumentoDialog'
 import { COMISION_PCT_DEFAULT } from '@/lib/venta'
 
 const CAT_LABEL_FIN: Record<string, string> = {
@@ -192,6 +193,8 @@ function FSelect({ label, value, onChange, options }: {
 type VehicleDetailProps = {
   v: any; clientes: any[]; vehicles: any[]; movimientos: any[]; prestamos: any[]; tareas?: any[]
   cuentas?: CuentaInfo[]; comisionPct?: number
+  /** ¿La instancia tiene backend de contratos? Sin él, no hay botón. */
+  documentosHabilitado?: boolean
 }
 
 /**
@@ -203,12 +206,13 @@ type VehicleDetailProps = {
  */
 function VehicleDetailBody({
   v, clientes, vehicles, movimientos, prestamos, tareas = [],
-  cuentas = [], comisionPct = COMISION_PCT_DEFAULT,
+  cuentas = [], comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false,
 }: VehicleDetailProps) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showVenta, setShowVenta] = useState(false)
+  const [showDoc, setShowDoc] = useState(false)
 
   const [form, setForm] = useState({
     estado: v.estado ?? '',
@@ -508,6 +512,17 @@ function VehicleDetailBody({
               Registrar venta
             </Button>
           )}
+          {/* Los contratos los arma el backend del bot. Sin esas env el botón no
+              se dibuja — la feature simplemente no existe en esa instancia. */}
+          {documentosHabilitado && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={e => { e.stopPropagation(); setShowDoc(true) }}
+            >
+              <FileTextIcon /> Generar documento
+            </Button>
+          )}
         </div>
 
         <RegistrarVentaDialog
@@ -520,6 +535,15 @@ function VehicleDetailBody({
           cuentas={cuentas}
           comisionPct={comisionPct}
         />
+
+        {documentosHabilitado && (
+          <DocumentoDialog
+            open={showDoc}
+            onOpenChange={setShowDoc}
+            vehiculo={v}
+            clientes={clientes}
+          />
+        )}
     </div>
   )
 }
@@ -537,11 +561,11 @@ function VehicleDetailRow(props: VehicleDetailProps) {
 
 function VehicleTable({
   vehicles, tareas, clientes, movimientos, prestamos, expanded, onToggle, defAssignee,
-  cuentas, comisionPct,
+  cuentas, comisionPct, documentosHabilitado,
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos: any[]; prestamos: any[]
   expanded: Set<number>; onToggle: (id: number) => void; defAssignee: string
-  cuentas: CuentaInfo[]; comisionPct: number
+  cuentas: CuentaInfo[]; comisionPct: number; documentosHabilitado: boolean
 }) {
   function tareasAuto(vid: number) {
     return tareas.filter(t => t.vehicle_id === vid && t.estado !== 'completada')
@@ -602,6 +626,7 @@ function VehicleTable({
               <VehicleDetailBody
                 v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos}
                 prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct}
+                documentosHabilitado={documentosHabilitado}
               />
             )}
           </li>
@@ -670,7 +695,7 @@ function VehicleTable({
                   <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} defAssignee={defAssignee} /></td>
                   <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} defAssignee={defAssignee} /></td>
                 </tr>
-                {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} />}
+                {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} documentosHabilitado={documentosHabilitado} />}
               </Fragment>
             )
           })}
@@ -708,7 +733,7 @@ const ESTADO_ORDER = [
 
 export default function StockClient({
   vehicles, tareas, clientes, movimientos = [], prestamos = [], defAssignee = DEFAULT_ASSIGNEE,
-  cuentas = [], comisionPct = COMISION_PCT_DEFAULT,
+  cuentas = [], comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false,
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos?: any[]; prestamos?: any[]
   // A quién se le anota haber completado una tarea al tildar el check. Sale de
@@ -720,6 +745,10 @@ export default function StockClient({
   // % de comisión de consignación (config_negocio.comision_consignacion_pct).
   // Sin la tabla, el 5 de siempre.
   comisionPct?: number
+  // ¿Esta instancia tiene backend de contratos (BACKEND_URL + BACKEND_API_KEY)?
+  // Lo resuelve el server component: sin las dos env el botón "Generar
+  // documento" no se dibuja. Ver app/stock/page.tsx.
+  documentosHabilitado?: boolean
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [showNew, setShowNew] = useState(false)
@@ -860,6 +889,7 @@ export default function StockClient({
               defAssignee={defAssignee}
               cuentas={cuentas}
               comisionPct={comisionPct}
+              documentosHabilitado={documentosHabilitado}
             />
           </CardContent>
         </Card>
@@ -881,6 +911,7 @@ export default function StockClient({
                     defAssignee={defAssignee}
                     cuentas={cuentas}
                     comisionPct={comisionPct}
+                    documentosHabilitado={documentosHabilitado}
                   />
                 </CardContent>
               </Card>
@@ -928,7 +959,7 @@ export default function StockClient({
                             {fmtFecha(v.fecha_venta)}
                           </td>
                         </tr>
-                        {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} />}
+                        {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} documentosHabilitado={documentosHabilitado} />}
                       </Fragment>
                     )
                   })}
