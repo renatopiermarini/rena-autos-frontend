@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { parseConfigNegocio, patchRecordDetailed, postRecord } from '@/lib/kapso'
 import { keywordsToText, textToKeywords, jsonError } from '@/lib/config-negocio'
+import { MENSAJES_CONFIG_KEY } from '@/lib/mensajes'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { FInput, FTextarea } from '@/components/form-fields'
@@ -19,7 +20,7 @@ type Campo = {
   className?: string
 }
 
-// Las 15 claves de config_negocio, agrupadas por para qué sirven. El orden acá
+// Las 16 claves de config_negocio, agrupadas por para qué sirven. El orden acá
 // es el orden en pantalla; agregar una clave nueva es agregar una línea.
 const GRUPOS: { titulo: string; descripcion: string; campos: Campo[] }[] = [
   {
@@ -50,6 +51,10 @@ const GRUPOS: { titulo: string; descripcion: string; campos: Campo[] }[] = [
       { clave: 'comision_consignacion_pct', label: 'Comisión consignación (%)', kind: 'number', hint: 'Porcentaje, no fracción: 5 = 5%.' },
       { clave: 'umbral_alerta_caja', label: 'Umbral alerta de caja', kind: 'number', hint: 'Por debajo de este saldo salta la alerta en el tablero.' },
       { clave: 'tablero_destacados', label: 'Destacados del tablero', hint: 'Claves del equipo con sección propia arriba del tablero, separadas por coma.' },
+      {
+        clave: MENSAJES_CONFIG_KEY, label: 'Pantalla «Mensajes frecuentes»',
+        hint: 'Poné 1 para que aparezca en el menú (plantillas para copiar y pegar en WhatsApp). Vacío = no aparece.',
+      },
       {
         clave: 'stock_keywords', label: 'Palabras clave de stock', kind: 'lines',
         className: 'md:col-span-2',

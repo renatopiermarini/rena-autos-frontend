@@ -7,6 +7,7 @@ import { MainNav } from '@/components/main-nav'
 import { ThemeProvider } from '@/components/theme-provider'
 import { getConfigNegocio } from '@/lib/kapso'
 import { brandingFrom } from '@/lib/branding'
+import { mensajesHabilitados } from '@/lib/mensajes'
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
 
@@ -18,7 +19,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const branding = brandingFrom(await getConfigNegocio())
+  // Una sola lectura de config_negocio para todo lo que el nav necesita saber
+  // de la instancia: cómo se llama (branding) y qué pantallas tiene.
+  const config = await getConfigNegocio()
+  const branding = brandingFrom(config)
   return (
     <html lang="es" className={cn('font-sans', geist.variable)} suppressHydrationWarning>
       <body className="bg-background text-foreground min-h-screen antialiased">
@@ -28,7 +32,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           enableSystem={false}
           disableTransitionOnChange
         >
-          <MainNav iniciales={branding.iniciales} titulo={branding.titulo} />
+          <MainNav
+            iniciales={branding.iniciales}
+            titulo={branding.titulo}
+            mensajes={mensajesHabilitados(config)}
+          />
           <main className="mx-auto w-full max-w-[1600px] px-4 sm:px-8 py-6">{children}</main>
           <Toaster position="top-right" richColors />
         </ThemeProvider>

@@ -30,8 +30,10 @@ export const ROUTE_LABEL: Record<RouteKey, string> = {
   tareas: 'Tareas',
   finanzas: 'Finanzas',
   contratos: 'Contratos',
-  // La CLAVE sigue siendo 'kb' (es lo que viaja a equipo.routes y al router del
-  // bot); sólo cambia la palabra que se lee en el form de Configuración.
+  // Ruta del BOT, no del dashboard: la pantalla "Guía" (/kb) se eliminó, pero el
+  // router del backend sigue despachando 'kb' contra su base kb_entries. La clave
+  // es lo que viaja a equipo.routes; la etiqueta se lee sólo en los badges de
+  // Configuración → Equipo.
   kb: 'Guía',
   research: 'Research',
   tramites: 'Trámites',

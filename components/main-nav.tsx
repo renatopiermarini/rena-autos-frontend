@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
-import { SettingsIcon } from 'lucide-react'
+import { SettingsIcon, MessageSquareTextIcon } from 'lucide-react'
 
 // Twelve top-level items was five too many. Interesados lives under Clientes,
 // Ofertas is gone, and the tablero replaced the separate calendario.
@@ -22,9 +22,9 @@ const NAV: { href: string; label: string; icon?: typeof SettingsIcon }[] = [
   { href: '/visitas',        label: 'Visitas'        },
   { href: '/clientes',       label: 'Clientes'       },
   { href: '/tareas',         label: 'Tareas'         },
-  // La ruta sigue siendo /kb (y la tabla kb_entries): sólo cambia la palabra que
-  // se lee. "KB" no le dice nada a nadie que no sea técnico.
-  { href: '/kb',             label: 'Guía'           },
+  // En el lugar que tenía "Guía" (pantalla eliminada). NO está en todas las
+  // instancias: ver el prop `mensajes` más abajo.
+  { href: '/mensajes',       label: 'Mensajes', icon: MessageSquareTextIcon },
   { href: '/verificaciones', label: 'Verificaciones' },
   { href: '/config/negocio', label: 'Configuración', icon: SettingsIcon },
 ]
@@ -36,11 +36,20 @@ const NAV: { href: string; label: string; icon?: typeof SettingsIcon }[] = [
 export function MainNav({
   iniciales = 'RP',
   titulo = 'Renato Piermarini Autos',
+  mensajes = true,
 }: {
   iniciales?: string
   titulo?: string
+  /**
+   * ¿Esta instancia tiene "Mensajes frecuentes"? Lo decide el layout en el
+   * server con mensajesHabilitados(config_negocio) — igual que el branding, acá
+   * no se puede leer la DB. El default `true` es la instancia de Renato sin
+   * config cargada, que es la que hoy la usa.
+   */
+  mensajes?: boolean
 } = {}) {
   const pathname = usePathname()
+  const items = NAV.filter(n => n.href !== '/mensajes' || mensajes)
 
   // Indicador de overflow: en el celular la barra cortaba en "Clie…" sin ninguna
   // señal de que había más ítems a la derecha. El degradé aparece SÓLO del lado
@@ -80,7 +89,7 @@ export function MainNav({
         </Link>
         <div className="relative min-w-0 flex-1">
           <nav ref={scroller} className="flex gap-1 overflow-x-auto scrollbar-hide">
-            {NAV.map(n => {
+            {items.map(n => {
               // /config tiene cuatro pantallas: el ítem queda activo en todas.
               const base = n.href.startsWith('/config') ? '/config' : n.href
               const active = base === '/' ? pathname === '/' : pathname.startsWith(base)
