@@ -1,7 +1,7 @@
 'use client'
 import { useState, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
-import { computeVehicleFinancials, computeLoanPosition } from '@/lib/kapso'
+import { computeVehicleFinancials, computeLoanPosition, type CuentaInfo } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 import { DEFAULT_ASSIGNEE } from '@/lib/equipo'
@@ -12,8 +12,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, CheckIcon, AlertCircleIcon, SearchIcon, XIcon, CarIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, CheckIcon, AlertCircleIcon, SearchIcon, XIcon, CarIcon, PlusIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
+import NuevoAutoDialog from './NuevoAutoDialog'
 
 const CAT_LABEL_FIN: Record<string, string> = {
   vehicle_purchase: 'Compra',
@@ -601,13 +602,18 @@ const ESTADO_ORDER = [
 
 export default function StockClient({
   vehicles, tareas, clientes, movimientos = [], prestamos = [], defAssignee = DEFAULT_ASSIGNEE,
+  cuentas = [],
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos?: any[]; prestamos?: any[]
   // A quién se le anota haber completado una tarea al tildar el check. Sale de
   // config_negocio.default_assignee; sin la tabla, 'rena' como siempre.
   defAssignee?: string
+  // Cajas de la contabilidad, para el egreso opcional del alta. Sin tabla
+  // `cuentas`, cuentasInfo cae en DEFAULT_CUENTAS.
+  cuentas?: CuentaInfo[]
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [showNew, setShowNew] = useState(false)
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
   // Default to ownership, not estado: "is this car mine or on consignment?" is
   // the question this page gets opened to answer, and grouping by estado made a
@@ -666,12 +672,22 @@ export default function StockClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-xl font-semibold">Stock</h1>
-        <span className="text-sm text-muted-foreground">
-          {activos.length} activos · {vendidosAll.length} vendidos
-        </span>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-xl font-semibold">Stock</h1>
+          <span className="text-sm text-muted-foreground">
+            {activos.length} activos · {vendidosAll.length} vendidos
+          </span>
+        </div>
+        <Button onClick={() => setShowNew(true)}><PlusIcon /> Nuevo auto</Button>
       </div>
+
+      <NuevoAutoDialog
+        open={showNew}
+        onOpenChange={setShowNew}
+        clientes={clientes}
+        cuentas={cuentas}
+      />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <div className="relative w-full sm:w-64">

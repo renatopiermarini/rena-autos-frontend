@@ -6,3 +6,5 @@ node_modules/
 
 # Impeccable skill files (tooling, not app source)
 .claude/skills/
+.vercel
+.env*

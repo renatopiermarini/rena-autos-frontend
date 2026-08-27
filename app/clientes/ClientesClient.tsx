@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, ContactIcon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, ContactIcon, PlusIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
+import NuevoClienteDialog from './NuevoClienteDialog'
 
 const TIPO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   vendedor: 'secondary',
@@ -250,10 +251,16 @@ function InteresadoRow({ i }: { i: any }) {
 
 export default function ClientesClient({ clientes, interesados }: { clientes: any[]; interesados: any[] }) {
   const interesadosActivos = interesados.filter(i => i.estado !== 'compro' && i.estado !== 'perdido')
+  const [showNew, setShowNew] = useState(false)
 
   return (
     <div className="space-y-8">
-      <h1 className="text-xl font-semibold">Clientes</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-xl font-semibold">Clientes</h1>
+        <Button onClick={() => setShowNew(true)}><PlusIcon /> Nuevo cliente</Button>
+      </div>
+
+      <NuevoClienteDialog open={showNew} onOpenChange={setShowNew} />
 
       <section>
         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
