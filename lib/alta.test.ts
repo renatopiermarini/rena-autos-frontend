@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
-  validarAltaVehiculo, validarAltaCliente, ofreceRegistrarCompra,
+  validarAltaVehiculo, validarAltaCliente, validarAltaOferta, ofreceRegistrarCompra,
   movimientoCompra, normalizarDominio, esErrorColumnaVersion, sinColumnaVersion,
-  VEHICULO_FORM_VACIO, CLIENTE_FORM_VACIO,
-  type AltaVehiculoForm, type AltaClienteForm,
+  VEHICULO_FORM_VACIO, CLIENTE_FORM_VACIO, OFERTA_FORM_VACIO,
+  type AltaVehiculoForm, type AltaClienteForm, type AltaOfertaForm,
 } from './alta'
 
 const NOW = '2026-08-25T15:00:00.000Z'
@@ -191,5 +191,50 @@ describe('normalizarDominio', () => {
   it('recorta y pasa a mayúsculas', () => {
     expect(normalizarDominio(' ab123cd ')).toBe('AB123CD')
     expect(normalizarDominio('')).toBe('')
+  })
+})
+
+describe('validarAltaOferta', () => {
+  const of = (over: Partial<AltaOfertaForm> = {}): AltaOfertaForm =>
+    ({ ...OFERTA_FORM_VACIO, vehicle_id: '7', monto_ofrecido: '9500', ...over })
+
+  it('arma la fila mínima con el interesado del contexto', () => {
+    const r = validarAltaOferta(of(), 12, NOW)
+    if (!r.ok) throw new Error(r.error)
+    expect(r.row).toEqual({
+      interesado_id: 12,
+      vehicle_id: 7,
+      monto_ofrecido: 9500,
+      estado: 'pendiente',
+      created_at: NOW,
+      updated_at: NOW,
+    })
+  })
+
+  it('exige interesado, auto y monto > 0', () => {
+    expect(validarAltaOferta(of(), null, NOW)).toMatchObject({ ok: false })
+    expect(validarAltaOferta(of({ vehicle_id: '' }), 12, NOW)).toMatchObject({ ok: false })
+    expect(validarAltaOferta(of({ monto_ofrecido: '' }), 12, NOW)).toMatchObject({ ok: false })
+    expect(validarAltaOferta(of({ monto_ofrecido: '0' }), 12, NOW)).toMatchObject({ ok: false })
+    expect(validarAltaOferta(of({ monto_ofrecido: 'mucho' }), 12, NOW)).toMatchObject({ ok: false })
+  })
+
+  it('valida el enum de estado que valida el proxy', () => {
+    expect(validarAltaOferta(of({ estado: 'aceptada' }), 12, NOW)).toMatchObject({ ok: true })
+    expect(validarAltaOferta(of({ estado: 'quizas' }), 12, NOW)).toMatchObject({ ok: false })
+  })
+
+  it('omite monto_aceptado y notas vacíos, y los manda cuando están', () => {
+    const vacio = validarAltaOferta(of(), 12, NOW)
+    if (!vacio.ok) throw new Error(vacio.error)
+    expect(Object.keys(vacio.row)).not.toContain('monto_aceptado')
+    expect(Object.keys(vacio.row)).not.toContain('notas')
+
+    const lleno = validarAltaOferta(
+      of({ estado: 'aceptada', monto_aceptado: '9000', notas: ' paga contado ' }), 12, NOW,
+    )
+    if (!lleno.ok) throw new Error(lleno.error)
+    expect(lleno.row.monto_aceptado).toBe(9000)
+    expect(lleno.row.notas).toBe('paga contado')
   })
 })

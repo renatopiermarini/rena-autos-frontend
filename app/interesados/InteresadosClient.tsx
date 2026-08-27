@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, UsersIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
+import NuevaOfertaDialog from './NuevaOfertaDialog'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   activo: 'info',
@@ -36,12 +37,13 @@ function Field({ label, value }: { label: string; value: any }) {
 }
 
 function InteresadoRow({
-  i, vehicleLabel, ofertas,
-}: { i: any; vehicleLabel: (id: any) => string; ofertas: any[] }) {
+  i, vehicleLabel, ofertas, vehicles,
+}: { i: any; vehicleLabel: (id: any) => string; ofertas: any[]; vehicles: any[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showOferta, setShowOferta] = useState(false)
   const [form, setForm] = useState({
     nombre: i.nombre ?? '',
     telefono: i.telefono ?? '',
@@ -163,9 +165,19 @@ function InteresadoRow({
                 {e}
               </Button>
             ))}
-            <Button size="xs" variant="outline" onClick={() => setEditing(true)} className="ml-auto">Editar</Button>
+            <Button size="xs" variant="outline" onClick={() => setShowOferta(true)} className="ml-auto">
+              Registrar oferta
+            </Button>
+            <Button size="xs" variant="outline" onClick={() => setEditing(true)}>Editar</Button>
             <Button size="xs" variant="destructive" onClick={borrar} disabled={saving}>Borrar</Button>
           </div>
+
+          <NuevaOfertaDialog
+            open={showOferta}
+            onOpenChange={setShowOferta}
+            interesado={i}
+            vehicles={vehicles}
+          />
         </div>
       )}
 
@@ -374,7 +386,7 @@ export default function InteresadosClient({
       <Card size="sm">
         <CardContent className="p-0">
           {sorted.map(i => (
-            <InteresadoRow key={i.id} i={i} vehicleLabel={vehicleLabel} ofertas={ofertas} />
+            <InteresadoRow key={i.id} i={i} vehicleLabel={vehicleLabel} ofertas={ofertas} vehicles={vehicles} />
           ))}
           {sorted.length === 0 && (
             <EmptyState icon={UsersIcon} title="Sin interesados" hint="Sumá uno con “Nuevo interesado”." />

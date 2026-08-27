@@ -1,5 +1,5 @@
 /**
- * Altas desde el dashboard: vehículo y cliente.
+ * Altas desde el dashboard: vehículo, cliente y oferta.
  *
  * Módulo PURO (sin Next, sin fetch, sin env). Lo usan los diálogos de /stock y
  * /clientes para armar el payload, y los tests para fijar las reglas. La
@@ -24,8 +24,11 @@ export const ESTADOS_VEHICULO = [
 export const TIPOS_OPERACION = ['propio', 'consignacion'] as const
 // Espejo de ENUMS.clientes.tipo.
 export const TIPOS_CLIENTE = ['comprador', 'vendedor', 'acreedor'] as const
+// Espejo de ENUMS.ofertas.estado.
+export const ESTADOS_OFERTA = ['pendiente', 'aceptada', 'rechazada', 'contraoferta'] as const
 
 export const ESTADO_VEHICULO_DEFAULT = 'a_ingresar'
+export const ESTADO_OFERTA_DEFAULT = 'pendiente'
 
 export type AltaOk = { ok: true; row: Record<string, any> }
 export type AltaError = { ok: false; error: string }
@@ -65,6 +68,27 @@ export const VEHICULO_FORM_VACIO: AltaVehiculoForm = {
   tipo_operacion: 'propio', cliente_id: '', estado: ESTADO_VEHICULO_DEFAULT,
   precio_compra: '', precio_publicado: '', precio_venta_objetivo: '',
   fecha_ingreso: '',
+}
+
+/**
+ * Alta de oferta desde la ficha de un interesado. Espejo de las columnas reales
+ * de `ofertas` (db/migrations/0001_base.sql del backend): el interesado NO es un
+ * campo del form — sale del contexto de la fila desde donde se abre el diálogo.
+ * `monto_aceptado`, `respuesta_propietario`, `fecha_respuesta` y `email_enviado`
+ * son del lado de la RESPUESTA (los completa el bot o una edición posterior) —
+ * salvo monto_aceptado, que se ofrece cuando la oferta ya nace aceptada.
+ */
+export type AltaOfertaForm = {
+  vehicle_id: string
+  monto_ofrecido: string
+  monto_aceptado: string
+  estado: string
+  notas: string
+}
+
+export const OFERTA_FORM_VACIO: AltaOfertaForm = {
+  vehicle_id: '', monto_ofrecido: '', monto_aceptado: '',
+  estado: ESTADO_OFERTA_DEFAULT, notas: '',
 }
 
 export const CLIENTE_FORM_VACIO: AltaClienteForm = {
@@ -255,5 +279,49 @@ export function validarAltaCliente(form: AltaClienteForm, nowIso: string): AltaR
     const v = (form[campo] ?? '').trim()
     if (v) row[campo] = v
   }
+  return { ok: true, row }
+}
+
+/**
+ * Valida el form de una oferta y devuelve la fila lista para POSTear a
+ * `ofertas`. `interesadoId` es el dueño de la ficha desde la que se abrió el
+ * diálogo: una oferta sin interesado no la puede leer nadie (la lista de
+ * /interesados filtra por interesado_id).
+ */
+export function validarAltaOferta(
+  form: AltaOfertaForm,
+  interesadoId: any,
+  nowIso: string,
+): AltaResult {
+  const interesado_id = idPositivo(String(interesadoId ?? ''))
+  if (interesado_id === null) return err('La oferta necesita un interesado.')
+
+  const vehicle_id = idPositivo(form.vehicle_id)
+  if (vehicle_id === null) return err('Elegí por qué auto es la oferta.')
+
+  const estado = (form.estado ?? '').trim() || ESTADO_OFERTA_DEFAULT
+  if (!(ESTADOS_OFERTA as readonly string[]).includes(estado)) {
+    return err(`Estado de oferta inválido: ${JSON.stringify(estado)}.`)
+  }
+
+  const ofrecido = numeroOpcional(String(form.monto_ofrecido ?? ''), 'El monto ofrecido', false)
+  if (!ofrecido.ok) return ofrecido
+  if (ofrecido.value === null) return err('El monto ofrecido es obligatorio.')
+  if (ofrecido.value <= 0) return err('El monto ofrecido tiene que ser mayor que 0.')
+
+  const aceptado = numeroOpcional(String(form.monto_aceptado ?? ''), 'El monto aceptado', false)
+  if (!aceptado.ok) return aceptado
+
+  const row: Record<string, any> = {
+    interesado_id,
+    vehicle_id,
+    monto_ofrecido: ofrecido.value,
+    estado,
+    created_at: nowIso,
+    updated_at: nowIso,
+  }
+  if (aceptado.value !== null) row.monto_aceptado = aceptado.value
+  const notas = (form.notas ?? '').trim()
+  if (notas) row.notas = notas
   return { ok: true, row }
 }

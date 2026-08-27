@@ -1,7 +1,11 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { flagOn, activasOrdenadas, patchRecordDetailed, postRecord, deleteRecordDetailed } from '@/lib/kapso'
+import {
+  flagOn, activasOrdenadas, patchRecordDetailed, postRecord, deleteRecordDetailed,
+  saldoDeCuenta,
+} from '@/lib/kapso'
+import { planAjuste } from '@/lib/ajuste'
 import { isValidClave, CLAVE_RE } from '@/lib/routes-catalog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,7 +17,7 @@ import { FInput, FCheckbox } from '@/components/form-fields'
 import { ConfigMissingBanner, RestartNotice } from '@/components/config-banner'
 import { EmptyState } from '@/components/empty-state'
 import { toast } from 'sonner'
-import { PlusIcon, PencilIcon, Trash2Icon, WalletIcon } from 'lucide-react'
+import { PlusIcon, PencilIcon, Trash2Icon, WalletIcon, ScaleIcon } from 'lucide-react'
 
 type FormState = {
   clave: string
@@ -44,13 +48,27 @@ function rowToForm(c: any): FormState {
   }
 }
 
-export default function CuentasClient({ cuentas }: { cuentas: any[] }) {
+function money(n: number): string {
+  return `$${Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`
+}
+
+export default function CuentasClient({
+  cuentas, movimientos = [],
+}: {
+  cuentas: any[]
+  // El ledger completo: el saldo por cuenta es DERIVADO (saldoDeCuenta), no hay
+  // columna que leer.
+  movimientos?: any[]
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<any | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm(0))
   const [saving, setSaving] = useState(false)
   const [borrar, setBorrar] = useState<any | null>(null)
+  // Ajuste de saldo: la cuenta que se está cuadrando y el saldo real tipeado.
+  const [ajustando, setAjustando] = useState<any | null>(null)
+  const [saldoReal, setSaldoReal] = useState('')
 
   // Activas primero (en su orden), inactivas al final: la baja lógica no
   // esconde la fila, la manda abajo apagada.
@@ -133,6 +151,51 @@ export default function CuentasClient({ cuentas }: { cuentas: any[] }) {
     }
   }
 
+  function abrirAjuste(c: any) {
+    setAjustando(c)
+    // Se siembra con el derivado: así el default es "no cambia nada" y el
+    // usuario tiene que tipear a propósito el número que difiere.
+    setSaldoReal(String(saldoDeCuenta(movimientos, String(c.clave ?? ''))))
+  }
+
+  async function confirmarAjuste() {
+    if (!ajustando) return
+    const clave = String(ajustando.clave ?? '')
+    const derivado = saldoDeCuenta(movimientos, clave)
+    const r = planAjuste(clave, derivado, saldoReal)
+    if (!r.ok) { toast.error(r.error); return }
+    if (r.movimiento === null) {
+      // Diferencia 0: escribir un movimiento de $0 sería ruido en el ledger (y
+      // validarMovimiento lo rechazaría igual, monto > 0).
+      toast.success('La cuenta ya está cuadrada — no se escribió nada.')
+      setAjustando(null)
+      return
+    }
+    setSaving(true)
+    // Por /api/finanzas/movimiento y no por el proxy: es la única puerta que
+    // setea afecta_balance=1, sin el cual el ajuste no movería el saldo.
+    const res = await fetch('/api/finanzas/movimiento', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(r.movimiento),
+    })
+    setSaving(false)
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({} as any))
+      toast.error(json.message || json.error || 'No se pudo registrar el ajuste')
+      return
+    }
+    toast.success(
+      `Ajuste registrado: ${r.diferencia > 0 ? 'ingreso' : 'egreso'} de ` +
+      `${money(Math.abs(r.diferencia))} en "${clave}"`,
+    )
+    setAjustando(null)
+    router.refresh()
+  }
+
+  const derivadoAjuste = ajustando ? saldoDeCuenta(movimientos, String(ajustando.clave ?? '')) : 0
+  const previewAjuste = ajustando ? planAjuste(String(ajustando.clave ?? ''), derivadoAjuste, saldoReal) : null
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -166,6 +229,12 @@ export default function CuentasClient({ cuentas }: { cuentas: any[] }) {
                   )}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
+                  <span
+                    className="text-sm tabular-nums"
+                    title="Saldo derivado del ledger (ingresos − egresos)"
+                  >
+                    {money(saldoDeCuenta(movimientos, String(c.clave ?? '')))}
+                  </span>
                   <span className="text-xs text-muted-foreground tabular-nums">#{c.orden ?? 0}</span>
                   <FCheckbox
                     id={`activa-${c.id}`}
@@ -173,6 +242,13 @@ export default function CuentasClient({ cuentas }: { cuentas: any[] }) {
                     checked={activa}
                     onChange={() => toggleActiva(c)}
                   />
+                  {/* Sólo las activas: cuadrar una cuenta dada de baja dejaría
+                      un movimiento en una caja que ya no se muestra. */}
+                  {activa && (
+                    <Button variant="outline" size="sm" onClick={() => abrirAjuste(c)}>
+                      <ScaleIcon /> Ajustar saldo
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={() => abrirEdicion(c)}>
                     <PencilIcon /> Editar
                   </Button>
@@ -248,6 +324,62 @@ export default function CuentasClient({ cuentas }: { cuentas: any[] }) {
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancelar</Button>
             <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={ajustando !== null} onOpenChange={o => !o && setAjustando(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ajustar el saldo de &quot;{ajustando?.clave}&quot;</DialogTitle>
+            <DialogDescription>
+              El saldo no se escribe: se deriva del ledger. Poner el saldo real asienta la
+              DIFERENCIA como un movimiento de categoría &quot;ajuste&quot;.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Saldo derivado hoy</span>
+              <span className="tabular-nums font-medium">{money(derivadoAjuste)}</span>
+            </div>
+            <FInput
+              label="Saldo real hoy"
+              type="number"
+              step="0.01"
+              value={saldoReal}
+              onChange={setSaldoReal}
+              hint="Lo que hay de verdad en esa caja/cuenta."
+            />
+            {previewAjuste?.ok && previewAjuste.movimiento === null && (
+              <p className="text-sm text-muted-foreground">
+                La cuenta ya está cuadrada: no se va a escribir nada.
+              </p>
+            )}
+            {previewAjuste?.ok && previewAjuste.movimiento && (
+              <p className="text-sm">
+                Se registra un{' '}
+                <span className="font-medium">
+                  {previewAjuste.movimiento.tipo} de {money(previewAjuste.movimiento.monto)}
+                </span>{' '}
+                {previewAjuste.diferencia > 0
+                  ? '(falta plata en el ledger)'
+                  : '(sobra plata en el ledger)'}
+                .
+              </p>
+            )}
+            {previewAjuste && !previewAjuste.ok && (
+              <p className="text-sm text-destructive">{previewAjuste.error}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAjustando(null)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmarAjuste} disabled={saving}>
+              {saving ? 'Registrando…' : 'Registrar ajuste'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

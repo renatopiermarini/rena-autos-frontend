@@ -15,6 +15,8 @@ import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, CheckIcon, AlertCircleIcon, SearchIcon, XIcon, CarIcon, PlusIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import NuevoAutoDialog from './NuevoAutoDialog'
+import RegistrarVentaDialog from './RegistrarVentaDialog'
+import { COMISION_PCT_DEFAULT } from '@/lib/venta'
 
 const CAT_LABEL_FIN: Record<string, string> = {
   vehicle_purchase: 'Compra',
@@ -187,12 +189,17 @@ function FSelect({ label, value, onChange, options }: {
   )
 }
 
-function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas = [] }: {
+function VehicleDetail({
+  v, clientes, vehicles, movimientos, prestamos, tareas = [],
+  cuentas = [], comisionPct = COMISION_PCT_DEFAULT,
+}: {
   v: any; clientes: any[]; vehicles: any[]; movimientos: any[]; prestamos: any[]; tareas?: any[]
+  cuentas?: CuentaInfo[]; comisionPct?: number
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showVenta, setShowVenta] = useState(false)
 
   const [form, setForm] = useState({
     estado: v.estado ?? '',
@@ -477,14 +484,36 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
           )
         })()}
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={e => { e.stopPropagation(); setEditing(true) }}
-          className="mt-4"
-        >
-          Editar
-        </Button>
+        <div className="flex flex-wrap gap-2 mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={e => { e.stopPropagation(); setEditing(true) }}
+          >
+            Editar
+          </Button>
+          {/* Un auto ya vendido no se vuelve a vender: para corregir el precio
+              está "Editar" (que no toca la caja). */}
+          {v.estado !== 'vendido' && (
+            <Button
+              size="sm"
+              onClick={e => { e.stopPropagation(); setShowVenta(true) }}
+            >
+              Registrar venta
+            </Button>
+          )}
+        </div>
+
+        <RegistrarVentaDialog
+          open={showVenta}
+          onOpenChange={setShowVenta}
+          vehiculo={v}
+          vehicles={vehicles}
+          movimientos={movimientos}
+          clientes={clientes}
+          cuentas={cuentas}
+          comisionPct={comisionPct}
+        />
       </td>
     </tr>
   )
@@ -492,9 +521,11 @@ function VehicleDetail({ v, clientes, vehicles, movimientos, prestamos, tareas =
 
 function VehicleTable({
   vehicles, tareas, clientes, movimientos, prestamos, expanded, onToggle, defAssignee,
+  cuentas, comisionPct,
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos: any[]; prestamos: any[]
   expanded: Set<number>; onToggle: (id: number) => void; defAssignee: string
+  cuentas: CuentaInfo[]; comisionPct: number
 }) {
   function tareasAuto(vid: number) {
     return tareas.filter(t => t.vehicle_id === vid && t.estado !== 'completada')
@@ -565,7 +596,7 @@ function VehicleTable({
                   <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} defAssignee={defAssignee} /></td>
                   <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} defAssignee={defAssignee} /></td>
                 </tr>
-                {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} />}
+                {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} />}
               </Fragment>
             )
           })}
@@ -602,15 +633,18 @@ const ESTADO_ORDER = [
 
 export default function StockClient({
   vehicles, tareas, clientes, movimientos = [], prestamos = [], defAssignee = DEFAULT_ASSIGNEE,
-  cuentas = [],
+  cuentas = [], comisionPct = COMISION_PCT_DEFAULT,
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos?: any[]; prestamos?: any[]
   // A quién se le anota haber completado una tarea al tildar el check. Sale de
   // config_negocio.default_assignee; sin la tabla, 'rena' como siempre.
   defAssignee?: string
-  // Cajas de la contabilidad, para el egreso opcional del alta. Sin tabla
-  // `cuentas`, cuentasInfo cae en DEFAULT_CUENTAS.
+  // Cajas de la contabilidad, para el egreso opcional del alta y para el ingreso
+  // de la venta. Sin tabla `cuentas`, cuentasInfo cae en DEFAULT_CUENTAS.
   cuentas?: CuentaInfo[]
+  // % de comisión de consignación (config_negocio.comision_consignacion_pct).
+  // Sin la tabla, el 5 de siempre.
+  comisionPct?: number
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   const [showNew, setShowNew] = useState(false)
@@ -749,6 +783,8 @@ export default function StockClient({
               expanded={expanded}
               onToggle={toggle}
               defAssignee={defAssignee}
+              cuentas={cuentas}
+              comisionPct={comisionPct}
             />
           </CardContent>
         </Card>
@@ -768,6 +804,8 @@ export default function StockClient({
                     expanded={expanded}
                     onToggle={toggle}
                     defAssignee={defAssignee}
+                    cuentas={cuentas}
+                    comisionPct={comisionPct}
                   />
                 </CardContent>
               </Card>
@@ -815,7 +853,7 @@ export default function StockClient({
                             {fmtFecha(v.fecha_venta)}
                           </td>
                         </tr>
-                        {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} />}
+                        {isOpen && <VehicleDetail v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} />}
                       </Fragment>
                     )
                   })}

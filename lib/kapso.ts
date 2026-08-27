@@ -374,7 +374,10 @@ export function computeVehicleFinancials(
   }
 }
 
-function round2(n: number) { return Math.round(n * 100) / 100 }
+// Exportado: lib/venta.ts y lib/ajuste.ts redondean la MISMA plata que este
+// módulo (la comisión de una consignación, el saldo derivado de una cuenta). Con
+// dos round2 distintos el diálogo mostraría un centavo y el ledger guardaría otro.
+export function round2(n: number) { return Math.round(n * 100) / 100 }
 
 // Tasa anual as PERCENT (15). The canonical unit is percent; the legacy
 // fractional encoding (0.15) is tolerated here and ONLY here — same contract
@@ -525,6 +528,30 @@ export type Patrimonio = {
   posiciones: LoanPosition[]
 }
 
+/**
+ * Saldo CRUDO (sin redondear) de una cuenta, derivado del ledger: ingresos −
+ * egresos de las filas que afectan el balance. Es la única definición de "cuánta
+ * plata hay en esta caja" del dashboard.
+ *
+ * Va sin redondear porque computePatrimonio suma las cajas ANTES de redondear
+ * (el total redondea la suma cruda, no las partes); para mostrar un saldo se usa
+ * saldoDeCuenta().
+ */
+export function saldoCrudoDeCuenta(movimientos: any[], clave: string): number {
+  let total = 0
+  for (const m of movimientos ?? []) {
+    if (!affectsBalance(m)) continue
+    if (String(m.cuenta ?? '') !== clave) continue
+    total += Number(m.monto ?? 0) * (m.tipo === 'ingreso' ? 1 : -1)
+  }
+  return total
+}
+
+/** El mismo saldo, redondeado a centavos: lo que se muestra y lo que se ajusta. */
+export function saldoDeCuenta(movimientos: any[], clave: string): number {
+  return round2(saldoCrudoDeCuenta(movimientos, clave))
+}
+
 // Mirror of the backend's analisis_db(patrimonio): the real money picture.
 // cajas (derived from the ledger) + stock (autos PROPIOS sin vender, valued at
 // what we expect to get: precio_venta_objetivo → precio_publicado → costo —
@@ -544,21 +571,14 @@ export function computePatrimonio(
   cuentas: string[] = DEFAULT_CUENTAS,
 ): Patrimonio {
   const claves = Array.from(new Set(cuentas.filter(Boolean)))
-  const cajas: Record<string, number> = {}
-  for (const c of claves) cajas[c] = 0
-  for (const m of movimientos) {
-    if (!affectsBalance(m)) continue
-    const c = String(m.cuenta ?? '')
-    // Un movimiento de una cuenta que no está en el perfil no se cuenta —
-    // misma regla que antes, cuando el `in cajas` filtraba contra los 3 fijos.
-    if (!(c in cajas)) continue
-    cajas[c] += Number(m.monto ?? 0) * (m.tipo === 'ingreso' ? 1 : -1)
-  }
   const cajasOut = { total: 0 } as Cajas
   let totalCrudo = 0
   for (const c of claves) {
-    cajasOut[c] = round2(cajas[c])
-    totalCrudo += cajas[c]   // el total redondea la suma CRUDA, no las partes
+    // Un movimiento de una cuenta que no está en el perfil no se cuenta —
+    // misma regla que antes, cuando el `in cajas` filtraba contra los 3 fijos.
+    const crudo = saldoCrudoDeCuenta(movimientos, c)
+    cajasOut[c] = round2(crudo)
+    totalCrudo += crudo   // el total redondea la suma CRUDA, no las partes
   }
   cajasOut.total = round2(totalCrudo)
 
