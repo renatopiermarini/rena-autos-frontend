@@ -2,8 +2,8 @@
 //
 // Storage convention: an INSTANT (a thing with a time of day, e.g. `visita.fecha`)
 // is stored as AR-local wall-clock with an explicit `-03:00` offset — Argentina has
-// no DST, so `-03:00` is correct year-round. DATE-ONLY fields (`tareas.fecha_vencimiento`,
-// `transferencias.fecha_turno`) stay `"YYYY-MM-DD"`; `transferencias.horario` stays `"HH:MM"`.
+// no DST, so `-03:00` is correct year-round. DATE-ONLY fields
+// (`tareas.fecha_vencimiento`) stay `"YYYY-MM-DD"`.
 //
 // Two rules that kill the off-by-one bugs:
 //   1. Never `new Date("YYYY-MM-DD")` — that's UTC midnight and renders the previous

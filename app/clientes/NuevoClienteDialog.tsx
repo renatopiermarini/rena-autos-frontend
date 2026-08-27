@@ -65,7 +65,7 @@ export default function NuevoClienteDialog({
         <DialogHeader>
           <DialogTitle>Nuevo cliente</DialogTitle>
           <DialogDescription>
-            El mismo registro que usan las consignaciones, las transferencias y los préstamos.
+            El mismo registro que usan las consignaciones y los préstamos.
           </DialogDescription>
         </DialogHeader>
 

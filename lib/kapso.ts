@@ -31,8 +31,6 @@ export async function getInteresados()     { return get('interesados', 15) }
 export async function getTareas()          { return get('tareas', 15) }
 export async function getPrestamos()       { return get('prestamos', 60) }
 export async function getMovimientos()     { return get('movimientos_contabilidad', 60) }
-export async function getTransferencias()  { return get('transferencias', 15) }
-export async function getTurnos()           { return get('turnos', 15) }
 export async function getOfertas()         { return get('ofertas', 15) }
 export async function getVisitas()         { return get('visitas', 15) }
 export async function getKbEntries()       { return get('kb_entries', 15) }

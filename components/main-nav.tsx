@@ -15,7 +15,6 @@ const NAV: { href: string; label: string; icon?: typeof SettingsIcon }[] = [
   { href: '/finanzas',       label: 'Finanzas'       },
   { href: '/tareas',         label: 'Tareas'         },
   { href: '/kb',             label: 'KB'             },
-  { href: '/transferencias', label: 'Transferencias' },
   { href: '/verificaciones', label: 'Verificaciones' },
   { href: '/config/negocio', label: 'Configuración', icon: SettingsIcon },
 ]

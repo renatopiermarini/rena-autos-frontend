@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { visitaConflict } from '@/lib/agenda'
 import { CLAVE_RE, isValidClave, routesError } from '@/lib/routes-catalog'
 import { dbGet, dbPost, dbPatch, dbDelete, dbCount, DbError, matches } from '@/lib/db'
 
@@ -8,7 +7,7 @@ import { dbGet, dbPost, dbPatch, dbDelete, dbCount, DbError, matches } from '@/l
 // Las validaciones, el orden de los guards y los códigos de error de acá NO
 // dependen del backend: son las mismas para las dos instancias.
 
-const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'transferencias', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'prestamos'])
+const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'prestamos'])
 
 // Live-verified enum sets — mirrors the bot (rena-autos-api tools/kapso_tools.py
 // ENUMS, prod survey 2026-07-07). "equipo" in asignado is real (broadcast bucket).
@@ -126,7 +125,6 @@ const DELETE_LINKS: Record<string, Array<[table: string, col: string, label: str
   vehicles: [
     ['visitas', 'vehicle_id', 'visita(s)'],
     ['ofertas', 'vehicle_id', 'oferta(s)'],
-    ['transferencias', 'vehicle_id', 'transferencia(s)'],
     ['tareas', 'vehicle_id', 'tarea(s)'],
     ['gastos_vehicles', 'vehicle_id', 'gasto(s)'],
     ['movimientos_contabilidad', 'vehicle_id', 'movimiento(s) contable(s)'],
@@ -156,17 +154,18 @@ const VALUE_DELETE_LINKS: Record<string, {
   },
 }
 
-// Mutations address rows by ?id=N (or ?vehicle_id=N for legacy id-less
-// transferencias rows). Anything else — including NO filter, which Kapso would
-// apply to the whole table — is rejected.
-const FILTER_KEYS = ['id', 'vehicle_id']
+// Mutations address rows by ?id=N. Anything else — including NO filter, which
+// Kapso would apply to the whole table — is rejected. (There used to be a
+// ?vehicle_id=N form for the legacy id-less `transferencias` rows; that table is
+// gone from the dashboard and no other table needs it.)
+const FILTER_KEYS = ['id']
 
 function parseFilter(request: NextRequest): { key: string; value: number } | NextResponse {
   const params = request.nextUrl.searchParams
   const keys = FILTER_KEYS.filter(k => params.has(k))
   if (keys.length !== 1) {
     return NextResponse.json(
-      { error: 'filtro_requerido', message: 'Se requiere exactamente un filtro: ?id=N o ?vehicle_id=N.' },
+      { error: 'filtro_requerido', message: 'Se requiere exactamente un filtro: ?id=N.' },
       { status: 400 },
     )
   }
@@ -297,37 +296,6 @@ function dbErrorResponse(e: unknown) {
   return NextResponse.json({ error: 'db_error', message }, { status: 500 })
 }
 
-// Defense-in-depth: the dashboard UI already blocks a conflicting visita, but enforce
-// it here too so no client can write a visita on top of a transferencia turno block.
-// Mirrors the bot (rena-autos-api). Fail-open: if we can't read transferencias, allow.
-async function fetchAllTransferencias(): Promise<any[]> {
-  try {
-    return await dbGet('transferencias')
-  } catch (e) {
-    // Igual que antes: con una lectura a medias se chequea contra lo que haya
-    // (y visitaConflict409 ya deja pasar la visita si esto falla del todo).
-    if (e instanceof DbError) return e.partial ?? []
-    throw e
-  }
-}
-
-async function visitaConflict409(table: string, body: any): Promise<NextResponse | null> {
-  if (table !== 'visitas' || !body?.fecha) return null
-  try {
-    const transferencias = await fetchAllTransferencias()
-    const hit = visitaConflict(body.fecha, transferencias)
-    if (hit) {
-      return NextResponse.json(
-        { error: 'conflicto_turno', message: `No se puede agendar: choca con el turno de transferencia de ${hit.auto}.`, auto: hit.auto },
-        { status: 409 },
-      )
-    }
-  } catch {
-    return null
-  }
-  return null
-}
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ table: string }> },
@@ -342,8 +310,6 @@ export async function POST(
   if (badShape) return badShape
   const badAsignado = await asignadoError(table, body)
   if (badAsignado) return badAsignado
-  const conflict = await visitaConflict409(table, body)
-  if (conflict) return conflict
 
   try {
     const row = await dbPost(table, body)
@@ -372,8 +338,6 @@ export async function PATCH(
   if (badAsignado) return badAsignado
   const missing = await notFound404(table, filter.key, filter.value)
   if (missing) return missing
-  const conflict = await visitaConflict409(table, body)
-  if (conflict) return conflict
 
   try {
     const row = await dbPatch(table, filter.value, body, filter.key)

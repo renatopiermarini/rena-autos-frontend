@@ -85,9 +85,9 @@ describe('routesToCsv', () => {
 })
 
 describe('ROUTES_CATALOG', () => {
-  it('tiene las 12 rutas del bot, sin repetidos', () => {
-    expect(ROUTES_CATALOG).toHaveLength(12)
-    expect(new Set(ROUTES_CATALOG).size).toBe(12)
+  it('tiene las 11 rutas del bot, sin repetidos', () => {
+    expect(ROUTES_CATALOG).toHaveLength(11)
+    expect(new Set(ROUTES_CATALOG).size).toBe(11)
     expect(ROUTES_CATALOG.every(isValidClave)).toBe(true)
   })
   it('"all" no es una ruta del catálogo, es el sentinela', () => {

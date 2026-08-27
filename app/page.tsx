@@ -1,11 +1,10 @@
 import {
-  getTareas, getVehicles, getPrestamos, getVisitas, getTransferencias, getTurnos,
+  getTareas, getVehicles, getPrestamos, getVisitas,
   getInteresados, getBalances, getCuentas, getEquipo, getConfigNegocio,
   cuentasInfo, umbralAlertaCaja, capFirst,
 } from '@/lib/kapso'
 import { destacadosClaves, equipoFromRows, resolveDefaultAssignee, seccionesEquipo, miembroPorClave } from '@/lib/equipo'
 import TableroClient from './TableroClient'
-import { transferenciaBlocks, turnosBlocks, blockConflicts, eventConflicts } from '@/lib/agenda'
 import { parseInstant, localDayKey } from '@/lib/date'
 import type { BoardItem } from '@/components/calendar/MonthBoard'
 
@@ -13,10 +12,10 @@ const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.g
 
 export default async function Tablero() {
   const [
-    tareas, vehicles, prestamos, visitas, transferencias, turnos, interesados, balances,
+    tareas, vehicles, prestamos, visitas, interesados, balances,
     cuentasRows, equipoRows, config,
   ] = await Promise.all([
-    getTareas(), getVehicles(), getPrestamos(), getVisitas(), getTransferencias(), getTurnos(), getInteresados(), getBalances(),
+    getTareas(), getVehicles(), getPrestamos(), getVisitas(), getInteresados(), getBalances(),
     getCuentas(), getEquipo(), getConfigNegocio(),
   ])
 
@@ -35,13 +34,11 @@ export default async function Tablero() {
   const interLabel = (id: any) => interesados.find((x: any) => x.id === id)?.nombre ?? ''
 
   const items: BoardItem[] = []
-  const visitaInstants: { id: number; start: Date }[] = []
 
   for (const v of visitas) {
     if (!v.fecha || (v.resultado && v.resultado !== 'pendiente')) continue
     const d = parseInstant(v.fecha)
     if (!d) continue
-    visitaInstants.push({ id: v.id, start: d })
     items.push({
       id: v.id,
       kind: 'visita',
@@ -54,18 +51,6 @@ export default async function Tablero() {
     })
   }
 
-  for (const b of [...transferenciaBlocks(transferencias), ...turnosBlocks(turnos)]) {
-    items.push({
-      id: b.id,
-      kind: 'turno',
-      hora: hhmm(b.start),
-      title: b.title,
-      subtitle: b.subtitle,
-      href: b.href,
-      dayKey: localDayKey(b.start),
-    })
-  }
-
   // Seguimientos are the bot's CRM follow-ups. There are hundreds of them and they
   // drowned the tablero — on one day they were 38 of 38 items. They stay in /tareas
   // and the agent still messages about them; this screen is for what a human has to
@@ -74,29 +59,6 @@ export default async function Tablero() {
   const esSeguimiento = (t: any) =>
     String(t?.tipo ?? '').toLowerCase() === 'seguimiento' ||
     /^\s*seguimiento\b/i.test(String(t?.titulo ?? ''))
-
-  // Double-booking detection. This used to live in the calendario's week grid; with
-  // that screen gone the tablero is the only place a human can catch a clash the
-  // validators never rejected, so the display-layer check moves here. Still NOT the
-  // write rule mirrored in flows/agenda_rules.py — see lib/agenda.ts.
-  const allBlocks = [...transferenciaBlocks(transferencias), ...turnosBlocks(turnos)]
-  const blockClashes = blockConflicts(allBlocks)
-  const visitaClashes = eventConflicts(
-    visitaInstants.map(v => ({ id: v.id, start: v.start })),
-    allBlocks,
-  )
-  const clashLabel = (others: { title: string }[]) =>
-    `Choca con ${others[0].title}${others.length > 1 ? ` +${others.length - 1}` : ''}`
-
-  for (const it of items) {
-    if (it.kind === 'visita') {
-      const hits = visitaClashes.get(it.id)
-      if (hits?.length) it.conflict = clashLabel(hits)
-    } else if (it.kind === 'turno') {
-      const hits = blockClashes.get(it.id)
-      if (hits?.length) it.conflict = clashLabel(hits)
-    }
-  }
 
   // Las tareas de los miembros destacados (asignables que NO son el asignado por
   // defecto — con el perfil de Renato, Marshiot) van en su propia sección arriba

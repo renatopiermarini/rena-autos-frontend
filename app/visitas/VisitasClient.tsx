@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation'
 import { useDeepLinkId, useScrollToDeepLink } from '@/lib/deep-link'
 import { patchRecordDetailed, postRecord, deleteRecordDetailed } from '@/lib/kapso'
 import { fmtDateTime, fmtDM, toARInputValue, fromARInputValue } from '@/lib/date'
-import { visitaConflict } from '@/lib/agenda'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,23 +26,9 @@ const RESULTADOS = ['pendiente', 'concretada', 'cancelada', 'no_compro'] as cons
 const nativeSelectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
-const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-
-// True (and toasts) if the chosen datetime-local lands inside an active transferencia
-// turno block — the same rule the bot enforces (lib/agenda + backend agenda_rules.py).
-function visitaChocaConTurno(fechaInput: string, transferencias: any[]): boolean {
-  if (!fechaInput) return false
-  const hit = visitaConflict(fromARInputValue(fechaInput), transferencias)
-  if (hit) {
-    toast.error(`No se puede agendar: choca con el turno de transferencia de ${hit.auto} (${hhmm(hit.start)}–${hhmm(hit.end)}).`)
-    return true
-  }
-  return false
-}
-
 function VisitaRow({
-  v, vehicleLabel, interesadoLabel, transferencias, defaultOpen = false,
-}: { v: any; vehicleLabel: (id: any) => string; interesadoLabel: (id: any) => string; transferencias: any[]; defaultOpen?: boolean }) {
+  v, vehicleLabel, interesadoLabel, defaultOpen = false,
+}: { v: any; vehicleLabel: (id: any) => string; interesadoLabel: (id: any) => string; defaultOpen?: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(defaultOpen)
   const [notas, setNotas] = useState(v.notas ?? '')
@@ -59,7 +44,6 @@ function VisitaRow({
   }
 
   async function saveDetalles() {
-    if (fecha && visitaChocaConTurno(fecha, transferencias)) return
     setSaving('detalles')
     const payload: any = { notas: notas || null }
     if (fecha) payload.fecha = fromARInputValue(fecha)
@@ -152,8 +136,8 @@ function VisitaRow({
 }
 
 function NuevaVisitaForm({
-  vehicles, interesados, transferencias, onClose,
-}: { vehicles: any[]; interesados: any[]; transferencias: any[]; onClose: () => void }) {
+  vehicles, interesados, onClose,
+}: { vehicles: any[]; interesados: any[]; onClose: () => void }) {
   const router = useRouter()
   const [form, setForm] = useState({
     vehicle_id: '', interesado_id: '', fecha: '', notas: '',
@@ -165,7 +149,6 @@ function NuevaVisitaForm({
       toast.error('Vehículo, interesado y fecha son obligatorios')
       return
     }
-    if (visitaChocaConTurno(form.fecha, transferencias)) return
     setSaving(true)
     const payload: any = {
       vehicle_id: Number(form.vehicle_id),
@@ -242,8 +225,8 @@ function NuevaVisitaForm({
 type Filtro = 'todas' | 'proximas' | 'pasadas' | typeof RESULTADOS[number]
 
 export default function VisitasClient({
-  visitas, vehicles, interesados, transferencias,
-}: { visitas: any[]; vehicles: any[]; interesados: any[]; transferencias: any[] }) {
+  visitas, vehicles, interesados,
+}: { visitas: any[]; vehicles: any[]; interesados: any[] }) {
   const [showNueva, setShowNueva] = useState(false)
   const [filter, setFilter] = useState<Filtro>('proximas')
 
@@ -298,7 +281,7 @@ export default function VisitasClient({
       </div>
 
       {showNueva && (
-        <NuevaVisitaForm vehicles={vehicles} interesados={interesados} transferencias={transferencias} onClose={() => setShowNueva(false)} />
+        <NuevaVisitaForm vehicles={vehicles} interesados={interesados} onClose={() => setShowNueva(false)} />
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -318,7 +301,7 @@ export default function VisitasClient({
       <Card size="sm">
         <CardContent className="p-0">
           {sorted.map(v => (
-            <VisitaRow key={v.id} v={v} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} transferencias={transferencias} defaultOpen={v.id === deepId} />
+            <VisitaRow key={v.id} v={v} vehicleLabel={vehicleLabel} interesadoLabel={interesadoLabel} defaultOpen={v.id === deepId} />
           ))}
           {sorted.length === 0 && (
             <EmptyState icon={CalendarClockIcon} title="Sin visitas" hint="Agendá una con “Nueva visita”." />
