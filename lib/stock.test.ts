@@ -52,7 +52,7 @@ describe('tarjetaVehiculo', () => {
     expect(t.detalle).toContain('AB123CD')
     expect(t.detalle).toContain('Gris')
     expect(t.detalle).toContain('km')
-    expect(t.precio.startsWith('$')).toBe(true)
+    expect(t.precio.startsWith('USD ')).toBe(true)
     expect(t.estadoLabel).toBe('Publicado')
     expect(t.dias).toBe(12)
     expect(t.diasLabel).toBe('12 días')
@@ -69,7 +69,7 @@ describe('tarjetaVehiculo', () => {
   it('sin publicado usa el objetivo y lo marca como estimado', () => {
     const t = tarjetaVehiculo({ ...base, precio_publicado: null, precio_venta_objetivo: 20000 }, ahora)
     expect(t.precioEstimado).toBe(true)
-    expect(t.precio.startsWith('$')).toBe(true)
+    expect(t.precio.startsWith('USD ')).toBe(true)
   })
 
   it('sin ningún precio muestra "—" y no inventa un número', () => {

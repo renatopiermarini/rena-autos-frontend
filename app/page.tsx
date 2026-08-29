@@ -8,6 +8,7 @@ import { diasEnStock, DIAS_STOCK_ALERTA } from '@/lib/stock'
 import TableroClient from './TableroClient'
 import { parseInstant, localDayKey } from '@/lib/date'
 import type { BoardItem } from '@/components/calendar/MonthBoard'
+import { money } from '@/lib/money'
 
 const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
@@ -131,7 +132,7 @@ export default async function Tablero() {
   const umbral = umbralAlertaCaja(config)
   const saldoPrincipal = patrimonio.cajas[cajaPrincipal.clave] ?? 0
   if (saldoPrincipal < umbral) {
-    alertas.push(`${capFirst(cajaPrincipal.label)} bajo: $${saldoPrincipal.toLocaleString('es-AR')}`)
+    alertas.push(`${capFirst(cajaPrincipal.label)} bajo: ${money(saldoPrincipal)}`)
   }
   prestamos.filter((p: any) => p.estado === 'activo').forEach((p: any) => {
     if (!p.fecha_vencimiento) return
@@ -165,7 +166,6 @@ export default async function Tablero() {
 
   // Los cuatro números de arriba. `sub` es la letra chica; `href` la pantalla
   // donde se sigue mirando. Todo derivado del ledger — nada cargado a mano.
-  const money = (n: number) => `$${Math.round(n).toLocaleString('es-AR')}`
   const resumen = [
     {
       label: 'En caja',

@@ -9,6 +9,7 @@
  */
 
 import { estadoMeta, type BadgeVariant } from '@/lib/estados'
+import { money as fmtMonto } from '@/lib/money'
 import { parseAny } from '@/lib/date'
 
 /** Un auto que lleva más de esto en stock ya es un problema, no un dato. */
@@ -26,13 +27,6 @@ export function diasEnStock(fechaIngreso: any, ahora: number = Date.now()): numb
 export function etiquetaDias(dias: number | null): string {
   if (dias === null) return ''
   return `${dias} día${dias === 1 ? '' : 's'}`
-}
-
-function fmtMonto(n: any): string {
-  if (n == null || n === '') return '—'
-  const v = Number(n)
-  if (!Number.isFinite(v)) return '—'
-  return `$${v.toLocaleString('es-AR')}`
 }
 
 export type TarjetaVehiculo = {

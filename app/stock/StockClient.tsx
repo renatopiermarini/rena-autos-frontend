@@ -19,6 +19,7 @@ import NuevoAutoDialog from './NuevoAutoDialog'
 import RegistrarVentaDialog from './RegistrarVentaDialog'
 import DocumentoDialog from './DocumentoDialog'
 import { COMISION_PCT_DEFAULT } from '@/lib/venta'
+import { money } from '@/lib/money'
 
 const CAT_LABEL_FIN: Record<string, string> = {
   vehicle_purchase: 'Compra',
@@ -127,10 +128,7 @@ function diasEnStockCorto(fecha: string) {
   return dias === null ? '—' : `${dias}d`
 }
 
-function fmt(n: any) {
-  if (n == null || n === '') return '—'
-  return `$${Number(n).toLocaleString('es-AR')}`
-}
+const fmt = money
 
 function fmtN(n: any) {
   if (n == null || n === '') return '—'
@@ -694,9 +692,9 @@ function VehicleTable({
                   <td className="py-2.5 px-3 text-muted-foreground tabular-nums hidden md:table-cell">{v.km ? fmtN(v.km) : '—'}</td>
                   <td className="py-2.5 px-3 tabular-nums">
                     {v.precio_publicado
-                      ? `$${Number(v.precio_publicado).toLocaleString('es-AR')}`
+                      ? money(v.precio_publicado)
                       : v.precio_venta_objetivo
-                      ? <span className="text-muted-foreground">${Number(v.precio_venta_objetivo).toLocaleString('es-AR')}</span>
+                      ? <span className="text-muted-foreground">{money(v.precio_venta_objetivo)}</span>
                       : '—'}
                   </td>
                   <td className="py-2.5 px-3 text-muted-foreground hidden md:table-cell">{diasEnStockCorto(v.fecha_ingreso)}</td>
@@ -971,7 +969,7 @@ export default function StockClient({
                             </div>
                           </td>
                           <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">
-                            {v.precio_venta_final ? `$${Number(v.precio_venta_final).toLocaleString('es-AR')}` : '—'}
+                            {v.precio_venta_final ? money(v.precio_venta_final) : '—'}
                           </td>
                           <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">
                             {fmtFecha(v.fecha_venta)}

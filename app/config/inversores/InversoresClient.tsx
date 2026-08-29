@@ -15,6 +15,7 @@ import { FInput, FTextarea } from '@/components/form-fields'
 import { EmptyState } from '@/components/empty-state'
 import { toast } from 'sonner'
 import { PlusIcon, HandCoinsIcon } from 'lucide-react'
+import { money } from '@/lib/money'
 
 /**
  * Un cliente es acreedor si lo dice CUALQUIERA de los dos campos: `es_acreedor`
@@ -29,7 +30,7 @@ export function esAcreedor(c: any): boolean {
 
 function fmtMonto(n: any) {
   if (n == null || n === '') return '—'
-  return `$${Number(n).toLocaleString('es-AR')}`
+  return money(n)
 }
 
 const MODALIDAD_LABEL: Record<string, string> = {

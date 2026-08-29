@@ -28,3 +28,16 @@ export function estadoMeta(estado?: string): { label: string; variant: BadgeVari
     { label: (estado ?? '—').replace(/_/g, ' '), variant: 'outline' }
   )
 }
+
+// La otra mitad del vocabulario: tipo_operacion (de quién es la plata). Los
+// slugs crudos ('propio', 'consignacion' sin acento) se veían tal cual en
+// Finanzas › Por Vehículo.
+const TIPO_OPERACION_LABEL: Record<string, string> = {
+  propio:       'Propio',
+  consignacion: 'Consignación',
+}
+
+export function tipoOperacionLabel(tipo?: string | null): string {
+  if (!tipo) return '—'
+  return TIPO_OPERACION_LABEL[tipo] ?? tipo
+}

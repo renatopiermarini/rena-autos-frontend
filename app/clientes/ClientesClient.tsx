@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, ContactIcon, PlusIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import NuevoClienteDialog from './NuevoClienteDialog'
+import { money } from '@/lib/money'
 
 const TIPO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   vendedor: 'secondary',
@@ -233,7 +234,7 @@ function InteresadoRow({ i }: { i: any }) {
         </button>
         <div className="flex items-center gap-4 shrink-0 ml-4">
           {i.presupuesto && (
-            <span className="text-xs text-muted-foreground">${Number(i.presupuesto).toLocaleString('es-AR')}</span>
+            <span className="text-xs text-muted-foreground">{money(i.presupuesto)}</span>
           )}
           {i.telefono && <span className="text-xs text-muted-foreground">{i.telefono}</span>}
           <Badge variant="outline">{i.estado}</Badge>

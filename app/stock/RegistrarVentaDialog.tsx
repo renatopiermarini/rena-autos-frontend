@@ -14,6 +14,7 @@ import {
 import { formSucio } from '@/lib/dirty'
 import { FField, FInput, FSelect, FCheckbox, nativeSelectCls } from '@/components/form-fields'
 import { toast } from 'sonner'
+import { money } from '@/lib/money'
 
 /**
  * Registrar la venta de un auto desde su ficha en /stock.
@@ -29,10 +30,6 @@ import { toast } from 'sonner'
  * desglose ANTES de confirmar: en una consignación el usuario tiene que ver que
  * a la caja entran $X y no los $Y que le pagó el comprador.
  */
-
-function money(n: number): string {
-  return `$${Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`
-}
 
 export default function RegistrarVentaDialog({
   open, onOpenChange, vehiculo, vehicles, movimientos, clientes, cuentas, comisionPct,

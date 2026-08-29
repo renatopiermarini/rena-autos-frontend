@@ -20,6 +20,7 @@ import { ConfigMissingBanner, RestartNotice } from '@/components/config-banner'
 import { EmptyState } from '@/components/empty-state'
 import { toast } from 'sonner'
 import { PlusIcon, PencilIcon, Trash2Icon, WalletIcon, ScaleIcon } from 'lucide-react'
+import { money } from '@/lib/money'
 
 type FormState = {
   clave: string
@@ -48,10 +49,6 @@ function rowToForm(c: any): FormState {
     es_routing: flagOn(c.es_routing, false),
     activa: flagOn(c.activa),
   }
-}
-
-function money(n: number): string {
-  return `$${Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 })}`
 }
 
 export default function CuentasClient({

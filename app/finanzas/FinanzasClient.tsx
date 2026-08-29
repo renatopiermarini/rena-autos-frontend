@@ -26,6 +26,8 @@ import { formSucio } from '@/lib/dirty'
 import { FField, FInput, FTextarea, nativeSelectCls as fieldSelectCls } from '@/components/form-fields'
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, AlertTriangleIcon, PlusIcon } from 'lucide-react'
+import { money } from '@/lib/money'
+import { tipoOperacionLabel } from '@/lib/estados'
 
 type Tab = 'resumen' | 'patrimonio' | 'prestamos' | 'por_vehiculo' | 'movimientos'
 
@@ -63,9 +65,10 @@ const CAT_LABEL: Record<string, string> = {
 const nativeSelectCls =
   'h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
+// Todo el dashboard formatea plata con lib/money (USD explícito). Acá un
+// monto ausente es 0, no '—': son celdas de totales.
 function fmt(n: any) {
-  const v = Number(n ?? 0)
-  return `$${v.toLocaleString('es-AR')}`
+  return money(Number(n ?? 0))
 }
 function autoLabel(v: any) {
   if (!v) return '—'
@@ -252,7 +255,7 @@ function ResumenTab({
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <StatCard
           tone="hero"
-          label="Cajas"
+          label="En caja"
           value={fmt(pat.cajas.total)}
           sub={cuentas.map(c => `${c.label} ${fmt(pat.cajas[c.clave] ?? 0)}`).join(' · ')}
           tip={<>Dinero físico y en cuentas, derivado como <b>suma de ingresos − egresos</b> del ledger (solo movimientos que afectan saldo). Incluye plata prestada: por eso solo, este número sobreestima lo que es tuyo.</>}
@@ -364,7 +367,7 @@ function PatrimonioTab({
   patrimonio: ReturnType<typeof computePatrimonio>; clientesById: any; cuentas: CuentaInfo[]
 }) {
   const terms: { label: string; monto: number; sign: '+' | '−'; tip: React.ReactNode }[] = [
-    { label: 'Cajas', monto: pat.cajas.total, sign: '+',
+    { label: 'En caja', monto: pat.cajas.total, sign: '+',
       tip: <>Suma de ingresos − egresos del ledger por cuenta: {cuentas.map(c => `${c.label} ${fmt(pat.cajas[c.clave] ?? 0)}`).join(', ')}.</> },
     { label: 'Stock a la venta', monto: pat.stock.total, sign: '+',
       tip: <>Autos propios sin vender, a valor esperado de venta (precio objetivo de la ficha; sin dato, el costo invertido).</> },
@@ -868,7 +871,7 @@ function PorVehiculoTab({
                           {v.dominio && <span className="text-xs text-muted-foreground ml-1">· {v.dominio}</span>}
                         </button>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{v.tipo_operacion ?? '—'}</td>
+                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{tipoOperacionLabel(v.tipo_operacion)}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums" title={f.fuente_compra === 'vehicle_purchase' ? 'Compra tomada de los movimientos del ledger (la ficha no tiene precio de compra)' : undefined}>
                         {fmt(f.compra)}
                       </td>
@@ -1051,9 +1054,123 @@ function VehicleFinancialDetail({
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const
 
+/**
+ * Edición inline de un movimiento — el ledger dejó de ser de solo lectura: la
+ * corrección de un monto mal tipeado era "inventá un contraasiento en prosa"
+ * (hay cuatro "Ajuste de saldo" en la DB que son exactamente eso). Editables:
+ * monto, cuenta, tipo y nota. Categoría y vínculos no: para eso, eliminar y
+ * volver a cargar (los guards de vínculos son del alta).
+ */
+function MovimientoEdit({
+  m, cuentas, onDone,
+}: { m: any; cuentas: CuentaInfo[]; onDone: () => void }) {
+  const [monto, setMonto] = useState(String(m.monto ?? ''))
+  const [cuenta, setCuenta] = useState(String(m.cuenta ?? ''))
+  const [tipo, setTipo] = useState(String(m.tipo ?? 'egreso'))
+  const [nota, setNota] = useState(String(m.nota ?? ''))
+  const [saving, setSaving] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const [errMonto, setErrMonto] = useState('')
+
+  async function guardar() {
+    const n = Number(monto)
+    if (!Number.isFinite(n) || n <= 0) {
+      setErrMonto('El monto debe ser mayor que 0.')
+      toast.error('El monto debe ser mayor que 0.')
+      return
+    }
+    setErrMonto('')
+    setSaving(true)
+    const res = await fetch(`/api/finanzas/movimiento?id=${m.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ monto: n, cuenta, tipo, nota }),
+    })
+    setSaving(false)
+    if (res.ok) { toast.success('Movimiento actualizado'); onDone() }
+    else {
+      const err = await res.json().catch(() => ({} as any))
+      toast.error(err.message || 'Error al guardar.')
+    }
+  }
+
+  async function eliminar() {
+    setSaving(true)
+    const res = await fetch(`/api/finanzas/movimiento?id=${m.id}`, { method: 'DELETE' })
+    setSaving(false)
+    setConfirmDel(false)
+    if (res.ok) { toast.success('Movimiento eliminado'); onDone() }
+    else {
+      const err = await res.json().catch(() => ({} as any))
+      toast.error(err.message || 'Error al eliminar.')
+    }
+  }
+
+  return (
+    <div className="px-3 pb-4 pt-3 bg-muted/30 border-b space-y-3">
+      {/* La nota completa, que en la fila vive truncada. */}
+      {m.nota && <p className="text-sm text-muted-foreground max-w-prose">{m.nota}</p>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
+        <FInput
+          label="Monto (USD)"
+          type="number"
+          min="0"
+          step="0.01"
+          value={monto}
+          onChange={v => { setMonto(v); if (Number(v) > 0) setErrMonto('') }}
+          error={errMonto}
+        />
+        <FField label="Cuenta">
+          <select value={cuenta} onChange={e => setCuenta(e.target.value)} className={fieldSelectCls}>
+            {cuentas.map(c => <option key={c.clave} value={c.clave}>{capFirst(c.label)}</option>)}
+          </select>
+        </FField>
+        <FField label="Tipo">
+          <select value={tipo} onChange={e => setTipo(e.target.value)} className={fieldSelectCls}>
+            <option value="ingreso">Ingreso</option>
+            <option value="egreso">Egreso</option>
+          </select>
+        </FField>
+        <FInput label="Nota" value={nota} onChange={setNota} />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
+        <p className="text-xs text-muted-foreground">
+          Categoría y vínculos no se editan: si están mal, eliminá el movimiento y cargalo de nuevo.
+        </p>
+        <div className="flex gap-2">
+          <Button size="sm" variant="ghost" onClick={() => setConfirmDel(true)} className="text-destructive hover:text-destructive">
+            Eliminar
+          </Button>
+          <Button size="sm" onClick={guardar} disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar'}
+          </Button>
+        </div>
+      </div>
+
+      <Dialog open={confirmDel} onOpenChange={setConfirmDel}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar movimiento</DialogTitle>
+            <DialogDescription>
+              {m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} de {money(m.monto)} en {capFirst(String(m.cuenta ?? ''))} · {fmtFecha(m.created_at)}
+              {m.nota ? ` — "${m.nota}"` : ''}. El saldo se recalcula del ledger: esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDel(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={eliminar} disabled={saving}>Eliminar movimiento</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 function MovimientosTab({
   movimientos, vehiclesById, cuentas,
 }: { movimientos: any[]; vehiclesById: any; cuentas: CuentaInfo[] }) {
+  const router = useRouter()
+  const [openId, setOpenId] = useState<number | null>(null)
   const [cats, setCats]         = useState<Set<string>>(new Set())
   const [cuenta, setCuenta]     = useState<string>('')
   const [tipo, setTipo]         = useState<string>('')
@@ -1216,20 +1333,50 @@ function MovimientosTab({
               <tbody className="divide-y divide-border">
                 {visible.map((m: any) => {
                   const veh = m.vehicle_id ? vehiclesById[m.vehicle_id] : null
+                  const isOpen = openId === m.id
                   return (
-                    <tr key={m.id}>
-                      <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">{fmtFecha(m.created_at)}</td>
-                      <td className={`px-3 py-2 text-xs ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>{m.tipo}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{CAT_LABEL[m.categoria] ?? m.categoria}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground capitalize">{m.cuenta}</td>
-                      <td className="px-3 py-2 text-xs">
-                        {veh ? `${veh.marca} ${veh.modelo}` : <span className="text-muted-foreground/60">—</span>}
-                      </td>
-                      <td className="px-3 py-2 text-sm truncate max-w-xs">{m.nota || ''}</td>
-                      <td className={`px-3 py-2 text-sm font-medium text-right whitespace-nowrap tabular-nums ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>
-                        {m.tipo === 'ingreso' ? '+' : '-'}{fmt(m.monto)}
-                      </td>
-                    </tr>
+                    <Fragment key={m.id}>
+                      <tr
+                        onClick={() => setOpenId(isOpen ? null : m.id)}
+                        className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/30'}`}
+                      >
+                        <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                          {/* Botón real para teclado/lector; la fila sigue clickeable con mouse. */}
+                          <button
+                            type="button"
+                            aria-expanded={isOpen}
+                            onClick={e => { e.stopPropagation(); setOpenId(isOpen ? null : m.id) }}
+                            className="flex items-center gap-1.5 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {isOpen
+                              ? <ChevronUpIcon className="size-3" aria-hidden />
+                              : <ChevronDownIcon className="size-3" aria-hidden />}
+                            {fmtFecha(m.created_at)}
+                          </button>
+                        </td>
+                        <td className={`px-3 py-2 text-xs ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>{m.tipo}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">{CAT_LABEL[m.categoria] ?? m.categoria}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground capitalize">{m.cuenta}</td>
+                        <td className="px-3 py-2 text-xs">
+                          {veh ? `${veh.marca} ${veh.modelo}` : <span className="text-muted-foreground/60">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-sm truncate max-w-xs" title={m.nota || undefined}>{m.nota || ''}</td>
+                        <td className={`px-3 py-2 text-sm font-medium text-right whitespace-nowrap tabular-nums ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>
+                          {m.tipo === 'ingreso' ? '+' : '-'}{fmt(m.monto)}
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={7} className="p-0">
+                            <MovimientoEdit
+                              m={m}
+                              cuentas={cuentas}
+                              onDone={() => { setOpenId(null); router.refresh() }}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
                 {filtered.length === 0 && (
