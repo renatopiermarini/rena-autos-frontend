@@ -137,7 +137,7 @@ export function NotificacionesBell() {
       >
         <BellIcon className="size-4.5" />
         {badge && (
-          <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-white">
+          <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-destructive-foreground">
             {badge}
           </span>
         )}
@@ -185,13 +185,15 @@ export function NotificacionesBell() {
                           !n.leida && 'bg-primary/[0.04]',
                         )}
                       >
-                        {/* Punto ámbar = alerta. Los avisos comunes no gastan color. */}
+                        {/* Punto rojo = alerta: "alerta" ya es roja en el panel del
+                            Tablero, y el contador de arriba también. Los avisos
+                            comunes no gastan color. */}
                         <span
                           aria-hidden
                           className={cn(
                             'mt-1.5 size-1.5 shrink-0 rounded-full',
                             n.nivel === 'alerta'
-                              ? 'bg-amber-500'
+                              ? 'bg-destructive'
                               : n.leida ? 'bg-transparent' : 'bg-primary',
                           )}
                         />
@@ -201,7 +203,7 @@ export function NotificacionesBell() {
                           </p>
                           <p className="mt-0.5 text-[11px] text-muted-foreground">
                             {tiempoRelativo(n.created_at)}
-                            {n.nivel === 'alerta' && <span className="text-amber-600 dark:text-amber-500"> · alerta</span>}
+                            {n.nivel === 'alerta' && <span className="text-destructive"> · alerta</span>}
                           </p>
                         </div>
                       </div>

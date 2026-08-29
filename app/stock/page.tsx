@@ -15,12 +15,18 @@ export default async function Stock() {
       getVehicles(), getTareas(), getClientes(), getMovimientos(), getPrestamos(),
       getEquipo(), getConfigNegocio(), getCuentas(),
     ])
+  // El detalle de un auto solo consume movimientos ligados a un vehículo
+  // (computeVehicleFinancials) o a un préstamo (computeLoanPosition). Serializar
+  // el ledger ENTERO al browser en cada carga era el mayor peso de esta página.
+  const movimientosVinculados = movimientos.filter(
+    (m: any) => m.vehicle_id != null || m.prestamo_id != null,
+  )
   return (
     <StockClient
       vehicles={vehicles}
       tareas={tareas}
       clientes={clientes}
-      movimientos={movimientos}
+      movimientos={movimientosVinculados}
       prestamos={prestamos}
       defAssignee={resolveDefaultAssignee(config, equipoFromRows(equipoRows))}
       cuentas={cuentasInfo(cuentasRows)}

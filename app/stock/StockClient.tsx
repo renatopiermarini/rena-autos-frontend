@@ -51,7 +51,7 @@ const DOC_ITEMS: { key: string; label: string }[] = [
 const docOk = (v: any, key: string) => Number(v?.[key] ?? 0) === 1
 
 const nativeSelectCls =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 // Mapeo del flag del vehículo → tipo de tarea que se debe completar
 // cuando se tilda el check en la tabla.
@@ -664,9 +664,18 @@ function VehicleTable({
                 >
                   <td className="py-2.5 px-3">
                     <div className="flex items-center gap-1.5">
-                      {isOpen ? <ChevronUpIcon className="size-3 text-muted-foreground" /> : <ChevronDownIcon className="size-3 text-muted-foreground" />}
-                      <span className="font-medium">{v.marca} {v.modelo}</span>
-                      <span className="text-muted-foreground">{v.año}</span>
+                      {/* Botón real para teclado/lector; la fila entera sigue
+                          clickeable con mouse (mismo patrón que la tarjeta móvil). */}
+                      <button
+                        type="button"
+                        aria-expanded={isOpen}
+                        onClick={e => { e.stopPropagation(); onToggle(v.id) }}
+                        className="flex items-center gap-1.5 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {isOpen ? <ChevronUpIcon className="size-3 text-muted-foreground" aria-hidden /> : <ChevronDownIcon className="size-3 text-muted-foreground" aria-hidden />}
+                        <span className="font-medium">{v.marca} {v.modelo}</span>
+                        <span className="text-muted-foreground">{v.año}</span>
+                      </button>
                       {v.color && <span className="text-xs text-muted-foreground">· {v.color}</span>}
                       {Number(v.uso_personal ?? 0) > 0 && (
                         <Badge variant="outline" className="ml-1" title="Auto de uso propio — es patrimonio pero no está a la venta">
@@ -854,6 +863,7 @@ export default function StockClient({
               key={key}
               size="xs"
               variant={tipoFilter === key ? 'default' : 'outline'}
+              aria-pressed={tipoFilter === key}
               onClick={() => setTipoFilter(key)}
             >
               {label}
@@ -867,6 +877,7 @@ export default function StockClient({
               key={key}
               size="xs"
               variant={groupMode === key ? 'default' : 'outline'}
+              aria-pressed={groupMode === key}
               onClick={() => setGroupMode(key)}
             >
               {label}
@@ -944,8 +955,15 @@ export default function StockClient({
                         >
                           <td className="px-4 py-2.5">
                             <div className="flex items-center gap-1.5">
-                              {isOpen ? <ChevronUpIcon className="size-3 text-muted-foreground" /> : <ChevronDownIcon className="size-3 text-muted-foreground" />}
-                              <span>{v.marca} {v.modelo} {v.año}</span>
+                              <button
+                                type="button"
+                                aria-expanded={isOpen}
+                                onClick={e => { e.stopPropagation(); toggle(v.id) }}
+                                className="flex items-center gap-1.5 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              >
+                                {isOpen ? <ChevronUpIcon className="size-3 text-muted-foreground" aria-hidden /> : <ChevronDownIcon className="size-3 text-muted-foreground" aria-hidden />}
+                                <span>{v.marca} {v.modelo} {v.año}</span>
+                              </button>
                               {v.color && <span className="text-xs text-muted-foreground">· {v.color}</span>}
                               {v.tipo_operacion && (
                                 <span className="text-xs text-muted-foreground">· {v.tipo_operacion}</span>

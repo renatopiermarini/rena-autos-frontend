@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { FField } from '@/components/form-fields'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, useDirtyClose } from '@/components/ui/dialog'
@@ -41,23 +42,27 @@ const useEquipo = () => useContext(EquipoCtx)
 
 const PRIORIDAD_RANK: Record<string, number> = { urgente: 0, alta: 1, media: 2, baja: 3 }
 
+// urgente/alta usan los tokens semánticos (destructive/warning): "urgente" era
+// bg-red-500 acá y bg-destructive en el Tablero — dos rojos para el mismo
+// concepto en pantallas vecinas. "media" queda amarillo a propósito: es el
+// escalón intermedio de la escala y no hay token amarillo; tiene pares dark.
 const PRIORIDAD_DOT: Record<string, string> = {
-  urgente: 'bg-red-500',
-  alta:    'bg-orange-400',
+  urgente: 'bg-destructive',
+  alta:    'bg-warning',
   media:   'bg-yellow-400',
   baja:    'bg-muted-foreground/40',
 }
 
 const PRIORIDAD_BORDER: Record<string, string> = {
-  urgente: 'border-l-[3px] border-l-red-500',
-  alta:    'border-l-[3px] border-l-orange-400',
+  urgente: 'border-l-[3px] border-l-destructive',
+  alta:    'border-l-[3px] border-l-warning',
   media:   'border-l-[3px] border-l-yellow-400',
   baja:    'border-l-[3px] border-l-border',
 }
 
 const PRIORIDAD_CARD: Record<string, string> = {
-  urgente: 'bg-red-50 border-l-[3px] border-red-500 text-red-900 dark:bg-red-950/50 dark:text-red-100',
-  alta:    'bg-orange-50 border-l-[3px] border-orange-400 text-orange-900 dark:bg-orange-950/50 dark:text-orange-100',
+  urgente: 'bg-destructive/10 border-l-[3px] border-destructive text-destructive dark:bg-destructive/20',
+  alta:    'bg-warning/10 border-l-[3px] border-warning text-warning dark:bg-warning/15',
   media:   'bg-yellow-50 border-l-[3px] border-yellow-400 text-yellow-900 dark:bg-yellow-950/50 dark:text-yellow-100',
   baja:    'bg-muted/50 border-l-[3px] border-border text-muted-foreground',
 }
@@ -78,7 +83,7 @@ const TIPO_LABEL: Record<string, string> = {
 
 
 const nativeSelectCls =
-  'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function horaDeTarea(t: any): string {
   // El agente guarda fecha_vencimiento como DATE (YYYY-MM-DD) y prefija la hora
@@ -268,6 +273,7 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
             key={o.key}
             size="xs"
             variant={sort === o.key ? 'default' : 'outline'}
+            aria-pressed={sort === o.key}
             onClick={() => setSort(o.key)}
           >
             {o.label}
@@ -430,6 +436,7 @@ function NuevaTareaDialog({
     fecha_vencimiento: '',
   }
   const [form, setForm] = useState(vacio)
+  const [errTitulo, setErrTitulo] = useState('')
   // Escape / click afuera / X / Cancelar preguntan antes de tirar lo cargado.
   const { dialogProps, cerrar } = useDirtyClose({ sucio: formSucio(form, vacio), onOpenChange })
 
@@ -438,7 +445,8 @@ function NuevaTareaDialog({
   }
 
   async function save() {
-    if (!form.titulo.trim()) { toast.error('El título es requerido.'); return }
+    if (!form.titulo.trim()) { setErrTitulo('El título es requerido.'); toast.error('El título es requerido.'); return }
+    setErrTitulo('')
     setSaving(true)
     const payload: Record<string, any> = {
       titulo:    form.titulo.trim(),
@@ -469,12 +477,15 @@ function NuevaTareaDialog({
           <DialogTitle>Nueva tarea</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2 space-y-1.5">
-            <Label>Título *</Label>
-            <Input value={form.titulo} onChange={e => set('titulo', e.target.value)} placeholder="Ej: Lavar el Audi A3" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Tipo</Label>
+          <FField label="Título *" error={errTitulo} className="col-span-2">
+            <Input
+              required
+              value={form.titulo}
+              onChange={e => { set('titulo', e.target.value); if (e.target.value.trim()) setErrTitulo('') }}
+              placeholder="Ej: Lavar el Audi A3"
+            />
+          </FField>
+          <FField label="Tipo">
             <select className={nativeSelectCls} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
               <option value="lavado">Lavado</option>
               <option value="fotos">Fotos</option>
@@ -483,27 +494,24 @@ function NuevaTareaDialog({
               <option value="seguimiento">Seguimiento</option>
               <option value="otro">Otro</option>
             </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Prioridad</Label>
+          </FField>
+          <FField label="Prioridad">
             <select className={nativeSelectCls} value={form.prioridad} onChange={e => set('prioridad', e.target.value)}>
               <option value="urgente">Urgente</option>
               <option value="alta">Alta</option>
               <option value="media">Media</option>
               <option value="baja">Baja</option>
             </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Asignado</Label>
+          </FField>
+          <FField label="Asignado">
             <select className={nativeSelectCls} value={form.asignado} onChange={e => set('asignado', e.target.value)}>
               {equipo.map(m => (
                 <option key={m.clave} value={m.clave}>{m.label}</option>
               ))}
               <option value="">Sin asignar</option>
             </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Auto (opcional)</Label>
+          </FField>
+          <FField label="Auto (opcional)">
             <select className={nativeSelectCls} value={form.vehicle_id} onChange={e => set('vehicle_id', e.target.value)}>
               <option value="">—</option>
               {vehicles
@@ -514,15 +522,13 @@ function NuevaTareaDialog({
                   </option>
                 ))}
             </select>
-          </div>
-          <div className="col-span-2 space-y-1.5">
-            <Label>Fecha límite (opcional)</Label>
+          </FField>
+          <FField label="Fecha límite (opcional)" className="col-span-2">
             <Input type="date" value={form.fecha_vencimiento} onChange={e => set('fecha_vencimiento', e.target.value)} />
-          </div>
-          <div className="col-span-2 space-y-1.5">
-            <Label>Descripción (opcional)</Label>
+          </FField>
+          <FField label="Descripción (opcional)" className="col-span-2">
             <Textarea rows={3} value={form.descripcion} onChange={e => set('descripcion', e.target.value)} />
-          </div>
+          </FField>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={cerrar}>Cancelar</Button>
@@ -557,7 +563,7 @@ export default function TareasClient({
   return (
     <EquipoCtx.Provider value={ctx}>
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">Tareas</h1>
           <span className="text-sm text-muted-foreground">{pendientes.length} pendientes · {completadas.length} completadas</span>

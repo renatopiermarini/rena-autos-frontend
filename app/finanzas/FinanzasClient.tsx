@@ -61,7 +61,7 @@ const CAT_LABEL: Record<string, string> = {
 }
 
 const nativeSelectCls =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function fmt(n: any) {
   const v = Number(n ?? 0)
@@ -225,9 +225,9 @@ function ResumenTab({
   movimientos: any[]; clientesById: any; vehiclesById: any
   cuentas: CuentaInfo[]; umbralCaja: number
 }) {
-  const movRecientes = [...movimientos]
+  const movRecientes = useMemo(() => [...movimientos]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 20)
+    .slice(0, 20), [movimientos])
 
   const impagos = patrimonio.posiciones.filter(p => p.modalidad === 'mensual' && p.interes_mensual > 0 && p.interes_adeudado > 0)
   const alertas: string[] = []
@@ -630,11 +630,61 @@ function Th({ children, tip, right }: { children: React.ReactNode; tip?: React.R
 function PrestamosTable({
   prestamos, movimientos, clientesById, vehiclesById,
 }: { prestamos: any[]; movimientos: any[]; clientesById: any; vehiclesById: any }) {
+  // Una sola pasada de computeLoanPosition por préstamo (filtra+ordena el ledger
+  // completo cada vez), compartida por la vista móvil y la tabla de escritorio.
+  // El hook va ANTES del early return de "sin préstamos" (reglas de hooks).
+  const filas = useMemo(
+    () => prestamos.map((p: any) => ({ p, pos: computeLoanPosition(p, movimientos) })),
+    [prestamos, movimientos],
+  )
   if (prestamos.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">Sin préstamos.</p>
   }
   return (
-    <div className="overflow-x-auto">
+    <>
+    {/* Móvil (< md): tarjetas. La tabla tiene 9 columnas y en 375px obligaba a
+        arrastrar de costado para leer UN préstamo. Acá va lo que se viene a
+        mirar: quién es, cuánto costaría cancelar hoy, y si el mes está pago. */}
+    <ul className="divide-y divide-border md:hidden">
+      {filas.map(({ p, pos }) => {
+        const acr = clientesById[p.acreedor_id]?.nombre ?? '?'
+        const veh = p.vehicle_id ? vehiclesById[p.vehicle_id] : null
+        const esPagado = p.estado === 'pagado'
+        return (
+          <li key={p.id} className={`px-3 py-3 space-y-1 ${esPagado ? 'opacity-60' : ''}`}>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span className="font-medium">
+                {acr}
+                {pos.vencido && <Badge variant="destructive" className="ml-2">vencido</Badge>}
+              </span>
+              <span className="font-semibold tabular-nums">{fmt(pos.deuda_total)}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {fmt(pos.capital_vivo)} de capital
+              {pos.tasa_pct ? ` · ${pos.tasa_pct}%/año` : ''}
+              {' · '}{pos.modalidad === 'mensual' ? 'mensual' : 'al final'}
+              {' · '}
+              {pos.modalidad === 'mensual'
+                ? (pos.interes_mensual > 0 ? `${fmt(pos.interes_mensual)}/mes` : 'sin interés')
+                : `${fmt(pos.interes_devengado)} acum.`}
+            </p>
+            <p className="text-xs">
+              {esPagado || pos.modalidad !== 'mensual' || pos.interes_mensual <= 0 ? null
+                : pos.interes_mes_pagado ? <span className="text-success">mes pagado ✓</span>
+                : pos.interes_adeudado > 0 ? <span className="text-destructive font-medium">{fmt(pos.interes_adeudado)} impago</span>
+                : <span className="text-muted-foreground">vence {pos.proximo_vencimiento ? fmtFecha(pos.proximo_vencimiento) : 'el 1'}</span>}
+              {' '}
+              <span className="text-muted-foreground">
+                {veh ? `· ${autoLabel(veh)}` : '· capital general'}
+              </span>
+            </p>
+          </li>
+        )
+      })}
+    </ul>
+
+    {/* Escritorio (md+): la tabla de siempre. */}
+    <div className="hidden md:block overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="bg-muted/40">
           <tr className="text-left">
@@ -650,8 +700,7 @@ function PrestamosTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {prestamos.map((p: any) => {
-            const pos = computeLoanPosition(p, movimientos)
+          {filas.map(({ p, pos }) => {
             const acr = clientesById[p.acreedor_id]?.nombre ?? '?'
             const veh = p.vehicle_id ? vehiclesById[p.vehicle_id] : null
             const esPagado = p.estado === 'pagado'
@@ -701,6 +750,7 @@ function PrestamosTable({
         </tbody>
       </table>
     </div>
+    </>
   )
 }
 
@@ -709,18 +759,77 @@ function PrestamosTable({
 function PorVehiculoTab({
   vehicles, movimientos, prestamos, clientesById,
 }: { vehicles: any[]; movimientos: any[]; prestamos: any[]; clientesById: any }) {
-  const activos = vehicles.filter((v: any) => v.estado !== 'vendido')
-  const filas = activos.map((v: any) => {
-    const f = computeVehicleFinancials(v.id, vehicles, movimientos, prestamos)
-    return { v, f }
-  }).sort((a, b) => b.f.costo_total - a.f.costo_total)
+  // useMemo o esto corre O(vehículos × movimientos) en CADA expand/collapse de
+  // fila (setOpenId re-renderiza el tab entero).
+  const filas = useMemo(() => vehicles
+    .filter((v: any) => v.estado !== 'vendido')
+    .map((v: any) => ({ v, f: computeVehicleFinancials(v.id, vehicles, movimientos, prestamos) }))
+    .sort((a, b) => b.f.costo_total - a.f.costo_total),
+  [vehicles, movimientos, prestamos])
 
   const [openId, setOpenId] = useState<number | null>(null)
 
   return (
     <Card size="sm">
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
+        {/* Móvil (< md): tarjetas, mismo detalle expandible que la tabla. */}
+        <ul className="divide-y divide-border md:hidden">
+          {filas.map(({ v, f }) => {
+            const isOpen = openId === v.id
+            return (
+              <li key={v.id} className={isOpen ? 'bg-muted/30' : undefined}>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpenId(isOpen ? null : v.id)}
+                  className="w-full px-3 py-3 text-left"
+                >
+                  <span className="flex items-start justify-between gap-2">
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium leading-snug">
+                        {v.marca} {v.modelo} <span className="font-normal text-muted-foreground">{v.año}</span>
+                      </span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {[v.dominio, v.tipo_operacion].filter(Boolean).join(' · ') || '—'}
+                      </span>
+                    </span>
+                    {isOpen
+                      ? <ChevronUpIcon className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                      : <ChevronDownIcon className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden />}
+                  </span>
+                  <span className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <span className="text-base font-semibold tabular-nums">{fmt(f.costo_total)}</span>
+                    <span className="text-xs text-muted-foreground">costo</span>
+                    <span className={`text-sm font-medium tabular-nums ${
+                      f.es_consignacion || f.margen_esperado == null ? 'text-muted-foreground'
+                      : f.margen_esperado >= 0 ? 'text-success' : 'text-destructive'
+                    }`}>
+                      {f.es_consignacion ? 'consignación'
+                        : f.margen_esperado == null ? 'sin margen'
+                        : `${f.margen_esperado >= 0 ? '+' : ''}${fmt(f.margen_esperado)} margen`}
+                    </span>
+                    {f.prestamos_asociados.length > 0 && (
+                      <Badge variant="warning">
+                        {clientesById[f.prestamos_asociados[0].acreedor_id]?.nombre ?? 'préstamo'}
+                      </Badge>
+                    )}
+                  </span>
+                </button>
+                {isOpen && (
+                  <div className="px-3 pb-4 bg-muted/30 border-t border-border">
+                    <VehicleFinancialDetail v={v} f={f} movimientos={movimientos} clientesById={clientesById} />
+                  </div>
+                )}
+              </li>
+            )
+          })}
+          {filas.length === 0 && (
+            <li className="px-3 py-6 text-center text-sm text-muted-foreground">Sin vehículos activos.</li>
+          )}
+        </ul>
+
+        {/* Escritorio (md+): la tabla de siempre. */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
               <tr className="text-left">
@@ -744,12 +853,20 @@ function PorVehiculoTab({
                       className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/30'}`}
                     >
                       <td className="px-3 py-2.5">
-                        {isOpen
-                          ? <ChevronUpIcon className="inline size-3 text-muted-foreground mr-1.5" />
-                          : <ChevronDownIcon className="inline size-3 text-muted-foreground mr-1.5" />}
-                        <span className="font-medium">{v.marca} {v.modelo}</span>
-                        <span className="text-muted-foreground text-xs ml-1">{v.año}</span>
-                        {v.dominio && <span className="text-xs text-muted-foreground ml-1">· {v.dominio}</span>}
+                        {/* Botón real para teclado/lector; la fila sigue clickeable con mouse. */}
+                        <button
+                          type="button"
+                          aria-expanded={isOpen}
+                          onClick={e => { e.stopPropagation(); setOpenId(isOpen ? null : v.id) }}
+                          className="rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {isOpen
+                            ? <ChevronUpIcon className="inline size-3 text-muted-foreground mr-1.5" aria-hidden />
+                            : <ChevronDownIcon className="inline size-3 text-muted-foreground mr-1.5" aria-hidden />}
+                          <span className="font-medium">{v.marca} {v.modelo}</span>
+                          <span className="text-muted-foreground text-xs ml-1">{v.año}</span>
+                          {v.dominio && <span className="text-xs text-muted-foreground ml-1">· {v.dominio}</span>}
+                        </button>
                       </td>
                       <td className="px-3 py-2.5 text-xs text-muted-foreground">{v.tipo_operacion ?? '—'}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums" title={f.fuente_compra === 'vehicle_purchase' ? 'Compra tomada de los movimientos del ledger (la ficha no tiene precio de compra)' : undefined}>
@@ -771,7 +888,7 @@ function PorVehiculoTab({
                       </td>
                       <td className="px-3 py-2.5 text-xs">
                         {f.prestamos_asociados.length > 0 ? (
-                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900">
+                          <Badge variant="warning">
                             {clientesById[f.prestamos_asociados[0].acreedor_id]?.nombre ?? 'sí'}
                           </Badge>
                         ) : (
@@ -808,11 +925,15 @@ function PorVehiculoTab({
 function VehicleFinancialDetail({
   v, f, movimientos, clientesById,
 }: { v: any; f: ReturnType<typeof computeVehicleFinancials>; movimientos: any[]; clientesById: any }) {
-  const movsAuto = movimientos
+  const movsAuto = useMemo(() => movimientos
     .filter((m: any) => m.vehicle_id === v.id)
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+  [movimientos, v.id])
 
-  const catEntries = Object.entries(f.gastos_por_categoria).sort((a, b) => b[1] - a[1])
+  const catEntries = useMemo(
+    () => Object.entries(f.gastos_por_categoria).sort((a, b) => b[1] - a[1]),
+    [f.gastos_por_categoria],
+  )
 
   return (
     <div className="pt-3 grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -973,11 +1094,18 @@ function MovimientosTab({
   // off-balance NO son cash flow real y mezclarlos en el "Neto" infla los
   // números. affectsBalance = columna explícita 1/0 con fallback legacy a
   // saldo_post (misma regla que el backend).
-  const cashIngresos = filtered.filter(m => m.tipo === 'ingreso' && affectsBalance(m)).reduce((s, m) => s + Number(m.monto ?? 0), 0)
-  const cashEgresos  = filtered.filter(m => m.tipo === 'egreso'  && affectsBalance(m)).reduce((s, m) => s + Number(m.monto ?? 0), 0)
-  const offIngresos  = filtered.filter(m => m.tipo === 'ingreso' && !affectsBalance(m)).reduce((s, m) => s + Number(m.monto ?? 0), 0)
-  const offEgresos   = filtered.filter(m => m.tipo === 'egreso'  && !affectsBalance(m)).reduce((s, m) => s + Number(m.monto ?? 0), 0)
-  const cashNeto     = cashIngresos - cashEgresos
+  const { cashIngresos, cashEgresos, offIngresos, offEgresos } = useMemo(() => {
+    // Una sola pasada (antes eran 4 filter+reduce que corrían en cada cambio de página).
+    const t = { cashIngresos: 0, cashEgresos: 0, offIngresos: 0, offEgresos: 0 }
+    for (const m of filtered) {
+      const monto = Number(m.monto ?? 0)
+      const cash = affectsBalance(m)
+      if (m.tipo === 'ingreso') cash ? t.cashIngresos += monto : t.offIngresos += monto
+      else if (m.tipo === 'egreso') cash ? t.cashEgresos += monto : t.offEgresos += monto
+    }
+    return t
+  }, [filtered])
+  const cashNeto = cashIngresos - cashEgresos
 
   // Pagination: clamp page to range whenever filtered length or pageSize change.
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -1010,6 +1138,7 @@ function MovimientosTab({
                 key={c}
                 size="xs"
                 variant={cats.has(c) ? 'default' : 'outline'}
+                aria-pressed={cats.has(c)}
                 onClick={() => toggleCat(c)}
               >
                 {CAT_LABEL[c] ?? c}
@@ -1017,25 +1146,25 @@ function MovimientosTab({
             ))}
           </div>
           <div className="flex flex-wrap gap-2 items-center">
-            <select className={nativeSelectCls} value={tipo} onChange={e => { setTipo(e.target.value); setPage(1) }}>
+            <select aria-label="Filtrar por tipo" className={nativeSelectCls} value={tipo} onChange={e => { setTipo(e.target.value); setPage(1) }}>
               <option value="">Tipo: todos</option>
               <option value="ingreso">Ingreso</option>
               <option value="egreso">Egreso</option>
             </select>
-            <select className={nativeSelectCls} value={cuenta} onChange={e => { setCuenta(e.target.value); setPage(1) }}>
+            <select aria-label="Filtrar por cuenta" className={nativeSelectCls} value={cuenta} onChange={e => { setCuenta(e.target.value); setPage(1) }}>
               <option value="">Cuenta: todas</option>
               {cuentas.map(c => (
                 <option key={c.clave} value={c.clave}>{capFirst(c.label)}</option>
               ))}
             </select>
-            <select className={nativeSelectCls} value={vehId} onChange={e => { setVehId(e.target.value); setPage(1) }}>
+            <select aria-label="Filtrar por auto" className={nativeSelectCls} value={vehId} onChange={e => { setVehId(e.target.value); setPage(1) }}>
               <option value="">Auto: todos</option>
               {vehiclesConMovs.map((v: any) => (
                 <option key={v.id} value={v.id}>{autoLabel(v)}</option>
               ))}
             </select>
-            <Input type="date" className="h-8 w-auto text-xs" value={desde} onChange={e => { setDesde(e.target.value); setPage(1) }} />
-            <Input type="date" className="h-8 w-auto text-xs" value={hasta} onChange={e => { setHasta(e.target.value); setPage(1) }} />
+            <Input type="date" aria-label="Desde fecha" className="h-8 w-auto text-xs" value={desde} onChange={e => { setDesde(e.target.value); setPage(1) }} />
+            <Input type="date" aria-label="Hasta fecha" className="h-8 w-auto text-xs" value={hasta} onChange={e => { setHasta(e.target.value); setPage(1) }} />
             {hasFilters ? (
               <Button
                 size="xs"
@@ -1343,7 +1472,11 @@ function NuevoPrestamoDialog({
     modalidad: 'mensual', fecha_inicio: '', vehicle_id: '', notas: '',
   }
   const [form, setForm] = useState(vacio)
-  const set = (campo: keyof typeof vacio, valor: string) => setForm(f => ({ ...f, [campo]: valor }))
+  const [errores, setErrores] = useState<Partial<Record<keyof typeof vacio, string>>>({})
+  const set = (campo: keyof typeof vacio, valor: string) => {
+    setForm(f => ({ ...f, [campo]: valor }))
+    setErrores(e => (e[campo] ? { ...e, [campo]: undefined } : e))
+  }
   const { dialogProps, cerrar } = useDirtyClose({ sucio: formSucio(form, vacio), onOpenChange })
 
   // Los acreedores son los clientes marcados como tales. Si nadie está marcado
@@ -1354,11 +1487,12 @@ function NuevoPrestamoDialog({
 
   async function guardar() {
     const acreedor_id = Number(form.acreedor_id)
-    if (!Number.isInteger(acreedor_id) || acreedor_id <= 0) { toast.error('Elegí el acreedor.'); return }
+    if (!Number.isInteger(acreedor_id) || acreedor_id <= 0) { setErrores({ acreedor_id: 'Elegí el acreedor.' }); toast.error('Elegí el acreedor.'); return }
     const monto = Number(form.monto_original)
-    if (!Number.isFinite(monto) || monto <= 0) { toast.error('El monto debe ser mayor que 0.'); return }
+    if (!Number.isFinite(monto) || monto <= 0) { setErrores({ monto_original: 'El monto debe ser mayor que 0.' }); toast.error('El monto debe ser mayor que 0.'); return }
     const tasa = form.tasa_interes_anual === '' ? 0 : Number(form.tasa_interes_anual)
-    if (!Number.isFinite(tasa) || tasa < 0) { toast.error('La tasa debe ser un número.'); return }
+    if (!Number.isFinite(tasa) || tasa < 0) { setErrores({ tasa_interes_anual: 'La tasa debe ser un número.' }); toast.error('La tasa debe ser un número.'); return }
+    setErrores({})
 
     setSaving(true)
     const payload: Record<string, any> = {
@@ -1397,7 +1531,7 @@ function NuevoPrestamoDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FField label="Acreedor">
+          <FField label="Acreedor" error={errores.acreedor_id}>
             <select value={form.acreedor_id} onChange={e => set('acreedor_id', e.target.value)} className={fieldSelectCls}>
               <option value="">—</option>
               {opcionesAcreedor.map((c: any) => (
@@ -1412,6 +1546,7 @@ function NuevoPrestamoDialog({
             step="0.01"
             value={form.monto_original}
             onChange={v => set('monto_original', v)}
+            error={errores.monto_original}
           />
           <FInput
             label="Tasa anual (%)"
@@ -1421,6 +1556,7 @@ function NuevoPrestamoDialog({
             value={form.tasa_interes_anual}
             onChange={v => set('tasa_interes_anual', v)}
             hint="En porcentaje: 15 = 15% anual, nunca 0,15."
+            error={errores.tasa_interes_anual}
           />
           <FField label="Modalidad">
             <select value={form.modalidad} onChange={e => set('modalidad', e.target.value)} className={fieldSelectCls}>

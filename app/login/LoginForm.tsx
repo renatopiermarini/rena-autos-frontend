@@ -40,6 +40,7 @@ export default function LoginForm({ titulo = BRANDING_FALLBACK.titulo }: { titul
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 autoFocus

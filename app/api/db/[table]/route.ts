@@ -271,9 +271,28 @@ async function valueLinked409(table: string, key: string, value: number): Promis
   )
 }
 
+// Qué páginas renderizan filas de cada tabla. Un write invalida SOLO esas rutas:
+// el layout-wide de antes hacía que tildar un checkbox de lavado re-corriera las
+// lecturas de tabla completa de TODAS las páginas. La lista incluye toda página
+// donde la tabla aparece (aunque sea como label), así el router.refresh() del
+// que escribió siempre ve su propio cambio. Tablas fuera del mapa (vehicles,
+// clientes, cuentas, equipo, config_negocio: labels/branding en todos lados)
+// conservan la invalidación global.
+const RUTAS_POR_TABLA: Record<string, string[]> = {
+  movimientos_contabilidad: ['/', '/finanzas', '/stock', '/config/cuentas', '/config/inversores'],
+  prestamos:                ['/', '/finanzas', '/stock'],
+  tareas:                   ['/', '/tareas', '/stock'],
+  visitas:                  ['/', '/visitas'],
+  interesados:              ['/', '/interesados', '/visitas'],
+  ofertas:                  ['/', '/interesados'],
+  verificaciones_mecanicas: ['/', '/verificaciones'],
+  kb_entries:               ['/mensajes'],
+}
+
 function bustCache(table?: string) {
-  // Invalidate Data Cache for every page so router.refresh() gets fresh data.
-  revalidatePath('/', 'layout')
+  const rutas = table ? RUTAS_POR_TABLA[table] : undefined
+  if (rutas) rutas.forEach(r => revalidatePath(r))
+  else revalidatePath('/', 'layout')
   // Un alta del equipo tiene que poder asignarse una tarea EN EL ACTO, no en 60 s.
   if (table === 'equipo') equipoCache = null
 }

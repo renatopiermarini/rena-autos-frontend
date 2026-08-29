@@ -6,8 +6,8 @@ import { fmtDMY as fmtFecha, todayKey as today } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { FField, nativeSelectCls } from '@/components/form-fields'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, useDirtyClose } from '@/components/ui/dialog'
@@ -24,22 +24,10 @@ const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'dest
 
 const ESTADOS: string[] = ['pendiente', 'hecha', 'pagada']
 
-const nativeSelectCls =
-  'h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
-
 function autoLabel(v: any): string {
   if (!v) return '—'
   const base = `${v.marca ?? ''} ${v.modelo ?? ''} ${v.año ?? ''}`.trim()
   return v.dominio ? `${base} (${v.dominio})` : base || `#${v.id}`
-}
-
-function FField({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`space-y-1.5 ${className}`}>
-      <Label className="text-xs text-muted-foreground uppercase tracking-wide">{label}</Label>
-      {children}
-    </div>
-  )
 }
 
 function VerificacionEdit({
@@ -139,6 +127,7 @@ function VerificacionEdit({
               key={est}
               size="xs"
               variant={v.estado === est ? 'default' : 'outline'}
+              aria-pressed={v.estado === est}
               onClick={() => cambiarEstado(est)}
               disabled={saving}
             >
@@ -184,6 +173,7 @@ function NuevaVerificacionDialog({
   const [fechaVerificacion, setFechaVerificacion] = useState(today())
   const [notas, setNotas] = useState('')
   const [saving, setSaving] = useState(false)
+  const [errVehiculo, setErrVehiculo] = useState('')
 
   // Los campos no viven en un objeto `form`, así que la comparación se arma acá.
   // El inicial es el sembrado: mecánico "Maxi" y la fecha de hoy no son cambios.
@@ -196,7 +186,8 @@ function NuevaVerificacionDialog({
   })
 
   async function save() {
-    if (!vehicleId) { toast.error('Elegí un vehículo'); return }
+    if (!vehicleId) { setErrVehiculo('Elegí un vehículo'); toast.error('Elegí un vehículo'); return }
+    setErrVehiculo('')
     setSaving(true)
     const payload: any = {
       vehicle_id: vehicleId,
@@ -226,10 +217,10 @@ function NuevaVerificacionDialog({
           <DialogTitle>Nueva verificación</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FField label="Vehículo" className="md:col-span-2">
+          <FField label="Vehículo" error={errVehiculo} className="md:col-span-2">
             <select
               value={vehicleId}
-              onChange={e => setVehicleId(e.target.value ? Number(e.target.value) : '')}
+              onChange={e => { setVehicleId(e.target.value ? Number(e.target.value) : ''); if (e.target.value) setErrVehiculo('') }}
               className={nativeSelectCls}
             >
               <option value="">—</option>
@@ -288,7 +279,7 @@ export default function VerificacionesClient({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">Verificaciones</h1>
           <span className="text-sm text-muted-foreground">
@@ -345,12 +336,19 @@ export default function VerificacionesClient({
                         className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/30'}`}
                       >
                         <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1.5">
+                          {/* Botón real: la fila entera sigue clickeable con mouse, pero
+                              teclado y lector llegan por acá (mismo patrón que Stock móvil). */}
+                          <button
+                            type="button"
+                            aria-expanded={isOpen}
+                            onClick={e => { e.stopPropagation(); toggle(v.id) }}
+                            className="flex items-center gap-1.5 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
                             {isOpen
-                              ? <ChevronUpIcon className="size-3 text-muted-foreground" />
-                              : <ChevronDownIcon className="size-3 text-muted-foreground" />}
+                              ? <ChevronUpIcon className="size-3 text-muted-foreground" aria-hidden />
+                              : <ChevronDownIcon className="size-3 text-muted-foreground" aria-hidden />}
                             <span className="font-medium">{autoLabel(vehicle)}</span>
-                          </div>
+                          </button>
                         </td>
                         <td className="px-3 py-2.5 text-muted-foreground">{v.mecanico || '—'}</td>
                         <td className="px-3 py-2.5 text-muted-foreground max-w-md truncate">{resultadoCorto}</td>

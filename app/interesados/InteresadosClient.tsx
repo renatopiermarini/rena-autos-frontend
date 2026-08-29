@@ -24,7 +24,7 @@ const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'dest
 const ESTADOS = ['activo', 'contactado', 'reservo', 'compro', 'perdido'] as const
 
 const nativeSelectCls =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function Field({ label, value }: { label: string; value: any }) {
   if (!value && value !== 0) return null
@@ -106,13 +106,19 @@ function InteresadoRow({
         onClick={() => !editing && setOpen(v => !v)}
         className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          {open ? <ChevronUpIcon className="size-3 text-muted-foreground shrink-0" /> : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" />}
+        {/* Botón real para teclado/lector; la fila entera sigue clickeable con mouse. */}
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={e => { e.stopPropagation(); if (!editing) setOpen(v => !v) }}
+          className="flex items-center gap-2 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {open ? <ChevronUpIcon className="size-3 text-muted-foreground shrink-0" aria-hidden /> : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" aria-hidden />}
           <span className="text-sm font-medium">{i.nombre}</span>
           {i.vehicle_id && (
             <span className="text-xs text-muted-foreground">— {vehicleLabel(i.vehicle_id)}</span>
           )}
-        </div>
+        </button>
         <div className="flex items-center gap-3 shrink-0 ml-4">
           {i.presupuesto && <span className="text-xs text-muted-foreground tabular-nums">USD {Number(i.presupuesto).toLocaleString('es-AR')}</span>}
           {i.telefono && <span className="text-xs text-muted-foreground">{i.telefono}</span>}
@@ -159,6 +165,7 @@ function InteresadoRow({
                 key={e}
                 size="xs"
                 variant={i.estado === e ? 'default' : 'outline'}
+                aria-pressed={i.estado === e}
                 onClick={() => setEstadoQuick(e)}
                 disabled={saving || i.estado === e}
               >
@@ -355,12 +362,12 @@ export default function InteresadosClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">Interesados</h1>
           <span className="text-sm text-muted-foreground">{interesados.length} totales · {activos} activos</span>
         </div>
-        <Button size="sm" variant={showNuevo ? 'default' : 'outline'} onClick={() => setShowNuevo(v => !v)}>
+        <Button size="sm" variant={showNuevo ? 'default' : 'outline'} aria-expanded={showNuevo} onClick={() => setShowNuevo(v => !v)}>
           <PlusIcon /> Nuevo interesado
         </Button>
       </div>
@@ -376,6 +383,7 @@ export default function InteresadosClient({
             key={k}
             size="xs"
             variant={filter === k ? 'default' : 'outline'}
+            aria-pressed={filter === k}
             onClick={() => setFilter(k)}
           >
             {k}

@@ -130,15 +130,20 @@ export default function TableroClient({
               const isDone = done[String(t.id)] ?? false
               return (
                 <li key={t.id} className="flex items-center gap-2.5 px-3 py-2">
+                  {/* "Hecha" se pinta con los tokens success, igual que el mismo
+                      checkbox en MonthBoard: dos verdes distintos para el mismo
+                      gesto en la misma pantalla era drift. El violeta queda para
+                      el borde pendiente, que es el acento de la sección. */}
                   <button
                     type="button"
                     onClick={() => toggleTarea(t.id, !isDone)}
                     disabled={busy[String(t.id)]}
+                    aria-pressed={isDone}
                     title={isDone ? 'Reabrir tarea' : 'Marcar como completada'}
                     aria-label={isDone ? 'Reabrir tarea' : 'Marcar como completada'}
                     className={`size-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
                       isDone
-                        ? 'bg-violet-600 border-violet-600 text-white'
+                        ? 'border-success bg-success text-success-foreground'
                         : 'border-violet-400 dark:border-violet-700 hover:border-violet-600 text-transparent'
                     }`}
                   >

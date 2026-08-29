@@ -24,7 +24,7 @@ const RESULTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'd
 const RESULTADOS = ['pendiente', 'concretada', 'cancelada', 'no_compro'] as const
 
 const nativeSelectCls =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function VisitaRow({
   v, vehicleLabel, interesadoLabel, defaultOpen = false,
@@ -70,11 +70,17 @@ function VisitaRow({
         onClick={() => setOpen(o => !o)}
         className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          {open ? <ChevronUpIcon className="size-3 text-muted-foreground shrink-0" /> : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" />}
+        {/* Botón real para teclado/lector; la fila entera sigue clickeable con mouse. */}
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+          className="flex items-center gap-2 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {open ? <ChevronUpIcon className="size-3 text-muted-foreground shrink-0" aria-hidden /> : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" aria-hidden />}
           <span className="text-sm font-medium truncate">{vehicleLabel(v.vehicle_id)}</span>
           <span className="text-sm text-muted-foreground whitespace-nowrap">— {interesadoLabel(v.interesado_id)}</span>
-        </div>
+        </button>
         <div className="flex items-center gap-3 shrink-0 ml-4">
           <span className={`inline-flex items-center gap-1 text-xs ${v.email_enviado ? 'text-success' : 'text-muted-foreground'}`}>
             <MailIcon className="size-3" /> {v.email_enviado ? 'enviado' : 'pendiente'}
@@ -119,6 +125,7 @@ function VisitaRow({
                 key={r}
                 size="xs"
                 variant={resultado === r ? 'default' : 'outline'}
+                aria-pressed={resultado === r}
                 onClick={() => setResultado(r)}
                 disabled={saving === r || resultado === r}
               >
@@ -270,12 +277,12 @@ export default function VisitasClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold">Visitas</h1>
           <span className="text-sm text-muted-foreground">{visitas.length} totales · {proximasCount} próximas</span>
         </div>
-        <Button size="sm" variant={showNueva ? 'default' : 'outline'} onClick={() => setShowNueva(v => !v)}>
+        <Button size="sm" variant={showNueva ? 'default' : 'outline'} aria-expanded={showNueva} onClick={() => setShowNueva(v => !v)}>
           <PlusIcon /> Nueva visita
         </Button>
       </div>
@@ -291,6 +298,7 @@ export default function VisitasClient({
             key={k}
             size="xs"
             variant={filter === k ? 'default' : 'outline'}
+            aria-pressed={filter === k}
             onClick={() => setFilter(k as Filtro)}
           >
             {k}

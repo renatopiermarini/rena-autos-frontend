@@ -19,7 +19,7 @@ const TIPO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destru
 }
 
 const nativeSelectCls =
-  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
+  'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50'
 
 function Field({ label, value }: { label: string; value: any }) {
   if (!value && value !== 0) return null
@@ -87,11 +87,17 @@ function ClienteRow({ c }: { c: any }) {
         onClick={() => !editing && setOpen(o => !o)}
         className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
       >
-        <div className="flex items-center gap-2">
-          {open ? <ChevronUpIcon className="size-3 text-muted-foreground" /> : <ChevronDownIcon className="size-3 text-muted-foreground" />}
+        {/* Botón real para teclado/lector; la fila entera sigue clickeable con mouse. */}
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={e => { e.stopPropagation(); if (!editing) setOpen(o => !o) }}
+          className="flex items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {open ? <ChevronUpIcon className="size-3 text-muted-foreground" aria-hidden /> : <ChevronDownIcon className="size-3 text-muted-foreground" aria-hidden />}
           <span className="text-sm font-medium">{c.nombre}</span>
           {c.es_acreedor ? <Badge variant="destructive">acreedor</Badge> : null}
-        </div>
+        </button>
         <div className="flex items-center gap-4 flex-wrap justify-end">
           {c.telefono && <span className="text-xs text-muted-foreground">{c.telefono}</span>}
           {c.email && <span className="text-xs text-muted-foreground">{c.email}</span>}
@@ -205,20 +211,26 @@ function InteresadoRow({ i }: { i: any }) {
         onClick={() => hasExtra && setOpen(o => !o)}
         className={`flex items-center justify-between px-4 py-3 ${hasExtra ? 'cursor-pointer hover:bg-muted/50' : ''} transition-colors`}
       >
-        <div className="flex items-center gap-2 min-w-0">
+        <button
+          type="button"
+          aria-expanded={open}
+          disabled={!hasExtra}
+          onClick={e => { e.stopPropagation(); if (hasExtra) setOpen(o => !o) }}
+          className="flex items-center gap-2 min-w-0 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           {hasExtra && (open
-            ? <ChevronUpIcon className="size-3 text-muted-foreground shrink-0" />
-            : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" />
+            ? <ChevronUpIcon className="size-3 text-muted-foreground shrink-0" aria-hidden />
+            : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" aria-hidden />
           )}
-          <div className="min-w-0">
+          <span className="min-w-0 block">
             <span className="text-sm font-medium">{i.nombre}</span>
             {(i.marca_buscada || i.modelo_buscado) && (
               <span className="text-xs text-muted-foreground ml-2">
                 busca: {[i.marca_buscada, i.modelo_buscado, i.año_min && `desde ${i.año_min}`].filter(Boolean).join(' ')}
               </span>
             )}
-          </div>
-        </div>
+          </span>
+        </button>
         <div className="flex items-center gap-4 shrink-0 ml-4">
           {i.presupuesto && (
             <span className="text-xs text-muted-foreground">${Number(i.presupuesto).toLocaleString('es-AR')}</span>
@@ -255,7 +267,7 @@ export default function ClientesClient({ clientes, interesados }: { clientes: an
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h1 className="text-xl font-semibold">Clientes</h1>
         <Button onClick={() => setShowNew(true)}><PlusIcon /> Nuevo cliente</Button>
       </div>

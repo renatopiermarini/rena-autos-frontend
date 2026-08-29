@@ -100,7 +100,11 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.62 0.19 263);
+  /* 0.55 y no 0.62: con el texto casi blanco de arriba, 0.62 daba 3.59:1 en el
+     tema por defecto — falla AA en cada botón primario, badge y burbuja del
+     chat. A 0.55 el texto queda en 4.81:1 y el relleno sigue a 3.94:1 del
+     fondo. El --ring se queda en 0.62: un foco más brillante se ve mejor. */
+  --primary: oklch(0.55 0.19 263);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
@@ -109,7 +113,9 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
+  /* Texto oscuro sobre relleno rojo claro (6.19:1) — mismo patrón que success/
+     warning/info en dark. Con blanco daba 2.89:1. */
+  --destructive-foreground: oklch(0.205 0 0);
   --success: oklch(0.72 0.15 162);
   --success-foreground: oklch(0.205 0 0);
   --warning: oklch(0.80 0.14 78);
@@ -138,9 +144,12 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Sin font-family propia: la hereda de <html> (font-sans = Geist, cargada y
+     precargada en layout.tsx). La pila -apple-system que había acá pisaba a
+     Geist en todo el body: la fuente se descargaba y no se pintaba nunca, y
+     los títulos (font-heading) sí la usaban — dos tipografías sin querer. */
   body {
     @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   html {
     @apply font-sans;
