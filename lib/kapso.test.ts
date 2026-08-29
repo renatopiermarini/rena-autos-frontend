@@ -359,3 +359,36 @@ describe('computePatrimonio · socios y señas', () => {
     expect(pat.capital_propio).toBe(30000)
   })
 })
+
+describe('computePatrimonio · comisión pactada y ya cobrada', () => {
+  it('usa la comisión pactada y le resta lo ya cobrado', () => {
+    const pat = computePatrimonio(
+      [{ cuenta: 'cash', tipo: 'ingreso', monto: 250, afecta_balance: 1, categoria: 'commission', vehicle_id: 49 }],
+      [
+        // pactada 1250, ya cobrados 250 → quedan 1000 (el 5% daría 1387,50)
+        { id: 49, marca: 'Jeep', modelo: 'Commander', tipo_operacion: 'consignacion', estado: 'reservado', precio_venta_objetivo: 27750, comision_pactada: 1250 },
+        // sin pactada: el 5% de siempre
+        { id: 43, marca: 'Toyota', modelo: 'Hilux', tipo_operacion: 'consignacion', estado: 'publicado', precio_venta_objetivo: 47000 },
+      ],
+      [], [], HOY,
+    )
+    const autos = Object.fromEntries(pat.por_cobrar.comisiones_consignaciones.autos.map(a => [a.vehicle_id, a]))
+    expect(autos[49].comision_total).toBe(1250)
+    expect(autos[49].cobrado).toBe(250)
+    expect(autos[49].comision).toBe(1000)
+    expect(autos[49].es_pactada).toBe(true)
+    expect(autos[43].comision).toBe(2350)
+    expect(autos[43].es_pactada).toBe(false)
+    expect(pat.por_cobrar.comisiones_consignaciones.total).toBe(3350)
+  })
+
+  it('comisión ya cobrada entera: el auto sale de la lista', () => {
+    const pat = computePatrimonio(
+      [{ cuenta: 'cash', tipo: 'ingreso', monto: 900, afecta_balance: 1, categoria: 'commission', vehicle_id: 44 }],
+      [{ id: 44, marca: 'Ford', modelo: 'Ranger', tipo_operacion: 'consignacion', estado: 'reservado', precio_venta_objetivo: 18000 }],
+      [], [], HOY,
+    )
+    expect(pat.por_cobrar.comisiones_consignaciones.total).toBe(0)
+    expect(pat.por_cobrar.comisiones_consignaciones.autos).toEqual([])
+  })
+})

@@ -277,7 +277,7 @@ function ResumenTab({
             ...(pat.por_cobrar.comisiones_consignaciones.total > 0
               ? [`comisiones consig. ${fmt(pat.por_cobrar.comisiones_consignaciones.total)}`] : []),
           ].join(' · ') || 'nada por cobrar'}
-          tip={<>Dos cosas: (1) plata nuestra en manos de clientes — gastos que adelantamos por su cuenta menos lo devuelto; (2) <b>comisiones esperadas de consignaciones</b>: nuestro 5% del precio objetivo de cada auto en consignación, que se cobra al venderlo.{pat.por_cobrar.comisiones_consignaciones.autos.length > 0 && <><br /><br />{pat.por_cobrar.comisiones_consignaciones.autos.map(a => `${a.label}: 5% de ${fmt(a.precio_base)} = ${fmt(a.comision)}`).join(' · ')}</>}</>}
+          tip={<>Dos cosas: (1) plata nuestra en manos de clientes — gastos que adelantamos por su cuenta menos lo devuelto; (2) <b>comisiones pendientes de consignaciones</b>: la comisión pactada de cada auto en consignación (sin una pactada, el 5% del precio) <b>menos lo que ya cobramos</b> — la seña de una consignación entra a cuenta de la comisión y no se devuelve.{pat.por_cobrar.comisiones_consignaciones.autos.length > 0 && <><br /><br />{pat.por_cobrar.comisiones_consignaciones.autos.map(a => `${a.label}: ${a.es_pactada ? `pactada ${fmt(a.comision_total)}` : `5% de ${fmt(a.precio_base)} = ${fmt(a.comision_total)}`}${a.cobrado > 0 ? ` − ${fmt(a.cobrado)} ya cobrados` : ''} = ${fmt(a.comision)}`).join(' · ')}</>}</>}
         />
         <StatCard
           tone="negative"
@@ -477,9 +477,10 @@ function PatrimonioTab({
                 {pat.por_cobrar.comisiones_consignaciones.autos.map(a => (
                   <tr key={`v${a.vehicle_id}`}>
                     <td className="px-3 py-2.5 font-medium">{a.label}</td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">comisión consignación (esperada)</td>
+                    <td className="px-3 py-2.5 text-xs text-muted-foreground">comisión consignación (pendiente)</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
-                      5% de {fmt(a.precio_base)}
+                      {a.es_pactada ? `pactada ${fmt(a.comision_total)}` : `5% de ${fmt(a.precio_base)}`}
+                      {a.cobrado > 0 && ` − ${fmt(a.cobrado)} ya cobrados`}
                     </td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-medium">{fmt(a.comision)}</td>
                   </tr>

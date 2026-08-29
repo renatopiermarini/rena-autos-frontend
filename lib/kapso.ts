@@ -516,7 +516,7 @@ export type Patrimonio = {
     clientes: { cliente_id: number | null; nombre: string; adelantado: number; devuelto: number; saldo: number }[]
     comisiones_consignaciones: {
       total: number
-      autos: { vehicle_id: number | null; label: string; precio_base: number; comision: number }[]
+      autos: { vehicle_id: number | null; label: string; precio_base: number; comision_total: number; es_pactada: boolean; cobrado: number; comision: number }[]
     }
   }
   deuda_total: number
@@ -653,14 +653,34 @@ export function computePatrimonio(
   // Comisiones esperadas de consignaciones activas: nuestro 5% del precio
   // objetivo (fallback publicado). Se cobran recién al vender — van marcadas
   // como esperadas — pero son un activo real, igual que la ganancia esperada.
+  // Lo ya cobrado de comisión por auto: en las consignaciones la seña NO se
+  // devuelve, entra a cuenta de la comisión, así que lo que queda por cobrar es
+  // el total pactado menos lo que ya entró (si no, esa plata se cuenta dos
+  // veces: en la caja y otra vez como comisión esperada).
+  const comisionCobrada = new Map<number, number>()
+  for (const m of movimientos) {
+    if (m.categoria !== 'commission' || m.tipo !== 'ingreso') continue
+    const vid = coerceId(m.vehicle_id)
+    if (vid === null) continue
+    comisionCobrada.set(vid, (comisionCobrada.get(vid) ?? 0) + Number(m.monto ?? 0))
+  }
   const comisionesAutos = vehicles
     .filter(v => v.tipo_operacion === 'consignacion' && v.estado !== 'vendido')
     .map(v => {
+      const vid = coerceId(v.id)
       const base = Number(v.precio_venta_objetivo ?? 0) || Number(v.precio_publicado ?? 0)
       const label = `${v.marca ?? ''} ${v.modelo ?? ''}`.trim() + (v.dominio ? ` (${v.dominio})` : '')
-      return { vehicle_id: coerceId(v.id), label, precio_base: round2(base), comision: round2(base * 0.05) }
+      // comision_pactada = el monto ACORDADO (se negocia y casi nunca es el 5%
+      // exacto). Sin ella, el 5% del precio, como siempre.
+      const pactada = Number(v.comision_pactada ?? 0)
+      const total = round2(pactada > 0 ? pactada : base * 0.05)
+      const cobrado = round2(vid === null ? 0 : (comisionCobrada.get(vid) ?? 0))
+      return {
+        vehicle_id: vid, label, precio_base: round2(base), comision_total: total,
+        es_pactada: pactada > 0, cobrado, comision: round2(Math.max(0, total - cobrado)),
+      }
     })
-    .filter(a => a.precio_base > 0)
+    .filter(a => a.comision_total > 0 && a.comision > 0)
     .sort((a, b) => b.comision - a.comision)
   const comisionesTotal = round2(comisionesAutos.reduce((s, a) => s + a.comision, 0))
 
