@@ -1,8 +1,10 @@
 import {
   getTareas, getVehicles, getPrestamos, getVisitas,
   getInteresados, getMovimientos, getClientes, getCuentas, getEquipo, getConfigNegocio,
+  getVerificaciones,
   cuentasInfo, umbralAlertaCaja, capFirst, computePatrimonio,
 } from '@/lib/kapso'
+import { sinAuto } from '@/lib/verificaciones'
 import { destacadosClaves, equipoFromRows, resolveDefaultAssignee, seccionesEquipo, miembroPorClave } from '@/lib/equipo'
 import { diasEnStock, DIAS_STOCK_ALERTA } from '@/lib/stock'
 import TableroClient from './TableroClient'
@@ -15,11 +17,11 @@ const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.g
 export default async function Tablero() {
   const [
     tareas, vehicles, prestamos, visitas, interesados, movimientos, clientes,
-    cuentasRows, equipoRows, config,
+    cuentasRows, equipoRows, config, verificaciones,
   ] = await Promise.all([
     getTareas(), getVehicles(), getPrestamos(), getVisitas(), getInteresados(),
     getMovimientos(), getClientes(),
-    getCuentas(), getEquipo(), getConfigNegocio(),
+    getCuentas(), getEquipo(), getConfigNegocio(), getVerificaciones(),
   ])
 
   // Perfil de la instancia. Sin las tablas de config esto es exactamente lo que
@@ -164,6 +166,20 @@ export default async function Tablero() {
     })
     .filter((v: { faltan: string[] }) => v.faltan.length > 0)
 
+  // Verificaciones que el bot guardó sin auto asignado (Maxi mandó el audio
+  // pero no sabía de qué auto era). Las externas (prefijo "Auto externo" en
+  // notas) no cuentan: nunca se van a asignar. Las pagadas tampoco: ya
+  // cerraron, no vale la pena nagear para siempre.
+  const verificacionesSinAuto = verificaciones
+    .filter((v: any) => sinAuto(v) && v.estado !== 'pagada')
+    .map((v: any) => ({
+      mecanico: v.mecanico ?? null,
+      fecha: v.fecha_verificacion ? String(v.fecha_verificacion).slice(0, 10) : null,
+      resumen: v.resultado
+        ? String(v.resultado).slice(0, 60) + (String(v.resultado).length > 60 ? '…' : '')
+        : null,
+    }))
+
   // Los cuatro números de arriba. `sub` es la letra chica; `href` la pantalla
   // donde se sigue mirando. Todo derivado del ledger — nada cargado a mano.
   const resumen = [
@@ -203,6 +219,7 @@ export default async function Tablero() {
       alertas={alertas}
       sinFecha={sinFecha}
       datosFaltantes={datosFaltantes}
+      verificacionesSinAuto={verificacionesSinAuto}
       secciones={secciones}
       resumen={resumen}
     />

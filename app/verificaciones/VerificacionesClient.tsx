@@ -15,6 +15,7 @@ import { formSucio } from '@/lib/dirty'
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, ClipboardCheckIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
+import { esExterna, sinAuto } from '@/lib/verificaciones'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   pendiente: 'warning',
@@ -167,7 +168,10 @@ function NuevaVerificacionDialog({
   open: boolean; onOpenChange: (o: boolean) => void;
   vehicles: any[]; onDone: () => void
 }) {
-  const [vehicleId, setVehicleId] = useState<number | ''>('')
+  // 'sin_auto' es la opción explícita "todavía no sé de qué auto es" (persiste
+  // vehicle_id null); el '' del placeholder sigue siendo error, así una omisión
+  // accidental no crea filas huérfanas.
+  const [vehicleId, setVehicleId] = useState<number | '' | 'sin_auto'>('')
   const [mecanico, setMecanico] = useState('Maxi')
   const [monto, setMonto] = useState('')
   const [fechaVerificacion, setFechaVerificacion] = useState(today())
@@ -190,7 +194,7 @@ function NuevaVerificacionDialog({
     setErrVehiculo('')
     setSaving(true)
     const payload: any = {
-      vehicle_id: vehicleId,
+      vehicle_id: vehicleId === 'sin_auto' ? null : vehicleId,
       estado: 'pendiente',
       mecanico,
       fecha_verificacion: fechaVerificacion || null,
@@ -220,10 +224,15 @@ function NuevaVerificacionDialog({
           <FField label="Vehículo" error={errVehiculo} className="md:col-span-2">
             <select
               value={vehicleId}
-              onChange={e => { setVehicleId(e.target.value ? Number(e.target.value) : ''); if (e.target.value) setErrVehiculo('') }}
+              onChange={e => {
+                const val = e.target.value
+                setVehicleId(val === '' ? '' : val === 'sin_auto' ? 'sin_auto' : Number(val))
+                if (val) setErrVehiculo('')
+              }}
               className={nativeSelectCls}
             >
               <option value="">—</option>
+              <option value="sin_auto">Sin auto asignado (elegir después)</option>
               {vehicles.map(v => (
                 <option key={v.id} value={v.id}>{autoLabel(v)}</option>
               ))}
@@ -276,6 +285,7 @@ export default function VerificacionesClient({
   const mostrar = filtro === 'falta_pagar' ? faltaPagar : pagas
 
   const totalFaltaPagar = faltaPagar.reduce((s, v) => s + Number(v.monto ?? 0), 0)
+  const cantSinAuto = faltaPagar.filter(sinAuto).length
 
   return (
     <div className="space-y-4">
@@ -285,6 +295,9 @@ export default function VerificacionesClient({
           <span className="text-sm text-muted-foreground">
             {faltaPagar.length} falta pagar · {pagas.length} pagas
             {totalFaltaPagar > 0 ? ` · USD ${totalFaltaPagar.toLocaleString('es-AR')} por pagar` : ''}
+            {cantSinAuto > 0 && (
+              <span className="text-amber-600 dark:text-amber-400"> · {cantSinAuto} sin auto</span>
+            )}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -324,7 +337,11 @@ export default function VerificacionesClient({
               <tbody className="divide-y divide-border">
                 {mostrar.map(v => {
                   const isOpen = expanded.has(v.id)
-                  const vehicle = vehicles.find(x => x.id === v.vehicle_id)
+                  // Number() en ambos lados: en modo Kapso/D1 la FK puede venir
+                  // como string y el === estricto no matchearía (incidente 130i).
+                  const vehicle = v.vehicle_id != null && v.vehicle_id !== ''
+                    ? vehicles.find(x => Number(x.id) === Number(v.vehicle_id))
+                    : undefined
                   const monto = v.monto != null ? Number(v.monto) : null
                   const resultadoCorto = v.resultado
                     ? (v.resultado.length > 80 ? v.resultado.slice(0, 80) + '…' : v.resultado)
@@ -347,7 +364,16 @@ export default function VerificacionesClient({
                             {isOpen
                               ? <ChevronUpIcon className="size-3 text-muted-foreground" aria-hidden />
                               : <ChevronDownIcon className="size-3 text-muted-foreground" aria-hidden />}
-                            <span className="font-medium">{autoLabel(vehicle)}</span>
+                            {/* Sin vehículo resuelto: externa (no alerta), sin
+                                asignar (badge ámbar) o vehicle_id de un auto
+                                borrado (queda el '—' de siempre). */}
+                            {vehicle
+                              ? <span className="font-medium">{autoLabel(vehicle)}</span>
+                              : esExterna(v)
+                                ? <Badge variant="secondary">Externo</Badge>
+                                : sinAuto(v)
+                                  ? <Badge variant="warning">Sin auto</Badge>
+                                  : <span className="font-medium">—</span>}
                           </button>
                         </td>
                         <td className="px-3 py-2.5 text-muted-foreground">{v.mecanico || '—'}</td>

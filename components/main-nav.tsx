@@ -31,6 +31,11 @@ const NAV: { href: string; label: string; icon?: typeof SettingsIcon }[] = [
   // En el lugar que tenía "Guía" (pantalla eliminada). NO está en todas las
   // instancias: ver el prop `mensajes` más abajo.
   { href: '/mensajes',       label: 'Mensajes', icon: MessageSquareTextIcon },
+  // Portada de la demo Randazzo (papeles por auto + trámites + turnos). Acá
+  // SUMA en vez de reemplazar Finanzas/Visitas/Verificaciones como allá, y va
+  // en la zona ocasional para no empujar lo diario fuera de los 375px; el nav
+  // queda en 11 ítems, así que el corte documentado arriba empeora — pendiente.
+  { href: '/documentacion',  label: 'Documentación'  },
   { href: '/verificaciones', label: 'Verificaciones' },
   { href: '/config/negocio', label: 'Configuración', icon: SettingsIcon },
 ]

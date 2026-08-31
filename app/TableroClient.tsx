@@ -31,12 +31,13 @@ export type NumeroResumen = {
 }
 
 export default function TableroClient({
-  items, alertas, sinFecha, datosFaltantes = [], secciones = [], resumen = [],
+  items, alertas, sinFecha, datosFaltantes = [], verificacionesSinAuto = [], secciones = [], resumen = [],
 }: {
   items: BoardItem[]
   alertas: string[]
   sinFecha: { id: number; titulo: string; asignado?: string; urgent: boolean }[]
   datosFaltantes?: { label: string; faltan: string[]; dias?: number | null }[]
+  verificacionesSinAuto?: { mecanico: string | null; fecha: string | null; resumen: string | null }[]
   secciones?: SeccionEquipo[]
   resumen?: NumeroResumen[]
 }) {
@@ -208,6 +209,42 @@ export default function TableroClient({
                   </span>
                 )}
                 <span className="text-amber-700/80 dark:text-amber-300/80"> — falta: {v.faltan.join(', ')}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Verificaciones que el bot guardó sin saber de qué auto eran — mismo
+          tratamiento ámbar que datos faltantes: higiene de datos, no fuego.
+          Se resuelven asignando el auto en /verificaciones. */}
+      {verificacionesSinAuto.length > 0 && (
+        <section className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2">
+            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+              <CircleAlertIcon className="size-4 shrink-0" aria-hidden />
+              <h2 className="text-xs font-semibold uppercase tracking-wide">
+                {verificacionesSinAuto.length === 1
+                  ? 'Verificación sin auto asignado'
+                  : `Verificaciones sin auto asignado · ${verificacionesSinAuto.length}`}
+              </h2>
+            </div>
+            <Link href="/verificaciones" className="text-xs text-amber-700 dark:text-amber-300 hover:underline underline-offset-2">
+              Asignar en Verificaciones →
+            </Link>
+          </div>
+          <ul className="divide-y divide-amber-200/60 dark:divide-amber-900/60 border-t border-amber-200/60 dark:border-amber-900/60">
+            {verificacionesSinAuto.map((v, i) => (
+              <li key={i} className="px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                <span className="font-medium">{v.mecanico || 'Verificación'}</span>
+                {v.fecha && (
+                  <span className="ml-1.5 text-xs tabular-nums text-amber-700/80 dark:text-amber-300/80">
+                    {Number(v.fecha.slice(8, 10))}/{Number(v.fecha.slice(5, 7))}
+                  </span>
+                )}
+                {v.resumen && (
+                  <span className="text-amber-700/80 dark:text-amber-300/80"> — {v.resumen}</span>
+                )}
               </li>
             ))}
           </ul>

@@ -35,6 +35,8 @@ export async function getOfertas()         { return get('ofertas', 15) }
 export async function getVisitas()         { return get('visitas', 15) }
 export async function getKbEntries()       { return get('kb_entries', 15) }
 export async function getVerificaciones()  { return get('verificaciones_mecanicas', 30) }
+export async function getTramites()        { return get('tramites', 15) }
+export async function getTurnos()          { return get('turnos', 15) }
 
 // ── Tablas de configuración (productización multi-instancia) ──────────────────
 //
