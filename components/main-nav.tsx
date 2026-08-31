@@ -105,7 +105,7 @@ export function MainNav({
     <header className="border-b border-border sticky top-0 z-30 bg-background/90 backdrop-blur-sm">
       <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-8 py-3 flex items-center gap-4 sm:gap-8">
         <Link href="/" className="flex items-center gap-2 font-semibold text-sm tracking-tight shrink-0" aria-label={`${titulo} — Inicio`}>
-          <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground text-[11px] font-bold leading-none">{iniciales}</span>
+          <span className="grid size-6 place-items-center rounded-md bg-primary text-primary-foreground text-2xs font-bold leading-none">{iniciales}</span>
           <span className="hidden lg:inline">{titulo}</span>
         </Link>
         <div className="relative min-w-0 flex-1">

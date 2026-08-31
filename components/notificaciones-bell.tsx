@@ -201,7 +201,7 @@ export function NotificacionesBell() {
                           <p className={cn('break-words', n.leida ? 'text-muted-foreground' : 'font-medium')}>
                             {n.texto}
                           </p>
-                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          <p className="mt-0.5 text-2xs text-muted-foreground">
                             {tiempoRelativo(n.created_at)}
                             {n.nivel === 'alerta' && <span className="text-destructive"> · alerta</span>}
                           </p>

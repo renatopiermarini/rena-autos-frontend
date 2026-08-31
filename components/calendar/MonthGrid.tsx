@@ -125,7 +125,7 @@ export function MonthGrid<T>({
                     >
                       <div className="mb-1">
                         <span className={`text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
-                          isToday ? 'bg-blue-600 text-white' : isSel ? 'text-foreground' : 'text-muted-foreground'
+                          isToday ? 'bg-primary text-primary-foreground' : isSel ? 'text-foreground' : 'text-muted-foreground'
                         }`}>{day}</span>
                         {/* Today is otherwise a blue circle and nothing else. */}
                         {isToday && <span className="sr-only">hoy</span>}

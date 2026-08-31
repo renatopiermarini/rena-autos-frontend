@@ -396,14 +396,14 @@ function PatrimonioTab({
               <Fragment key={t.label}>
                 {i > 0 && <span className="text-muted-foreground text-lg">{t.sign === '−' ? '−' : '+'}</span>}
                 <div>
-                  <p className="text-[11px] text-muted-foreground flex items-center gap-1">{t.label} <InfoTip>{t.tip}</InfoTip></p>
+                  <p className="text-2xs text-muted-foreground flex items-center gap-1">{t.label} <InfoTip>{t.tip}</InfoTip></p>
                   <p className={`text-lg font-medium font-mono tabular-nums ${t.sign === '−' ? 'text-destructive' : ''}`}>{fmt(t.monto)}</p>
                 </div>
               </Fragment>
             ))}
             <span className="text-muted-foreground text-lg">=</span>
             <div>
-              <p className="text-[11px] text-muted-foreground">Capital propio</p>
+              <p className="text-2xs text-muted-foreground">Capital propio</p>
               <p className="text-xl font-semibold font-mono tabular-nums">{fmt(pat.capital_propio)}</p>
             </div>
           </div>

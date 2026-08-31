@@ -17,10 +17,14 @@ describe('fallback sin tabla', () => {
     }
     expect(DEFAULT_EQUIPO.map(m => m.clave)).toEqual(['rena', 'fran', 'marshiot'])
     expect(DEFAULT_EQUIPO.map(m => m.label)).toEqual(['Rena', 'Fran', 'Marshiot'])
+    // Badges tinted (idioma de los Badge de estado), avatares sólidos: un
+    // círculo de 20px con tinte al 10% es ilegible. Rena conserva el inverso.
     expect(DEFAULT_EQUIPO.map(m => m.badge)).toEqual([
+      'bg-foreground text-background', PALETA_EQUIPO[1].badge, PALETA_EQUIPO[0].badge,
+    ])
+    expect(DEFAULT_EQUIPO.map(m => m.avatar)).toEqual([
       'bg-foreground text-background', 'bg-blue-600 text-white', 'bg-violet-600 text-white',
     ])
-    expect(DEFAULT_EQUIPO.every(m => m.avatar === m.badge)).toBe(true)
   })
   it('el asignado por defecto es rena y el orden de secciones marshiot, rena, fran', () => {
     const def = resolveDefaultAssignee({}, DEFAULT_EQUIPO)
@@ -64,10 +68,11 @@ describe('equipoFromRows con tabla', () => {
   it('las claves conocidas conservan su color exacto; el resto va por paleta cíclica', () => {
     const eq = equipoFromRows(rows)
     expect(eq.find(m => m.clave === 'rena')!.badge).toBe('bg-foreground text-background')
-    expect(eq.find(m => m.clave === 'marshiot')!.badge).toBe('bg-violet-600 text-white')
+    expect(eq.find(m => m.clave === 'marshiot')!.badge).toBe(PALETA_EQUIPO[0].badge)
+    expect(eq.find(m => m.clave === 'marshiot')!.avatar).toBe('bg-violet-600 text-white')
     // nacho es el índice 1 de la lista → segundo color de la paleta.
-    expect(eq.find(m => m.clave === 'nacho')!.badge).toBe(PALETA_EQUIPO[1])
-    expect(eq.find(m => m.clave === 'negocio')!.badge).toBe(PALETA_EQUIPO[3])
+    expect(eq.find(m => m.clave === 'nacho')!.badge).toBe(PALETA_EQUIPO[1].badge)
+    expect(eq.find(m => m.clave === 'negocio')!.badge).toBe(PALETA_EQUIPO[3].badge)
   })
   it('sin display_name el label es la clave capitalizada', () => {
     expect(equipoFromRows(rows).find(m => m.clave === 'nacho')!.label).toBe('Nacho')

@@ -24,22 +24,44 @@ export const DEFAULT_ASSIGNEE = 'rena'
 
 // Paleta cíclica para las claves que no conocemos: violeta, azul, verde, ámbar,
 // rosa. Determinista por índice, así el color de una persona no baila entre
-// renders ni entre pantallas.
+// renders ni entre pantallas. El HUE de cada persona es identidad y no se toca;
+// el tratamiento sí: badge tinted (mismo idioma que los Badge de estado) y
+// avatar sólido — un círculo de 20px con tinte al 10% es ilegible.
+// Texto light en *-800 y dark en *-300: los 20 pares hue×tema pasan AA
+// (peor caso green-800 light 6.34:1; con *-700, green daba 4.42 y fallaba).
+// Strings LITERALES a propósito: el scanner de Tailwind no ve clases armadas
+// con template strings — interpolar acá rompería la generación del CSS.
 export const PALETA_EQUIPO = [
-  'bg-violet-600 text-white',
-  'bg-blue-600 text-white',
-  'bg-green-600 text-white',
-  'bg-amber-600 text-white',
-  'bg-pink-600 text-white',
+  {
+    badge: 'border border-violet-600/30 bg-violet-600/10 text-violet-800 dark:border-violet-400/25 dark:bg-violet-400/15 dark:text-violet-300',
+    avatar: 'bg-violet-600 text-white',
+  },
+  {
+    badge: 'border border-blue-600/30 bg-blue-600/10 text-blue-800 dark:border-blue-400/25 dark:bg-blue-400/15 dark:text-blue-300',
+    avatar: 'bg-blue-600 text-white',
+  },
+  {
+    badge: 'border border-green-600/30 bg-green-600/10 text-green-800 dark:border-green-400/25 dark:bg-green-400/15 dark:text-green-300',
+    avatar: 'bg-green-600 text-white',
+  },
+  {
+    badge: 'border border-amber-600/30 bg-amber-600/10 text-amber-800 dark:border-amber-400/25 dark:bg-amber-400/15 dark:text-amber-300',
+    avatar: 'bg-amber-600 text-white',
+  },
+  {
+    badge: 'border border-pink-600/30 bg-pink-600/10 text-pink-800 dark:border-pink-400/25 dark:bg-pink-400/15 dark:text-pink-300',
+    avatar: 'bg-pink-600 text-white',
+  },
 ]
 
 // Los colores de siempre. Se respetan aunque la persona venga de la tabla: si
 // Marshiot cambiara de violeta a verde el día que se corre el DDL, el usuario
-// leería el cambio como un bug.
+// leería el cambio como un bug. Rena conserva el inverso foreground/background:
+// es la marca del dueño, no un color de la paleta.
 const COLORES_FIJOS: Record<string, { badge: string; avatar: string }> = {
   rena:     { badge: 'bg-foreground text-background', avatar: 'bg-foreground text-background' },
-  fran:     { badge: 'bg-blue-600 text-white',        avatar: 'bg-blue-600 text-white' },
-  marshiot: { badge: 'bg-violet-600 text-white',      avatar: 'bg-violet-600 text-white' },
+  fran:     PALETA_EQUIPO[1], // azul
+  marshiot: PALETA_EQUIPO[0], // violeta
 }
 
 /**
@@ -62,8 +84,7 @@ export const DEFAULT_DESTACADOS = ['marshiot']
 function colores(clave: string, i: number) {
   const fijo = COLORES_FIJOS[clave]
   if (fijo) return fijo
-  const cls = PALETA_EQUIPO[i % PALETA_EQUIPO.length]
-  return { badge: cls, avatar: cls }
+  return PALETA_EQUIPO[i % PALETA_EQUIPO.length]
 }
 
 /**

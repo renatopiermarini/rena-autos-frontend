@@ -297,7 +297,7 @@ export default function VerificacionesClient({
             {faltaPagar.length} falta pagar · {pagas.length} pagas
             {totalFaltaPagar > 0 ? ` · ${money(totalFaltaPagar)} por pagar` : ''}
             {cantSinAuto > 0 && (
-              <span className="text-amber-600 dark:text-amber-400"> · {cantSinAuto} sin auto</span>
+              <span className="text-warning"> · {cantSinAuto} sin auto</span>
             )}
           </span>
         </div>

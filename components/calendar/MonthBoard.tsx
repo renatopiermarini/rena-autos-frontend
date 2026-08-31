@@ -128,7 +128,7 @@ export function MonthBoard({
         <div className="p-2">
           <div className="grid grid-cols-7 mb-1">
             {DOW_LUN.map(d => (
-              <div key={d} className="py-1 text-center text-[11px] font-medium text-muted-foreground">{d}</div>
+              <div key={d} className="py-1 text-center text-2xs font-medium text-muted-foreground">{d}</div>
             ))}
           </div>
 

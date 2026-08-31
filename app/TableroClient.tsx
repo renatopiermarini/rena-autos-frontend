@@ -102,7 +102,7 @@ export default function TableroClient({
                 {n.valor}
               </p>
               {n.sub && (
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={n.sub}>{n.sub}</p>
+                <p className="mt-0.5 truncate text-2xs text-muted-foreground" title={n.sub}>{n.sub}</p>
               )}
             </Link>
           ))}
@@ -114,19 +114,19 @@ export default function TableroClient({
           el de la persona: identifica "tareas del equipo" y queda igual que
           siempre. Quién es cada uno lo dice el pill, que sí usa su color. */}
       {secciones.map(seccion => (
-        <section key={seccion.clave} className="rounded-lg border border-violet-300 bg-violet-50/60 dark:border-violet-900 dark:bg-violet-950/30 overflow-hidden">
-          <header className="flex items-center justify-between px-3 py-2 border-b border-violet-200/60 dark:border-violet-900/60">
+        <section key={seccion.clave} className="rounded-lg border border-violet-600/30 bg-violet-600/5 dark:border-violet-400/25 dark:bg-violet-400/10 overflow-hidden">
+          <header className="flex items-center justify-between px-3 py-2 border-b border-violet-600/15 dark:border-violet-400/15">
             <div className="flex items-center gap-2">
               <span className={`${seccion.badgeCls} rounded-full px-2 py-0.5 text-xs font-medium`}>{seccion.label}</span>
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-violet-800 dark:text-violet-300">
                 {(() => { const n = seccion.tareas.filter(t => !done[String(t.id)]).length; return n === 0 ? 'Todo listo' : `${n} tarea${n === 1 ? '' : 's'}` })()}
               </h2>
             </div>
-            <Link href="/tareas" className="text-xs text-violet-700 dark:text-violet-300 hover:underline underline-offset-2">
+            <Link href="/tareas" className="text-xs text-violet-800 dark:text-violet-300 hover:underline underline-offset-2">
               Ver tareas →
             </Link>
           </header>
-          <ul className="divide-y divide-violet-200/60 dark:divide-violet-900/60">
+          <ul className="divide-y divide-violet-600/15 dark:divide-violet-400/15">
             {seccion.tareas.map(t => {
               const isDone = done[String(t.id)] ?? false
               return (
@@ -145,7 +145,7 @@ export default function TableroClient({
                     className={`size-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
                       isDone
                         ? 'border-success bg-success text-success-foreground'
-                        : 'border-violet-400 dark:border-violet-700 hover:border-violet-600 text-transparent'
+                        : 'border-violet-600/40 dark:border-violet-400/40 hover:border-violet-600 dark:hover:border-violet-400 text-transparent'
                     }`}
                   >
                     <CheckIcon className="size-3" aria-hidden />
@@ -183,72 +183,54 @@ export default function TableroClient({
       )}
 
       {/* Datos faltantes en vehículos — banner permanente (reemplaza al aviso
-          diario por WhatsApp). Ámbar, no rojo: es higiene de datos, no fuego. */}
+          diario por WhatsApp). Warning, no destructive: higiene de datos, no fuego. */}
       {datosFaltantes.length > 0 && (
-        <section className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-              <CircleAlertIcon className="size-4 shrink-0" aria-hidden />
-              <h2 className="text-xs font-semibold uppercase tracking-wide">
-                Datos faltantes en {datosFaltantes.length} vehículo{datosFaltantes.length === 1 ? '' : 's'}
-              </h2>
-            </div>
-            <Link href="/stock" className="text-xs text-amber-700 dark:text-amber-300 hover:underline underline-offset-2">
-              Completar en Stock →
-            </Link>
-          </div>
-          <ul className="divide-y divide-amber-200/60 dark:divide-amber-900/60 border-t border-amber-200/60 dark:border-amber-900/60">
-            {datosFaltantes.map((v, i) => (
-              <li key={i} className="px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-                <span className="font-medium">{v.label}</span>
-                {/* Días en stock: el auto que lleva demasiado parado se marca acá
-                    mismo — es plata quieta, no sólo un campo sin llenar. */}
-                {v.dias != null && (
-                  <span className="ml-1.5 rounded-full bg-amber-200/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">
-                    hace {v.dias} días
-                  </span>
-                )}
-                <span className="text-amber-700/80 dark:text-amber-300/80"> — falta: {v.faltan.join(', ')}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <AlertaHigiene
+          titulo={`Datos faltantes en ${datosFaltantes.length} vehículo${datosFaltantes.length === 1 ? '' : 's'}`}
+          href="/stock"
+          cta="Completar en Stock →"
+        >
+          {datosFaltantes.map((v, i) => (
+            <li key={i} className="px-3 py-2 text-sm">
+              <span className="font-medium">{v.label}</span>
+              {/* Días en stock: el auto que lleva demasiado parado se marca acá
+                  mismo — es plata quieta, no sólo un campo sin llenar. */}
+              {v.dias != null && (
+                <span className="ml-1.5 rounded-full bg-warning/15 px-1.5 py-0.5 text-2xs font-medium font-mono tabular-nums text-warning">
+                  hace {v.dias} días
+                </span>
+              )}
+              <span className="text-muted-foreground"> — falta: {v.faltan.join(', ')}</span>
+            </li>
+          ))}
+        </AlertaHigiene>
       )}
 
       {/* Verificaciones que el bot guardó sin saber de qué auto eran — mismo
-          tratamiento ámbar que datos faltantes: higiene de datos, no fuego.
-          Se resuelven asignando el auto en /verificaciones. */}
+          tratamiento warning que datos faltantes. Se resuelven asignando el
+          auto en /verificaciones. */}
       {verificacionesSinAuto.length > 0 && (
-        <section className="rounded-lg border border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2">
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-              <CircleAlertIcon className="size-4 shrink-0" aria-hidden />
-              <h2 className="text-xs font-semibold uppercase tracking-wide">
-                {verificacionesSinAuto.length === 1
-                  ? 'Verificación sin auto asignado'
-                  : `Verificaciones sin auto asignado · ${verificacionesSinAuto.length}`}
-              </h2>
-            </div>
-            <Link href="/verificaciones" className="text-xs text-amber-700 dark:text-amber-300 hover:underline underline-offset-2">
-              Asignar en Verificaciones →
-            </Link>
-          </div>
-          <ul className="divide-y divide-amber-200/60 dark:divide-amber-900/60 border-t border-amber-200/60 dark:border-amber-900/60">
-            {verificacionesSinAuto.map((v, i) => (
-              <li key={i} className="px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
-                <span className="font-medium">{v.mecanico || 'Verificación'}</span>
-                {v.fecha && (
-                  <span className="ml-1.5 text-xs tabular-nums text-amber-700/80 dark:text-amber-300/80">
-                    {Number(v.fecha.slice(8, 10))}/{Number(v.fecha.slice(5, 7))}
-                  </span>
-                )}
-                {v.resumen && (
-                  <span className="text-amber-700/80 dark:text-amber-300/80"> — {v.resumen}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <AlertaHigiene
+          titulo={verificacionesSinAuto.length === 1
+            ? 'Verificación sin auto asignado'
+            : `Verificaciones sin auto asignado · ${verificacionesSinAuto.length}`}
+          href="/verificaciones"
+          cta="Asignar en Verificaciones →"
+        >
+          {verificacionesSinAuto.map((v, i) => (
+            <li key={i} className="px-3 py-2 text-sm">
+              <span className="font-medium">{v.mecanico || 'Verificación'}</span>
+              {v.fecha && (
+                <span className="ml-1.5 text-xs font-mono tabular-nums text-muted-foreground">
+                  {Number(v.fecha.slice(8, 10))}/{Number(v.fecha.slice(5, 7))}
+                </span>
+              )}
+              {v.resumen && (
+                <span className="text-muted-foreground"> — {v.resumen}</span>
+              )}
+            </li>
+          ))}
+        </AlertaHigiene>
       )}
 
       <MonthBoard items={withLocalState} onToggleTarea={toggleTarea} />
@@ -277,5 +259,28 @@ export default function TableroClient({
         </section>
       )}
     </div>
+  )
+}
+
+// Marco compartido de las alertas de higiene de datos (datos faltantes,
+// verificaciones sin auto): tokens warning, mismo esqueleto que la sección
+// de Alertas destructive de arriba. Antes eran dos bloques ámbar idénticos
+// hardcodeados — el motivo del ignore ai-color-palette en .impeccable.
+function AlertaHigiene({
+  titulo, href, cta, children,
+}: { titulo: string; href: string; cta: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-lg border border-warning/30 bg-warning/5 overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center gap-2 text-warning">
+          <CircleAlertIcon className="size-4 shrink-0" aria-hidden />
+          <h2 className="text-xs font-semibold uppercase tracking-wide">{titulo}</h2>
+        </div>
+        <Link href={href} className="text-xs text-warning hover:underline underline-offset-2">
+          {cta}
+        </Link>
+      </div>
+      <ul className="divide-y divide-warning/15 border-t border-warning/15">{children}</ul>
+    </section>
   )
 }
