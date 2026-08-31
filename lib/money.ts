@@ -19,3 +19,14 @@ export function money(n: unknown): string {
     : { minimumFractionDigits: 2, maximumFractionDigits: 2 }
   return `USD ${v.toLocaleString('es-AR', opts)}`
 }
+
+/**
+ * Números que NO son plata (km, cantidades): mismo agrupado es-AR, sin prefijo.
+ * Vive acá para que todo formateo numérico tenga una sola casa.
+ */
+export function fmtN(n: unknown): string {
+  if (n == null || n === '') return '—'
+  const v = Number(n)
+  if (!Number.isFinite(v)) return '—'
+  return v.toLocaleString('es-AR')
+}

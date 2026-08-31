@@ -19,7 +19,7 @@ import NuevoAutoDialog from './NuevoAutoDialog'
 import RegistrarVentaDialog from './RegistrarVentaDialog'
 import DocumentoDialog from './DocumentoDialog'
 import { COMISION_PCT_DEFAULT } from '@/lib/venta'
-import { money } from '@/lib/money'
+import { money, fmtN } from '@/lib/money'
 
 const CAT_LABEL_FIN: Record<string, string> = {
   vehicle_purchase: 'Compra',
@@ -129,11 +129,6 @@ function diasEnStockCorto(fecha: string) {
 }
 
 const fmt = money
-
-function fmtN(n: any) {
-  if (n == null || n === '') return '—'
-  return Number(n).toLocaleString('es-AR')
-}
 
 function horaDeTarea(t: any): string {
   // El agente guarda la hora en `fecha_vencimiento` (si es ISO) o como
@@ -480,7 +475,7 @@ function VehicleDetailBody({
                         )}
                         <span className="truncate">{t.titulo}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 tabular-nums">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0 font-mono tabular-nums">
                         {t.asignado && <span className="capitalize">{t.asignado}</span>}
                         {cuando && <span>{cuando}</span>}
                       </div>
@@ -605,12 +600,12 @@ function VehicleTable({
                   : <ChevronDownIcon className="mt-1 size-4 shrink-0 text-muted-foreground" />}
               </span>
               <span className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-                <span className={`text-lg font-semibold tabular-nums ${t.precioEstimado ? 'text-muted-foreground' : ''}`}>
+                <span className={`text-lg font-semibold font-mono tabular-nums ${t.precioEstimado ? 'text-muted-foreground' : ''}`}>
                   {t.precio}
                 </span>
                 <Badge variant={t.estadoVariant}>{t.estadoLabel}</Badge>
                 {t.diasLabel && (
-                  <span className={`text-xs tabular-nums ${t.diasAlerta ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>
+                  <span className={`text-xs font-mono tabular-nums ${t.diasAlerta ? 'font-medium text-destructive' : 'text-muted-foreground'}`}>
                     {t.diasLabel} en stock
                   </span>
                 )}
@@ -634,18 +629,18 @@ function VehicleTable({
 
     {/* Escritorio (md+): la tabla de siempre, sin cambios. */}
     <div className="hidden md:block overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-[13px]">
         <thead>
           <tr className="border-b border-border text-left">
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">Auto</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs hidden sm:table-cell">Patente</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">Estado</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs hidden md:table-cell">KM</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs">Precio</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs hidden md:table-cell">Días</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center hidden sm:table-cell" title="Lavado">Lav</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center hidden sm:table-cell">Fotos</th>
-            <th className="pb-2 px-3 font-medium text-muted-foreground text-xs text-center hidden sm:table-cell" title="Publicado">Pub</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Auto</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground hidden sm:table-cell">Patente</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Estado</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground hidden md:table-cell">KM</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Precio</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground hidden md:table-cell">Días</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-center hidden sm:table-cell" title="Lavado">Lav</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-center hidden sm:table-cell">Fotos</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-center hidden sm:table-cell" title="Publicado">Pub</th>
           </tr>
         </thead>
         <tbody>
@@ -660,7 +655,7 @@ function VehicleTable({
                   onClick={() => onToggle(v.id)}
                   className={`cursor-pointer border-b border-border transition-colors ${isOpen ? 'bg-muted/50' : 'hover:bg-muted/30'}`}
                 >
-                  <td className="py-2.5 px-3">
+                  <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
                       {/* Botón real para teclado/lector; la fila entera sigue
                           clickeable con mouse (mismo patrón que la tarjeta móvil). */}
@@ -685,22 +680,22 @@ function VehicleTable({
                       )}
                     </div>
                   </td>
-                  <td className="py-2.5 px-3 text-muted-foreground hidden sm:table-cell">{v.dominio || '—'}</td>
-                  <td className="py-2.5 px-3">
+                  <td className="py-2 px-3 text-muted-foreground hidden sm:table-cell">{v.dominio || '—'}</td>
+                  <td className="py-2 px-3">
                     <Badge variant={estadoMeta(v.estado).variant}>{estadoMeta(v.estado).label}</Badge>
                   </td>
-                  <td className="py-2.5 px-3 text-muted-foreground tabular-nums hidden md:table-cell">{v.km ? fmtN(v.km) : '—'}</td>
-                  <td className="py-2.5 px-3 tabular-nums">
+                  <td className="py-2 px-3 text-muted-foreground font-mono tabular-nums hidden md:table-cell">{v.km ? fmtN(v.km) : '—'}</td>
+                  <td className="py-2 px-3 font-mono tabular-nums">
                     {v.precio_publicado
                       ? money(v.precio_publicado)
                       : v.precio_venta_objetivo
                       ? <span className="text-muted-foreground">{money(v.precio_venta_objetivo)}</span>
                       : '—'}
                   </td>
-                  <td className="py-2.5 px-3 text-muted-foreground hidden md:table-cell">{diasEnStockCorto(v.fecha_ingreso)}</td>
-                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} defAssignee={defAssignee} /></td>
-                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} defAssignee={defAssignee} /></td>
-                  <td className="py-2.5 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} defAssignee={defAssignee} /></td>
+                  <td className="py-2 px-3 text-muted-foreground hidden md:table-cell">{diasEnStockCorto(v.fecha_ingreso)}</td>
+                  <td className="py-2 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} defAssignee={defAssignee} /></td>
+                  <td className="py-2 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} defAssignee={defAssignee} /></td>
+                  <td className="py-2 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} defAssignee={defAssignee} /></td>
                 </tr>
                 {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} documentosHabilitado={documentosHabilitado} />}
               </Fragment>
@@ -941,7 +936,7 @@ export default function StockClient({
           <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Vendidos ({vendidos.length})</p>
           <Card size="sm">
             <CardContent className="p-0">
-              <table className="w-full text-sm">
+              <table className="w-full text-[13px]">
                 <tbody className="divide-y divide-border">
                   {vendidos.map(v => {
                     const isOpen = expanded.has(v.id)
@@ -951,7 +946,7 @@ export default function StockClient({
                           onClick={() => toggle(v.id)}
                           className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/50' : 'hover:bg-muted/30'}`}
                         >
-                          <td className="px-4 py-2.5">
+                          <td className="px-4 py-2">
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
@@ -968,10 +963,10 @@ export default function StockClient({
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-2.5 text-right text-muted-foreground tabular-nums">
+                          <td className="px-4 py-2 text-right text-muted-foreground font-mono tabular-nums">
                             {v.precio_venta_final ? money(v.precio_venta_final) : '—'}
                           </td>
-                          <td className="px-4 py-2.5 text-right text-xs text-muted-foreground">
+                          <td className="px-4 py-2 text-right text-xs text-muted-foreground">
                             {fmtFecha(v.fecha_venta)}
                           </td>
                         </tr>

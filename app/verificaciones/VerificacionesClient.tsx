@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, ClipboardCheckIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import { esExterna, sinAuto } from '@/lib/verificaciones'
+import { money } from '@/lib/money'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   pendiente: 'warning',
@@ -294,7 +295,7 @@ export default function VerificacionesClient({
           <h1 className="text-2xl font-semibold tracking-tight">Verificaciones</h1>
           <span className="text-sm text-muted-foreground">
             {faltaPagar.length} falta pagar · {pagas.length} pagas
-            {totalFaltaPagar > 0 ? ` · USD ${totalFaltaPagar.toLocaleString('es-AR')} por pagar` : ''}
+            {totalFaltaPagar > 0 ? ` · ${money(totalFaltaPagar)} por pagar` : ''}
             {cantSinAuto > 0 && (
               <span className="text-amber-600 dark:text-amber-400"> · {cantSinAuto} sin auto</span>
             )}
@@ -323,15 +324,15 @@ export default function VerificacionesClient({
       <Card size="sm">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b bg-muted/40 text-left">
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Auto</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Mecánico</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Resultado</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Monto</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Fecha verif.</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Estado</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Auto</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Mecánico</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Resultado</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-right">Monto</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Fecha verif.</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -352,7 +353,7 @@ export default function VerificacionesClient({
                         onClick={() => toggle(v.id)}
                         className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/30'}`}
                       >
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-2">
                           {/* Botón real: la fila entera sigue clickeable con mouse, pero
                               teclado y lector llegan por acá (mismo patrón que Stock móvil). */}
                           <button
@@ -376,15 +377,15 @@ export default function VerificacionesClient({
                                   : <span className="font-medium">—</span>}
                           </button>
                         </td>
-                        <td className="px-3 py-2.5 text-muted-foreground">{v.mecanico || '—'}</td>
-                        <td className="px-3 py-2.5 text-muted-foreground max-w-md truncate">{resultadoCorto}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">
-                          {monto != null ? `USD ${monto.toLocaleString('es-AR')}` : '—'}
+                        <td className="px-3 py-2 text-muted-foreground">{v.mecanico || '—'}</td>
+                        <td className="px-3 py-2 text-muted-foreground max-w-md truncate">{resultadoCorto}</td>
+                        <td className="px-3 py-2 text-right font-mono tabular-nums">
+                          {money(monto)}
                         </td>
-                        <td className="px-3 py-2.5 text-muted-foreground text-xs tabular-nums">
+                        <td className="px-3 py-2 text-muted-foreground text-xs font-mono tabular-nums">
                           {fmtFecha(v.fecha_verificacion)}
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 py-2">
                           <Badge variant={ESTADO_VARIANT[v.estado] ?? 'outline'}>
                             {v.estado}
                           </Badge>

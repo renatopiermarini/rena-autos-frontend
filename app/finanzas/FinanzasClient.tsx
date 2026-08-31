@@ -27,6 +27,7 @@ import { FField, FInput, FTextarea, nativeSelectCls as fieldSelectCls } from '@/
 import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, AlertTriangleIcon, PlusIcon } from 'lucide-react'
 import { money } from '@/lib/money'
+import { Th as ThBase } from '@/components/table-cells'
 import { tipoOperacionLabel } from '@/lib/estados'
 
 type Tab = 'resumen' | 'patrimonio' | 'prestamos' | 'por_vehiculo' | 'movimientos'
@@ -80,7 +81,7 @@ function TipoAmount({ tipo, monto, size = 'sm' }: { tipo: string; monto: any; si
   const cls = tipo === 'ingreso' ? 'text-success' : 'text-destructive'
   const sign = tipo === 'ingreso' ? '+' : '-'
   return (
-    <span className={`${size === 'sm' ? 'text-sm' : 'text-xs'} font-medium ${cls} tabular-nums`}>
+    <span className={`${size === 'sm' ? 'text-sm' : 'text-xs'} font-medium ${cls} font-mono tabular-nums`}>
       {sign}{fmt(monto)}
     </span>
   )
@@ -331,14 +332,14 @@ function ResumenTab({
                   </span>
                   <div className="flex shrink-0 items-center gap-3">
                     <TipoAmount tipo={m.tipo} monto={m.monto} />
-                    <span className="text-xs text-muted-foreground tabular-nums">{fmtFecha(m.created_at)}</span>
+                    <span className="text-xs text-muted-foreground font-mono tabular-nums">{fmtFecha(m.created_at)}</span>
                   </div>
                 </div>
               </div>
             )
           })}
           {movRecientes.length === 0 && (
-            <p className="px-3 py-2.5 text-sm text-muted-foreground">Sin movimientos registrados.</p>
+            <p className="px-3 py-2 text-sm text-muted-foreground">Sin movimientos registrados.</p>
           )}
         </CardContent>
       </Card>
@@ -396,14 +397,14 @@ function PatrimonioTab({
                 {i > 0 && <span className="text-muted-foreground text-lg">{t.sign === '−' ? '−' : '+'}</span>}
                 <div>
                   <p className="text-[11px] text-muted-foreground flex items-center gap-1">{t.label} <InfoTip>{t.tip}</InfoTip></p>
-                  <p className={`text-lg font-medium tabular-nums ${t.sign === '−' ? 'text-destructive' : ''}`}>{fmt(t.monto)}</p>
+                  <p className={`text-lg font-medium font-mono tabular-nums ${t.sign === '−' ? 'text-destructive' : ''}`}>{fmt(t.monto)}</p>
                 </div>
               </Fragment>
             ))}
             <span className="text-muted-foreground text-lg">=</span>
             <div>
               <p className="text-[11px] text-muted-foreground">Capital propio</p>
-              <p className="text-xl font-semibold tabular-nums">{fmt(pat.capital_propio)}</p>
+              <p className="text-xl font-semibold font-mono tabular-nums">{fmt(pat.capital_propio)}</p>
             </div>
           </div>
         </CardContent>
@@ -415,7 +416,7 @@ function PatrimonioTab({
         tip={<>Cada auto propio sin vender, con su <b>costo invertido</b> (compra + gastos según el ledger), su <b>valor esperado</b> de venta y la <b>ganancia esperada</b> (valor − costo) que queda &quot;adentro&quot; si se vende al precio previsto.</>}
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-[13px]">
             <thead className="bg-muted/40">
               <tr className="text-left">
                 <Th>Auto</Th>
@@ -427,19 +428,19 @@ function PatrimonioTab({
             <tbody className="divide-y divide-border">
               {pat.stock.autos.map(a => (
                 <tr key={a.vehicle_id}>
-                  <td className="px-3 py-2.5 font-medium">{a.label}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(a.costo)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(a.valor)}</td>
-                  <td className={`px-3 py-2.5 text-right tabular-nums font-medium ${a.valor - a.costo >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  <td className="px-3 py-2 font-medium">{a.label}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">{fmt(a.costo)}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(a.valor)}</td>
+                  <td className={`px-3 py-2 text-right font-mono tabular-nums font-medium ${a.valor - a.costo >= 0 ? 'text-success' : 'text-destructive'}`}>
                     {a.valor - a.costo >= 0 ? '+' : ''}{fmt(a.valor - a.costo)}
                   </td>
                 </tr>
               ))}
               <tr className="bg-muted/40 font-medium">
-                <td className="px-3 py-2.5">Total</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.stock.costo_invertido)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.stock.total)}</td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${pat.stock.ganancia_esperada >= 0 ? 'text-success' : 'text-destructive'}`}>
+                <td className="px-3 py-2">Total</td>
+                <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(pat.stock.costo_invertido)}</td>
+                <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(pat.stock.total)}</td>
+                <td className={`px-3 py-2 text-right font-mono tabular-nums ${pat.stock.ganancia_esperada >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {pat.stock.ganancia_esperada >= 0 ? '+' : ''}{fmt(pat.stock.ganancia_esperada)}
                 </td>
               </tr>
@@ -457,7 +458,7 @@ function PatrimonioTab({
           <p className="py-6 text-center text-sm text-muted-foreground">Nada por cobrar.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-[13px]">
               <thead className="bg-muted/40">
                 <tr className="text-left">
                   <Th>Quién / qué</Th>
@@ -469,29 +470,29 @@ function PatrimonioTab({
               <tbody className="divide-y divide-border">
                 {pat.por_cobrar.clientes.map(c => (
                   <tr key={`c${c.cliente_id}`}>
-                    <td className="px-3 py-2.5 font-medium">{c.nombre}</td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">deuda de cliente</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
+                    <td className="px-3 py-2 font-medium">{c.nombre}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">deuda de cliente</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-xs text-muted-foreground">
                       adelantado {fmt(c.adelantado)} − devuelto {fmt(c.devuelto)}
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">{fmt(c.saldo)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums font-medium">{fmt(c.saldo)}</td>
                   </tr>
                 ))}
                 {pat.por_cobrar.comisiones_consignaciones.autos.map(a => (
                   <tr key={`v${a.vehicle_id}`}>
-                    <td className="px-3 py-2.5 font-medium">{a.label}</td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">comisión consignación (pendiente)</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">
+                    <td className="px-3 py-2 font-medium">{a.label}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">comisión consignación (pendiente)</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-xs text-muted-foreground">
                       {a.es_pactada ? `pactada ${fmt(a.comision_total)}` : `5% de ${fmt(a.precio_base)}`}
                       {a.cobrado > 0 && ` − ${fmt(a.cobrado)} ya cobrados`}
                     </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-medium">{fmt(a.comision)}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums font-medium">{fmt(a.comision)}</td>
                   </tr>
                 ))}
                 <tr className="bg-muted/40 font-medium">
-                  <td className="px-3 py-2.5">Total</td>
-                  <td className="px-3 py-2.5" colSpan={2} />
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pat.por_cobrar.total)}</td>
+                  <td className="px-3 py-2">Total</td>
+                  <td className="px-3 py-2" colSpan={2} />
+                  <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(pat.por_cobrar.total)}</td>
                 </tr>
               </tbody>
             </table>
@@ -505,7 +506,7 @@ function PatrimonioTab({
         tip={<>Cada préstamo activo con su deuda al día: capital vivo + interés devengado impago. El detalle completo (cuotas, modalidad, vencimientos) está en la pestaña Préstamos.</>}
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-[13px]">
             <thead className="bg-muted/40">
               <tr className="text-left">
                 <Th>Acreedor</Th>
@@ -518,23 +519,23 @@ function PatrimonioTab({
             <tbody className="divide-y divide-border">
               {pat.posiciones.map(p => (
                 <tr key={p.id}>
-                  <td className="px-3 py-2.5 font-medium">
+                  <td className="px-3 py-2 font-medium">
                     {clientesById[p.acreedor_id as any]?.nombre ?? `Préstamo #${p.id}`}
                   </td>
-                  <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                  <td className="px-3 py-2 text-xs text-muted-foreground">
                     {p.modalidad === 'mensual'
                       ? `mensual · ${fmt(p.interes_mensual)}/mes (${p.tasa_pct}%)`
                       : `al final (${p.tasa_pct}% por día)`}
                   </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{fmt(p.capital_vivo)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmt(p.interes_adeudado)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-medium">{fmt(p.deuda_total)}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(p.capital_vivo)}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">{fmt(p.interes_adeudado)}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums font-medium">{fmt(p.deuda_total)}</td>
                 </tr>
               ))}
               <tr className="bg-muted/40 font-medium">
-                <td className="px-3 py-2.5">Total · interés mensual {fmt(pat.interes_mensual_total)}/mes</td>
-                <td className="px-3 py-2.5" colSpan={3} />
-                <td className="px-3 py-2.5 text-right tabular-nums text-destructive">{fmt(pat.deuda_total)}</td>
+                <td className="px-3 py-2">Total · interés mensual {fmt(pat.interes_mensual_total)}/mes</td>
+                <td className="px-3 py-2" colSpan={3} />
+                <td className="px-3 py-2 text-right font-mono tabular-nums text-destructive">{fmt(pat.deuda_total)}</td>
               </tr>
             </tbody>
           </table>
@@ -624,9 +625,9 @@ function round0(n: number) { return Math.round(n * 100) / 100 }
 
 function Th({ children, tip, right }: { children: React.ReactNode; tip?: React.ReactNode; right?: boolean }) {
   return (
-    <th className={`px-3 py-2 font-medium text-muted-foreground text-xs ${right ? 'text-right' : ''}`}>
+    <ThBase right={right}>
       <span className="inline-flex items-center gap-1">{children}{tip && <InfoTip>{tip}</InfoTip>}</span>
-    </th>
+    </ThBase>
   )
 }
 
@@ -660,7 +661,7 @@ function PrestamosTable({
                 {acr}
                 {pos.vencido && <Badge variant="destructive" className="ml-2">vencido</Badge>}
               </span>
-              <span className="font-semibold tabular-nums">{fmt(pos.deuda_total)}</span>
+              <span className="font-semibold font-mono tabular-nums">{fmt(pos.deuda_total)}</span>
             </div>
             <p className="text-xs text-muted-foreground">
               {fmt(pos.capital_vivo)} de capital
@@ -688,7 +689,7 @@ function PrestamosTable({
 
     {/* Escritorio (md+): la tabla de siempre. */}
     <div className="hidden md:block overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-[13px]">
         <thead className="bg-muted/40">
           <tr className="text-left">
             <Th>Acreedor</Th>
@@ -709,25 +710,25 @@ function PrestamosTable({
             const esPagado = p.estado === 'pagado'
             return (
               <tr key={p.id} className={esPagado ? 'opacity-60' : ''}>
-                <td className="px-3 py-2.5 font-medium">
+                <td className="px-3 py-2 font-medium">
                   {acr}
                   {pos.vencido && <Badge variant="destructive" className="ml-2">vencido</Badge>}
                 </td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(pos.capital_vivo)}</td>
-                <td className="px-3 py-2.5 text-right text-muted-foreground text-xs">{pos.tasa_pct ? `${pos.tasa_pct}%/año` : '—'}</td>
-                <td className="px-3 py-2.5 text-xs text-muted-foreground">
+                <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(pos.capital_vivo)}</td>
+                <td className="px-3 py-2 text-right text-muted-foreground text-xs">{pos.tasa_pct ? `${pos.tasa_pct}%/año` : '—'}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">
                   {pos.modalidad === 'mensual' ? 'mensual' : 'al final'}
                 </td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-xs">
+                <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">
                   {pos.modalidad === 'mensual'
                     ? (pos.interes_mensual > 0 ? `${fmt(pos.interes_mensual)}/mes` : '—')
                     : `${fmt(pos.interes_devengado)} acum.`}
                 </td>
-                <td className={`px-3 py-2.5 text-right tabular-nums ${pos.interes_adeudado > 0 && pos.modalidad === 'mensual' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                <td className={`px-3 py-2 text-right font-mono tabular-nums ${pos.interes_adeudado > 0 && pos.modalidad === 'mensual' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                   {fmt(pos.interes_adeudado)}
                 </td>
-                <td className="px-3 py-2.5 text-right font-medium tabular-nums">{fmt(pos.deuda_total)}</td>
-                <td className="px-3 py-2.5 text-xs">
+                <td className="px-3 py-2 text-right font-medium font-mono tabular-nums">{fmt(pos.deuda_total)}</td>
+                <td className="px-3 py-2 text-xs">
                   {esPagado || pos.modalidad !== 'mensual' || pos.interes_mensual <= 0 ? (
                     <span className="text-muted-foreground/60">—</span>
                   ) : pos.interes_mes_pagado ? (
@@ -738,7 +739,7 @@ function PrestamosTable({
                     <span className="text-muted-foreground">vence {pos.proximo_vencimiento ? fmtFecha(pos.proximo_vencimiento) : 'el 1'}</span>
                   )}
                 </td>
-                <td className="px-3 py-2.5">
+                <td className="px-3 py-2">
                   {veh ? (
                     <Link href="/stock" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
                       {autoLabel(veh)}
@@ -801,9 +802,9 @@ function PorVehiculoTab({
                       : <ChevronDownIcon className="mt-1 size-4 shrink-0 text-muted-foreground" aria-hidden />}
                   </span>
                   <span className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span className="text-base font-semibold tabular-nums">{fmt(f.costo_total)}</span>
+                    <span className="text-base font-semibold font-mono tabular-nums">{fmt(f.costo_total)}</span>
                     <span className="text-xs text-muted-foreground">costo</span>
-                    <span className={`text-sm font-medium tabular-nums ${
+                    <span className={`text-sm font-medium font-mono tabular-nums ${
                       f.es_consignacion || f.margen_esperado == null ? 'text-muted-foreground'
                       : f.margen_esperado >= 0 ? 'text-success' : 'text-destructive'
                     }`}>
@@ -833,17 +834,17 @@ function PorVehiculoTab({
 
         {/* Escritorio (md+): la tabla de siempre. */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-[13px]">
             <thead className="bg-muted/40">
               <tr className="text-left">
-                <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Auto</th>
-                <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Tipo</th>
-                <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">P. compra</th>
-                <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Gastos</th>
-                <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Costo total</th>
-                <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Publicado</th>
-                <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Margen</th>
-                <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Préstamo</th>
+                <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Auto</th>
+                <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Tipo</th>
+                <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-right">P. compra</th>
+                <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-right">Gastos</th>
+                <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-right">Costo total</th>
+                <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-right">Publicado</th>
+                <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-right">Margen</th>
+                <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Préstamo</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -855,7 +856,7 @@ function PorVehiculoTab({
                       onClick={() => setOpenId(isOpen ? null : v.id)}
                       className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/30'}`}
                     >
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2">
                         {/* Botón real para teclado/lector; la fila sigue clickeable con mouse. */}
                         <button
                           type="button"
@@ -871,16 +872,16 @@ function PorVehiculoTab({
                           {v.dominio && <span className="text-xs text-muted-foreground ml-1">· {v.dominio}</span>}
                         </button>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-muted-foreground">{tipoOperacionLabel(v.tipo_operacion)}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums" title={f.fuente_compra === 'vehicle_purchase' ? 'Compra tomada de los movimientos del ledger (la ficha no tiene precio de compra)' : undefined}>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{tipoOperacionLabel(v.tipo_operacion)}</td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums" title={f.fuente_compra === 'vehicle_purchase' ? 'Compra tomada de los movimientos del ledger (la ficha no tiene precio de compra)' : undefined}>
                         {fmt(f.compra)}
                       </td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{fmt(f.gastos_total)}</td>
-                      <td className="px-3 py-2.5 text-right font-medium tabular-nums">{fmt(f.costo_total)}</td>
-                      <td className="px-3 py-2.5 text-right text-muted-foreground tabular-nums">
+                      <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(f.gastos_total)}</td>
+                      <td className="px-3 py-2 text-right font-medium font-mono tabular-nums">{fmt(f.costo_total)}</td>
+                      <td className="px-3 py-2 text-right text-muted-foreground font-mono tabular-nums">
                         {f.precio_publicado != null ? fmt(f.precio_publicado) : '—'}
                       </td>
-                      <td className={`px-3 py-2.5 text-right font-medium tabular-nums ${
+                      <td className={`px-3 py-2 text-right font-medium font-mono tabular-nums ${
                         f.es_consignacion ? 'text-muted-foreground text-xs'
                         : f.margen_esperado == null ? 'text-muted-foreground'
                         : f.margen_esperado >= 0 ? 'text-success' : 'text-destructive'
@@ -889,7 +890,7 @@ function PorVehiculoTab({
                           : f.margen_esperado == null ? '—'
                           : (f.margen_esperado >= 0 ? '+' : '') + fmt(f.margen_esperado)}
                       </td>
-                      <td className="px-3 py-2.5 text-xs">
+                      <td className="px-3 py-2 text-xs">
                         {f.prestamos_asociados.length > 0 ? (
                           <Badge variant="warning">
                             {clientesById[f.prestamos_asociados[0].acreedor_id]?.nombre ?? 'sí'}
@@ -949,12 +950,12 @@ function VehicleFinancialDetail({
             {catEntries.map(([cat, monto]) => (
               <div key={cat} className="flex items-center justify-between px-3 py-2">
                 <span className="text-sm">{CAT_LABEL[cat] ?? cat}</span>
-                <span className="text-sm text-muted-foreground tabular-nums">{fmt(monto)}</span>
+                <span className="text-sm text-muted-foreground font-mono tabular-nums">{fmt(monto)}</span>
               </div>
             ))}
             <div className="flex items-center justify-between px-3 py-2 bg-muted/40 font-medium">
               <span className="text-sm">Total gastos nuestros</span>
-              <span className="text-sm tabular-nums">{fmt(f.gastos_total + f.otros_egresos)}</span>
+              <span className="text-sm font-mono tabular-nums">{fmt(f.gastos_total + f.otros_egresos)}</span>
             </div>
             {f.gastos_cliente > 0 && (
               <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
@@ -962,7 +963,7 @@ function VehicleFinancialDetail({
                   Por cuenta del cliente
                   <InfoTip>Gastos que adelantamos por cuenta del dueño del auto (recuperables): NO son costo nuestro ni entran en el costo total — el cliente los debe, y en una consignación se descuentan de su liquidación al vender.</InfoTip>
                 </span>
-                <span className="text-sm tabular-nums">{fmt(f.gastos_cliente)}</span>
+                <span className="text-sm font-mono tabular-nums">{fmt(f.gastos_cliente)}</span>
               </div>
             )}
           </div>
@@ -982,21 +983,21 @@ function VehicleFinancialDetail({
               <div className="border rounded-lg divide-y divide-border bg-background">
                 <div className="flex items-center justify-between px-3 py-2">
                   <span className="text-sm">Precio de venta{liq.estimada ? ' (estimado)' : ''}</span>
-                  <span className="text-sm tabular-nums">{fmt(liq.precio_venta)}</span>
+                  <span className="text-sm font-mono tabular-nums">{fmt(liq.precio_venta)}</span>
                 </div>
                 <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
                   <span className="text-sm">− Comisión {liq.comision_pct}%</span>
-                  <span className="text-sm tabular-nums">−{fmt(liq.comision)}</span>
+                  <span className="text-sm font-mono tabular-nums">−{fmt(liq.comision)}</span>
                 </div>
                 {liq.gastos_adelantados > 0 && (
                   <div className="flex items-center justify-between px-3 py-2 text-muted-foreground">
                     <span className="text-sm">− Gastos adelantados por su cuenta</span>
-                    <span className="text-sm tabular-nums">−{fmt(liq.gastos_adelantados)}</span>
+                    <span className="text-sm font-mono tabular-nums">−{fmt(liq.gastos_adelantados)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between px-3 py-2 bg-muted/40 font-medium">
                   <span className="text-sm">Neto al dueño</span>
-                  <span className="text-sm tabular-nums">{fmt(liq.neto_al_cliente)}</span>
+                  <span className="text-sm font-mono tabular-nums">{fmt(liq.neto_al_cliente)}</span>
                 </div>
               </div>
             )}
@@ -1039,7 +1040,7 @@ function VehicleFinancialDetail({
                 </div>
                 <div className="flex items-center gap-2 text-xs whitespace-nowrap shrink-0">
                   <TipoAmount tipo={m.tipo} monto={m.monto} size="xs" />
-                  <span className="text-muted-foreground tabular-nums">{fmtFecha(m.created_at)}</span>
+                  <span className="text-muted-foreground font-mono tabular-nums">{fmtFecha(m.created_at)}</span>
                 </div>
               </div>
             ))}
@@ -1298,9 +1299,9 @@ function MovimientosTab({
       <div className="space-y-1 px-1">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <span className="text-muted-foreground">{filtered.length} movimiento{filtered.length === 1 ? '' : 's'}</span>
-          <span className="text-success tabular-nums">+{fmt(cashIngresos)}</span>
-          <span className="text-destructive tabular-nums">-{fmt(cashEgresos)}</span>
-          <span className="text-foreground font-medium tabular-nums">
+          <span className="text-success font-mono tabular-nums">+{fmt(cashIngresos)}</span>
+          <span className="text-destructive font-mono tabular-nums">-{fmt(cashEgresos)}</span>
+          <span className="text-foreground font-medium font-mono tabular-nums">
             Neto: {cashNeto >= 0 ? '+' : ''}{fmt(cashNeto)}
           </span>
         </div>
@@ -1309,8 +1310,8 @@ function MovimientosTab({
             <span title="Préstamos recibidos, vehicle_purchase pagados por terceros, etc. — registros contables sin impacto en saldo de cuenta">
               + asientos sin impacto en saldo:
             </span>
-            <span className="text-success/70 tabular-nums">+{fmt(offIngresos)}</span>
-            <span className="text-destructive/70 tabular-nums">-{fmt(offEgresos)}</span>
+            <span className="text-success/70 font-mono tabular-nums">+{fmt(offIngresos)}</span>
+            <span className="text-destructive/70 font-mono tabular-nums">-{fmt(offEgresos)}</span>
           </div>
         )}
       </div>
@@ -1318,16 +1319,16 @@ function MovimientosTab({
       <Card size="sm">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-[13px]">
               <thead className="bg-muted/40">
                 <tr className="text-left">
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Fecha</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Tipo</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Categoría</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Cuenta</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Auto</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs">Nota</th>
-                  <th className="px-3 py-2 font-medium text-muted-foreground text-xs text-right">Monto</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Fecha</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Tipo</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Categoría</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Cuenta</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Auto</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Nota</th>
+                  <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-right">Monto</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -1340,7 +1341,7 @@ function MovimientosTab({
                         onClick={() => setOpenId(isOpen ? null : m.id)}
                         className={`cursor-pointer transition-colors ${isOpen ? 'bg-muted/30' : 'hover:bg-muted/30'}`}
                       >
-                        <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                        <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap font-mono tabular-nums">
                           {/* Botón real para teclado/lector; la fila sigue clickeable con mouse. */}
                           <button
                             type="button"
@@ -1361,7 +1362,7 @@ function MovimientosTab({
                           {veh ? `${veh.marca} ${veh.modelo}` : <span className="text-muted-foreground/60">—</span>}
                         </td>
                         <td className="px-3 py-2 text-sm truncate max-w-xs" title={m.nota || undefined}>{m.nota || ''}</td>
-                        <td className={`px-3 py-2 text-sm font-medium text-right whitespace-nowrap tabular-nums ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>
+                        <td className={`px-3 py-2 text-sm font-medium text-right whitespace-nowrap font-mono tabular-nums ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>
                           {m.tipo === 'ingreso' ? '+' : '-'}{fmt(m.monto)}
                         </td>
                       </tr>
@@ -1407,7 +1408,7 @@ function MovimientosTab({
               <div className="flex items-center gap-1.5">
                 <Button size="xs" variant="outline" disabled={safePage <= 1} onClick={() => setPage(1)}>«</Button>
                 <Button size="xs" variant="outline" disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</Button>
-                <span className="px-2 tabular-nums text-muted-foreground">
+                <span className="px-2 font-mono tabular-nums text-muted-foreground">
                   {safePage} / {totalPages}
                 </span>
                 <Button size="xs" variant="outline" disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</Button>

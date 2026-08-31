@@ -244,12 +244,12 @@ export default function CuentasClient({
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span
-                    className="text-sm tabular-nums"
+                    className="text-sm font-mono tabular-nums"
                     title="Saldo derivado del ledger (ingresos − egresos)"
                   >
                     {money(saldoDeCuenta(movimientos, String(c.clave ?? '')))}
                   </span>
-                  <span className="text-xs text-muted-foreground tabular-nums">#{c.orden ?? 0}</span>
+                  <span className="text-xs text-muted-foreground font-mono tabular-nums">#{c.orden ?? 0}</span>
                   <FCheckbox
                     id={`activa-${c.id}`}
                     label="Activa"
@@ -355,7 +355,7 @@ export default function CuentasClient({
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Saldo derivado hoy</span>
-              <span className="tabular-nums font-medium">{money(derivadoAjuste)}</span>
+              <span className="font-mono tabular-nums font-medium">{money(derivadoAjuste)}</span>
             </div>
             <FInput
               label="Saldo real hoy"

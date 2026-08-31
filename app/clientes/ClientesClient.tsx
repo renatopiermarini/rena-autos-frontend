@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, ContactIcon, PlusIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import NuevoClienteDialog from './NuevoClienteDialog'
-import { money } from '@/lib/money'
+import { money, fmtN } from '@/lib/money'
 
 const TIPO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
   vendedor: 'secondary',
@@ -248,7 +248,7 @@ function InteresadoRow({ i }: { i: any }) {
           <Field label="Fuente" value={i.fuente} />
           <Field label="Forma de pago" value={i.forma_pago} />
           <Field label="Año máx." value={i.año_max} />
-          <Field label="KM máx." value={i.km_max ? Number(i.km_max).toLocaleString('es-AR') : null} />
+          <Field label="KM máx." value={i.km_max ? fmtN(i.km_max) : null} />
           <Field label="Último contacto" value={i.fecha_ultimo_contacto ? new Date(i.fecha_ultimo_contacto).toLocaleDateString('es-AR') : null} />
           {i.notas && (
             <div className="col-span-2 lg:col-span-4">

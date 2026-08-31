@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { ChevronDownIcon, ChevronUpIcon, PlusIcon, UsersIcon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
 import NuevaOfertaDialog from './NuevaOfertaDialog'
+import { money, fmtN } from '@/lib/money'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   activo: 'info',
@@ -120,7 +121,7 @@ function InteresadoRow({
           )}
         </button>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          {i.presupuesto && <span className="text-xs text-muted-foreground tabular-nums">USD {Number(i.presupuesto).toLocaleString('es-AR')}</span>}
+          {i.presupuesto && <span className="text-xs text-muted-foreground font-mono tabular-nums">{money(i.presupuesto)}</span>}
           {i.telefono && <span className="text-xs text-muted-foreground">{i.telefono}</span>}
           <Badge variant={ESTADO_VARIANT[i.estado] ?? 'outline'}>{i.estado}</Badge>
         </div>
@@ -136,8 +137,8 @@ function InteresadoRow({
             <Field label="Busca" value={[i.marca_buscada, i.modelo_buscado].filter(Boolean).join(' ') || null} />
             <Field label="Año mín." value={i.año_min} />
             <Field label="Año máx." value={i.año_max} />
-            <Field label="KM máx." value={i.km_max ? Number(i.km_max).toLocaleString('es-AR') : null} />
-            <Field label="Presupuesto" value={i.presupuesto ? `USD ${Number(i.presupuesto).toLocaleString('es-AR')}` : null} />
+            <Field label="KM máx." value={i.km_max ? fmtN(i.km_max) : null} />
+            <Field label="Presupuesto" value={i.presupuesto ? money(i.presupuesto) : null} />
             <Field label="Forma de pago" value={i.forma_pago} />
             <Field label="Último contacto" value={i.fecha_ultimo_contacto ? new Date(i.fecha_ultimo_contacto).toLocaleDateString('es-AR') : null} />
             {i.notas && <div className="col-span-full"><p className="text-xs text-muted-foreground">Notas</p><p className="text-sm">{i.notas}</p></div>}
@@ -150,7 +151,7 @@ function InteresadoRow({
                 {ofertasDeEste.map(o => (
                   <div key={o.id} className="text-sm flex items-center gap-3">
                     <span>{vehicleLabel(o.vehicle_id)}</span>
-                    <span className="text-muted-foreground tabular-nums">USD {Number(o.monto_ofrecido).toLocaleString('es-AR')}</span>
+                    <span className="text-muted-foreground font-mono tabular-nums">{money(o.monto_ofrecido)}</span>
                     <Badge variant="outline">{o.estado}</Badge>
                   </div>
                 ))}

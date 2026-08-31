@@ -138,7 +138,7 @@ export default function InversoresClient({
                     {activos.map(p => (
                       <li key={p.id} className="flex items-center gap-3 text-xs text-muted-foreground">
                         <Badge variant="warning">activo</Badge>
-                        <span className="text-foreground tabular-nums">{fmtMonto(p.monto_original)}</span>
+                        <span className="text-foreground font-mono tabular-nums">{fmtMonto(p.monto_original)}</span>
                         <span>{tasaPct(p.tasa_interes_anual)}% anual</span>
                         <span>{MODALIDAD_LABEL[p.modalidad] ?? p.modalidad ?? '—'}</span>
                         {p.fecha_inicio && <span>desde {fmtDMY(p.fecha_inicio)}</span>}
