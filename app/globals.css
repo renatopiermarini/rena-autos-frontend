@@ -7,6 +7,13 @@
 @theme inline {
   --font-sans: var(--font-sans);
   --font-heading: var(--font-sans);
+  --font-mono: var(--font-mono);
+  /* Piso tipográfico: 11px. Nunca text-[10px] — ilegible en densidad real. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  /* Única sombra del sistema: solo overlays reales (menús, popovers, dialogs).
+     Cards y tablas son planas con border. */
+  --shadow-overlay: 0 1px 2px oklch(0 0 0 / 0.10), 0 8px 24px -4px oklch(0.12 0.02 263 / 0.35);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -37,107 +44,94 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* Neutros teñidos de cobalto (hue 263, el del --primary): chroma susurro que
+   se siente más que se ve — 0.002–0.016 en light, 0.014–0.030 en dark. Nunca
+   gris puro (chroma 0): eso es el default shadcn. Verificar contraste con
+   `node scripts/contrast.mjs --suite` después de tocar cualquier valor. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.003 263);
+  --foreground: oklch(0.145 0.012 263);
+  --card: oklch(0.998 0.002 263);
+  --card-foreground: oklch(0.145 0.012 263);
+  --popover: oklch(0.998 0.002 263);
+  --popover-foreground: oklch(0.145 0.012 263);
   --primary: oklch(0.546 0.215 263);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0.003 263);
+  --secondary: oklch(0.96 0.006 263);
+  --secondary-foreground: oklch(0.205 0.014 263);
+  --muted: oklch(0.96 0.006 263);
+  /* 0.54 y no 0.556: sobre --muted 0.96 da 4.51:1 — el par AA más justo del
+     sistema; no subir la L sin re-correr la suite. */
+  --muted-foreground: oklch(0.54 0.016 263);
+  --accent: oklch(0.96 0.006 263);
+  --accent-foreground: oklch(0.205 0.014 263);
   --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive-foreground: oklch(0.985 0.003 263);
   --success: oklch(0.50 0.13 160);
-  --success-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.985 0.003 263);
   --warning: oklch(0.52 0.15 65);
-  --warning-foreground: oklch(0.985 0 0);
+  --warning-foreground: oklch(0.985 0.003 263);
   --info: oklch(0.50 0.17 255);
-  --info-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --info-foreground: oklch(0.985 0.003 263);
+  --border: oklch(0.90 0.010 263);
+  --input: oklch(0.90 0.010 263);
   --ring: oklch(0.546 0.215 263);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --chart-1: var(--primary);
+  --chart-2: oklch(0.60 0.14 220);
+  --chart-3: oklch(0.55 0.13 162);
+  --chart-4: oklch(0.65 0.15 78);
+  --chart-5: oklch(0.58 0.17 310);
+  --radius: 0.375rem;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --background: oklch(0.155 0.014 263);
+  --foreground: oklch(0.985 0.004 263);
+  --card: oklch(0.205 0.016 263);
+  --card-foreground: oklch(0.985 0.004 263);
+  /* Popover levantado sobre --card (0.225 vs 0.205): los menús leen como capa
+     junto con borde + shadow-overlay, sin depender de blur. */
+  --popover: oklch(0.225 0.016 263);
+  --popover-foreground: oklch(0.985 0.004 263);
   /* 0.55 y no 0.62: con el texto casi blanco de arriba, 0.62 daba 3.59:1 en el
      tema por defecto — falla AA en cada botón primario, badge y burbuja del
-     chat. A 0.55 el texto queda en 4.81:1 y el relleno sigue a 3.94:1 del
+     chat. A 0.55 el texto queda en 4.81:1 y el relleno sigue a 3.89:1 del
      fondo. El --ring se queda en 0.62: un foco más brillante se ve mejor. */
   --primary: oklch(0.55 0.19 263);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.985 0.004 263);
+  --secondary: oklch(0.27 0.018 263);
+  --secondary-foreground: oklch(0.985 0.004 263);
+  --muted: oklch(0.27 0.018 263);
+  --muted-foreground: oklch(0.715 0.020 263);
+  --accent: oklch(0.27 0.018 263);
+  --accent-foreground: oklch(0.985 0.004 263);
   --destructive: oklch(0.704 0.191 22.216);
-  /* Texto oscuro sobre relleno rojo claro (6.19:1) — mismo patrón que success/
+  /* Texto oscuro sobre relleno rojo claro (6.20:1) — mismo patrón que success/
      warning/info en dark. Con blanco daba 2.89:1. */
-  --destructive-foreground: oklch(0.205 0 0);
+  --destructive-foreground: oklch(0.205 0.016 263);
   --success: oklch(0.72 0.15 162);
-  --success-foreground: oklch(0.205 0 0);
+  --success-foreground: oklch(0.205 0.016 263);
   --warning: oklch(0.80 0.14 78);
-  --warning-foreground: oklch(0.205 0 0);
+  --warning-foreground: oklch(0.205 0.016 263);
   --info: oklch(0.70 0.15 250);
-  --info-foreground: oklch(0.205 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
+  --info-foreground: oklch(0.205 0.016 263);
+  /* Alpha y no sólido: un solo token composita bien sobre --background (0.155),
+     --card (0.205) y --popover (0.225). 12% (era 10%): las superficies planas
+     sin ring cargan toda la separación en el borde. */
+  --border: oklch(0.92 0.030 263 / 12%);
+  --input: oklch(0.92 0.030 263 / 16%);
   --ring: oklch(0.62 0.19 263);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.70 0.19 263);
+  --chart-2: oklch(0.68 0.14 220);
+  --chart-3: oklch(0.72 0.13 162);
+  --chart-4: oklch(0.80 0.14 78);
+  --chart-5: oklch(0.70 0.17 310);
 }
 
 @layer base {
