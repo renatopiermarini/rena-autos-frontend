@@ -279,7 +279,7 @@ export default function VisitasClient({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold">Visitas</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Visitas</h1>
           <span className="text-sm text-muted-foreground">{visitas.length} totales · {proximasCount} próximas</span>
         </div>
         <Button size="sm" variant={showNueva ? 'default' : 'outline'} aria-expanded={showNueva} onClick={() => setShowNueva(v => !v)}>

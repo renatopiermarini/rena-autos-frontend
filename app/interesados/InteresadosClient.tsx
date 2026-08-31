@@ -364,7 +364,7 @@ export default function InteresadosClient({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold">Interesados</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Interesados</h1>
           <span className="text-sm text-muted-foreground">{interesados.length} totales · {activos} activos</span>
         </div>
         <Button size="sm" variant={showNuevo ? 'default' : 'outline'} aria-expanded={showNuevo} onClick={() => setShowNuevo(v => !v)}>

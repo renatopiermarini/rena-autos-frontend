@@ -474,7 +474,7 @@ function VehicleDetailBody({
                     <div key={t.id} className="flex items-center justify-between text-sm gap-3">
                       <div className="flex items-center gap-2 min-w-0">
                         {t.tipo && (
-                          <Badge variant="outline" className="text-[10px] shrink-0">
+                          <Badge variant="outline" className="text-2xs shrink-0">
                             {TIPO_TAREA_LABEL[t.tipo] ?? t.tipo}
                           </Badge>
                         )}
@@ -819,7 +819,7 @@ export default function StockClient({
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold">Stock</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Stock</h1>
           <span className="text-sm text-muted-foreground">
             {activos.length} activos · {vendidosAll.length} vendidos
           </span>

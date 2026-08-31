@@ -145,7 +145,7 @@ export default function NegocioClient({ rows }: { rows: any[] }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">Negocio</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Negocio</h1>
         <div className="flex items-center gap-3">
           {cambiadas.length > 0 && (
             <span className="text-xs text-muted-foreground">{cambiadas.length} sin guardar</span>

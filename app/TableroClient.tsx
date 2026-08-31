@@ -75,7 +75,7 @@ export default function TableroClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-semibold">Tablero</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Tablero</h1>
         <p className="text-sm text-muted-foreground first-letter:uppercase">
           {fecha} · {hoyCount === 0 ? 'nada pendiente hoy' : `${hoyCount} pendiente${hoyCount === 1 ? '' : 's'} hoy`}
         </p>
@@ -93,8 +93,8 @@ export default function TableroClient({
               href={n.href}
               className="rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:bg-muted/40"
             >
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{n.label}</p>
-              <p className={`text-lg font-semibold tabular-nums leading-tight ${
+              <p className="text-2xs uppercase tracking-wide text-muted-foreground">{n.label}</p>
+              <p className={`text-2xl font-semibold font-mono tabular-nums leading-tight ${
                 n.tone === 'positive' ? 'text-success'
                 : n.tone === 'negative' ? 'text-destructive'
                 : ''

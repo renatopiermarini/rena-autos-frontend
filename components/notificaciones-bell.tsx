@@ -137,7 +137,7 @@ export function NotificacionesBell() {
       >
         <BellIcon className="size-4.5" />
         {badge && (
-          <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-4 text-destructive-foreground">
+          <span className="absolute -top-0.5 -right-0.5 grid min-w-4 place-items-center rounded-full bg-destructive px-1 text-2xs font-bold leading-4 text-destructive-foreground">
             {badge}
           </span>
         )}

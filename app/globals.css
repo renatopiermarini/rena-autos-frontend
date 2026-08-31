@@ -138,9 +138,9 @@
   * {
     @apply border-border outline-ring/50;
   }
-  /* Sin font-family propia: la hereda de <html> (font-sans = Geist, cargada y
-     precargada en layout.tsx). La pila -apple-system que había acá pisaba a
-     Geist en todo el body: la fuente se descargaba y no se pintaba nunca, y
+  /* Sin font-family propia: la hereda de <html> (font-sans = IBM Plex Sans,
+     cargada en layout.tsx). La pila -apple-system que había acá pisaba a la
+     fuente cargada en todo el body: se descargaba y no se pintaba nunca, y
      los títulos (font-heading) sí la usaban — dos tipografías sin querer. */
   body {
     @apply bg-background text-foreground;

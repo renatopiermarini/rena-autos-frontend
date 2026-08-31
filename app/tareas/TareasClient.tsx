@@ -99,7 +99,7 @@ function AsignadoBadge({ nombre, size = 'sm' }: { nombre: string; size?: 'sm' | 
   if (!nombre) return null
   const persona = miembroPorClave(equipo, nombre)
   const style = persona ? persona.badge : 'bg-muted text-muted-foreground'
-  const pad = size === 'xs' ? 'px-1.5 py-0 text-[10px]' : 'px-2 py-0.5 text-xs'
+  const pad = size === 'xs' ? 'px-1.5 py-0 text-2xs' : 'px-2 py-0.5 text-xs'
   return (
     <span className={`${style} ${pad} rounded-full font-medium capitalize leading-tight whitespace-nowrap`}>
       {persona ? persona.label : nombre}
@@ -142,7 +142,7 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
             <span className="text-xs text-muted-foreground">{TIPO_LABEL[t.tipo] ?? t.tipo}</span>
           )}
           {isPendiente && ESTADO_VARIANT[t.estado] && (
-            <Badge variant={ESTADO_VARIANT[t.estado]} className="text-[10px]">
+            <Badge variant={ESTADO_VARIANT[t.estado]} className="text-2xs">
               {t.estado.replace(/_/g, ' ')}
             </Badge>
           )}
@@ -565,7 +565,7 @@ export default function TareasClient({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold">Tareas</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Tareas</h1>
           <span className="text-sm text-muted-foreground">{pendientes.length} pendientes · {completadas.length} completadas</span>
         </div>
         <div className="flex items-center gap-2">

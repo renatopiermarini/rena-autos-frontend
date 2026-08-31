@@ -119,7 +119,7 @@ export default function FinanzasClient({
     <TooltipProvider>
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Finanzas</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Finanzas</h1>
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={() => setNuevoMov(true)}>
             <PlusIcon className="size-4" /> Nuevo movimiento
@@ -209,7 +209,7 @@ function StatCard({
         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1.5">
           {label} <InfoTip>{tip}</InfoTip>
         </p>
-        <p className={`text-2xl tabular-nums ${
+        <p className={`text-2xl font-mono tabular-nums ${
           tone === 'hero' ? 'font-semibold'
           : tone === 'positive' ? 'font-medium text-success'
           : tone === 'negative' ? 'font-medium text-destructive'

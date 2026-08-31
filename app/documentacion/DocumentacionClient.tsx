@@ -151,7 +151,7 @@ export default function DocumentacionClient({
   return (
     <div className="space-y-6">
       <div className="flex items-baseline gap-3">
-        <h1 className="text-xl font-semibold">Documentación</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Documentación</h1>
         <span className="text-sm text-muted-foreground">
           {completos}/{activos.length} legajos completos · {enCurso.length} trámite{enCurso.length === 1 ? '' : 's'} en curso
         </span>

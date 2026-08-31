@@ -229,7 +229,7 @@ export function MonthBoard({
                     </span>
                     <span className="mt-0.5 flex items-center gap-1.5 min-w-0">
                       <span className={cn(
-                        'inline-flex shrink-0 items-center rounded px-1.5 py-px text-[10px] font-medium uppercase tracking-wide',
+                        'inline-flex shrink-0 items-center rounded px-1.5 py-px text-2xs font-medium uppercase tracking-wide',
                         KIND_CHIP[it.kind],
                       )}>
                         {KIND_ONE[it.kind]}

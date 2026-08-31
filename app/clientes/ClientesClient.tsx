@@ -269,7 +269,7 @@ export default function ClientesClient({ clientes, interesados }: { clientes: an
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <h1 className="text-xl font-semibold">Clientes</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
         <Button onClick={() => setShowNew(true)}><PlusIcon /> Nuevo cliente</Button>
       </div>
 

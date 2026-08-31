@@ -291,7 +291,7 @@ export default function VerificacionesClient({
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-3">
-          <h1 className="text-xl font-semibold">Verificaciones</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Verificaciones</h1>
           <span className="text-sm text-muted-foreground">
             {faltaPagar.length} falta pagar · {pagas.length} pagas
             {totalFaltaPagar > 0 ? ` · USD ${totalFaltaPagar.toLocaleString('es-AR')} por pagar` : ''}

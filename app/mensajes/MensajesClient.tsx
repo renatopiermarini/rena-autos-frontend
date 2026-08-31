@@ -168,7 +168,7 @@ export default function MensajesClient({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1 className="text-xl font-semibold">Mensajes frecuentes</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Mensajes frecuentes</h1>
         <p className="text-sm text-muted-foreground">
           Los textos que más repetís por WhatsApp. Tocá «Copiar» y pegalos en el chat.
         </p>
