@@ -52,6 +52,7 @@ export function MainNav({
   iniciales = 'RP',
   titulo = 'Renato Piermarini Autos',
   mensajes = true,
+  cotizaciones = true,
   chat = false,
 }: {
   iniciales?: string
@@ -64,6 +65,12 @@ export function MainNav({
    */
   mensajes?: boolean
   /**
+   * ¿Esta instancia tiene "Cotizaciones" (colega cotizador)? Misma mecánica que
+   * `mensajes`: lo decide el layout con cotizacionesHabilitadas(config_negocio).
+   * Default `true` = instancia de Renato sin config cargada.
+   */
+  cotizaciones?: boolean
+  /**
    * ¿Esta instancia tiene backend del bot (BACKEND_URL + BACKEND_API_KEY)?
    * Enciende el ítem "Chat" Y la campana de avisos, que salen del mismo lugar.
    * Lo decide el layout en el server: acá `process.env` no existe. El default
@@ -74,7 +81,9 @@ export function MainNav({
 } = {}) {
   const pathname = usePathname()
   const items = NAV.filter(n =>
-    (n.href !== '/mensajes' || mensajes) && (n.href !== '/chat' || chat))
+    (n.href !== '/mensajes' || mensajes) &&
+    (n.href !== '/cotizaciones' || cotizaciones) &&
+    (n.href !== '/chat' || chat))
 
   // Indicador de overflow: en el celular la barra cortaba en "Clie…" sin ninguna
   // señal de que había más ítems a la derecha. El degradé aparece SÓLO del lado

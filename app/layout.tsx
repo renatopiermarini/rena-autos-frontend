@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { getConfigNegocio } from '@/lib/kapso'
 import { brandingFrom } from '@/lib/branding'
 import { mensajesHabilitados } from '@/lib/mensajes'
+import { cotizacionesHabilitadas } from '@/lib/cotizaciones'
 import { backendHabilitado } from '@/lib/backend'
 
 // IBM Plex: la voz "herramienta de operaciones" del design system (ver DESIGN.md).
@@ -48,6 +49,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             iniciales={branding.iniciales}
             titulo={branding.titulo}
             mensajes={mensajesHabilitados(config)}
+            cotizaciones={cotizacionesHabilitadas(config)}
             // El chat y la campana viven del backend del bot. Se lee ACÁ, en el
             // server, porque BACKEND_API_KEY no puede cruzar al browser — igual
             // que `documentosHabilitado` en app/stock/page.tsx, y por la misma
