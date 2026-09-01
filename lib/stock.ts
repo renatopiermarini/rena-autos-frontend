@@ -9,7 +9,7 @@
  */
 
 import { estadoMeta, type BadgeVariant } from '@/lib/estados'
-import { money as fmtMonto } from '@/lib/money'
+import { money as fmtMonto, fmtN } from '@/lib/money'
 import { parseAny } from '@/lib/date'
 
 /** Un auto que lleva más de esto en stock ya es un problema, no un dato. */
@@ -56,7 +56,7 @@ export function tarjetaVehiculo(v: any, ahora: number = Date.now()): TarjetaVehi
   const titulo = [v?.marca, v?.modelo, v?.año].map((x: any) => (x == null ? '' : String(x).trim()))
     .filter(Boolean).join(' ') || 'Auto sin datos'
 
-  const km = v?.km ? `${Number(v.km).toLocaleString('es-AR')} km` : ''
+  const km = v?.km ? `${fmtN(v.km)} km` : ''
   const detalle = [v?.dominio || 'sin patente', v?.color, km]
     .map((x: any) => (x == null ? '' : String(x).trim()))
     .filter(Boolean)
