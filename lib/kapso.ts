@@ -54,6 +54,10 @@ async function getSafe(table: string, revalidate: number): Promise<any[]> {
   }
 }
 
+// La tabla `cotizaciones` también puede no existir todavía (DDL manual —
+// scripts/ddl_cotizaciones.sql en rena-autos-api), así que va por getSafe.
+export async function getCotizaciones() { return getSafe('cotizaciones', 15) }
+
 // D1 devuelve los booleanos como 1/0, "1"/"0" o true/false según el driver.
 // Boolean('0') es true, así que se coerce siempre. Sin valor = activo (una fila
 // vieja sin la columna no debería desaparecer de la UI).

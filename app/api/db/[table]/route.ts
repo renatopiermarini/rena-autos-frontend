@@ -7,7 +7,7 @@ import { dbGet, dbPost, dbPatch, dbDelete, dbCount, DbError, matches } from '@/l
 // Las validaciones, el orden de los guards y los códigos de error de acá NO
 // dependen del backend: son las mismas para las dos instancias.
 
-const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'prestamos'])
+const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'prestamos', 'cotizaciones'])
 
 // Live-verified enum sets — mirrors the bot (rena-autos-api tools/kapso_tools.py
 // ENUMS, prod survey 2026-07-07). "equipo" in asignado is real (broadcast bucket).
@@ -33,6 +33,9 @@ const ENUMS: Record<string, Record<string, string[]>> = {
     estado: ['activo', 'pagado', 'vencido'],
     modalidad: ['mensual', 'al_final'],
   },
+  // El ciclo lo escribe el bot (esperando → pendiente); el dashboard sólo
+  // cierra (enviada = ya se le pasó el precio al cliente final, o descartada).
+  cotizaciones: { estado: ['esperando', 'pendiente', 'enviada', 'descartada'] },
 }
 
 // `tareas.asignado` es el ÚNICO enum que dejó de ser fijo: con la tabla `equipo`
@@ -287,6 +290,7 @@ const RUTAS_POR_TABLA: Record<string, string[]> = {
   ofertas:                  ['/', '/interesados'],
   verificaciones_mecanicas: ['/', '/verificaciones'],
   kb_entries:               ['/mensajes'],
+  cotizaciones:             ['/cotizaciones'],
 }
 
 function bustCache(table?: string) {

@@ -28,6 +28,10 @@ const NAV: { href: string; label: string; icon?: typeof SettingsIcon }[] = [
   { href: '/visitas',        label: 'Visitas'        },
   { href: '/clientes',       label: 'Clientes'       },
   { href: '/tareas',         label: 'Tareas'         },
+  // Cotizaciones con el colega (las llena el bot; acá se marcan enviadas). Va
+  // después de Tareas: se abre cuando llega el aviso, no todos los días. El
+  // nav queda en 12 ítems — el corte de 375px documentado arriba sigue pendiente.
+  { href: '/cotizaciones',   label: 'Cotizaciones'   },
   // En el lugar que tenía "Guía" (pantalla eliminada). NO está en todas las
   // instancias: ver el prop `mensajes` más abajo.
   { href: '/mensajes',       label: 'Mensajes', icon: MessageSquareTextIcon },
