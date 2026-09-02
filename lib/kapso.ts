@@ -457,10 +457,15 @@ export function computeLoanPosition(
   if (modalidad === 'mensual') {
     interes_mensual = round2(capital_vivo * tasa / 100 / 12)
     if (inicio) {
-      const [iy, im] = inicio.split('-').map(Number)
-      const [hy, hm] = hoy.split('-').map(Number)
-      const mesesVencidos = Math.max(0, (hy - iy) * 12 + (hm - im))
-      interes_devengado = round2(mesesVencidos * interes_mensual)
+      // Cuotas devengadas = MESES COMPLETOS desde el desembolso (inicio 30/08 →
+      // la primera se cumple el 30/09, no el 1/09). El interés se paga vencido:
+      // contar el cambio de mes calendario le cobraba un mes entero a un
+      // préstamo de dos días (decisión del usuario 2026-09-01).
+      const [iy, im, id] = inicio.split('-').map(Number)
+      const [hy, hm, hd] = hoy.split('-').map(Number)
+      let mesesVencidos = (hy - iy) * 12 + (hm - im)
+      if (hd < id) mesesVencidos -= 1          // el mes en curso no se cumplió
+      interes_devengado = round2(Math.max(0, mesesVencidos) * interes_mensual)
     }
     const mesActual = hoy.slice(0, 7)
     interes_mes_pagado = interesesPagados.some(m => (arDay(m.created_at) || '').slice(0, 7) === mesActual)

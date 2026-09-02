@@ -56,9 +56,9 @@ describe('computePatrimonio · snapshot con las cuentas por defecto', () => {
     expect(pat.stock.ganancia_esperada).toBe(13000)
     expect(pat.por_cobrar.total).toBe(3418)
     expect(pat.por_cobrar.comisiones_consignaciones.total).toBe(700)
-    expect(pat.deuda_total).toBe(10125)
+    expect(pat.deuda_total).toBe(10000)
     expect(pat.interes_mensual_total).toBe(125)
-    expect(pat.capital_propio).toBe(57931.31)
+    expect(pat.capital_propio).toBe(58056.31)
   })
 })
 
@@ -185,14 +185,16 @@ describe('computeVehicleFinancials', () => {
 })
 
 describe('computeLoanPosition', () => {
-  it('mensual: cuota fija capital × tasa/12, devengado por 1° de mes vencidos', () => {
+  it('mensual: cuota fija capital × tasa/12, devengado por meses cumplidos', () => {
     const pos = computeLoanPosition(
       { id: 1, monto_original: 16000, tasa_interes_anual: 15, modalidad: 'mensual', fecha_inicio: '2026-04-17', estado: 'activo' },
       [], HOY,
     )
     expect(pos.interes_mensual).toBe(200)
-    expect(pos.interes_devengado).toBe(800)      // 1/05, 1/06, 1/07, 1/08
-    expect(pos.deuda_total).toBe(16800)
+    // meses cumplidos el 17/05, 17/06 y 17/07; el que corre desde el 17/07 no
+    // se debe hasta el 17/08 — el interés se paga vencido
+    expect(pos.interes_devengado).toBe(600)
+    expect(pos.deuda_total).toBe(16600)
     expect(pos.proximo_vencimiento).toBe('2026-09-01')
   })
 
@@ -257,9 +259,10 @@ describe('computePatrimonio', () => {
     expect(pat.stock.ganancia_esperada).toBe(11000)
     expect(pat.por_cobrar.total).toBe(2718)
     expect(pat.por_cobrar.clientes[0].nombre).toBe('Nico')
-    expect(pat.deuda_total).toBe(10125)          // 10000 + cuota agosto impaga
+    // desembolso 20/07: al 10/08 el primer mes todavía no se cumplió
+    expect(pat.deuda_total).toBe(10000)
     expect(pat.interes_mensual_total).toBe(125)
-    expect(pat.capital_propio).toBe(25000 + 22000 + 2718 - 10125)
+    expect(pat.capital_propio).toBe(25000 + 22000 + 2718 - 10000)
   })
 })
 
