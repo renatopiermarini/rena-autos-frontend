@@ -106,9 +106,15 @@ export function MainNav({
     if (!el) return
     el.addEventListener('scroll', medir, { passive: true })
     window.addEventListener('resize', medir)
+    // ResizeObserver además del resize de window: el ancho del scroller también
+    // cambia sin resize (fuentes que terminan de cargar, zoom, breakpoint del
+    // título en lg) y en 1024px el ítem cortado quedaba sin degradé (QA 2026-09-02).
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(medir) : null
+    ro?.observe(el)
     return () => {
       el.removeEventListener('scroll', medir)
       window.removeEventListener('resize', medir)
+      ro?.disconnect()
     }
   }, [medir, pathname])
 

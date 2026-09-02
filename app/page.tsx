@@ -109,6 +109,7 @@ export default async function Tablero() {
       hora: null,
       title: t.titulo || 'Sin título',
       subtitle: t.asignado || undefined,
+      href: `/tareas?id=${t.id}`,
       done: false,
       urgent,
       dayKey: raw,

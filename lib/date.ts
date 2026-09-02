@@ -65,12 +65,24 @@ export function todayKey(): string {
 
 // ── <input type="datetime-local"> round-trip ───────────────────────────────────
 
-/** Stored instant → datetime-local value "YYYY-MM-DDTHH:MM" (local wall-clock). */
+/**
+ * Stored instant → datetime-local value "YYYY-MM-DDTHH:MM", in AR wall-clock.
+ * Pinned to the AR timezone (NOT the browser's): the list next to the input
+ * formats with fmtDateTime, which pins AR — with local getHours() a browser in
+ * another timezone showed a different time in the input than in the list.
+ */
 export function toARInputValue(iso?: string | null): string {
   const d = parseInstant(iso)
   if (!d) return ''
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: AR_TZ_NAME,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d)
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? ''
+  // Some engines render midnight as "24" with hour12:false.
+  const hh = get('hour') === '24' ? '00' : get('hour')
+  return `${get('year')}-${get('month')}-${get('day')}T${hh}:${get('minute')}`
 }
 
 /**

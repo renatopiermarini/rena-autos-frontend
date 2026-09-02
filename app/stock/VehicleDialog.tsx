@@ -1,13 +1,13 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { computeVehicleFinancials, computeLoanPosition, type CuentaInfo } from '@/lib/kapso'
+import { computeVehicleFinancials, computeLoanPosition, round2, type CuentaInfo } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 import { diasEnStock } from '@/lib/stock'
 import { verificacionPaga } from '@/lib/verificaciones'
 import { money, fmtN } from '@/lib/money'
-import { COMISION_PCT_DEFAULT } from '@/lib/venta'
+import { COMISION_PCT_DEFAULT, comisionVenta } from '@/lib/venta'
 import { formSucio, MENSAJE_DESCARTAR } from '@/lib/dirty'
 import {
   Dialog, DialogContent, DialogClose, DialogTitle, useDirtyClose,
@@ -242,9 +242,19 @@ function VehicleDialogBody({
   // v.costo_total — la cache se desincroniza (incidente 130i: 2.368 vs 16.722)
   // y el margen salía de ahí.
   const fin = computeVehicleFinancials(v.id, vehicles, movimientos, prestamos)
-  const margen = v.precio_venta_final && fin.costo_total
-    ? Number(v.precio_venta_final) - fin.costo_total
+  // Margen de un propio: venta − costo. En una CONSIGNACIÓN el precio de venta
+  // es plata del DUEÑO — tratarlo como ingreso nuestro inventaba márgenes de
+  // +30.000 sobre un costo de 100. Lo nuestro es la comisión: la cobrada en el
+  // ledger (ingresos 'commission') si existe, o el % de config sobre la venta.
+  const ventaFinal = Number(v.precio_venta_final ?? 0)
+  const comisionConsignacion = fin.es_consignacion && ventaFinal > 0
+    ? (fin.comision_cobrada > 0 ? fin.comision_cobrada : comisionVenta(ventaFinal, comisionPct))
     : null
+  const margen = fin.es_consignacion
+    ? (comisionConsignacion != null ? round2(comisionConsignacion - fin.costo_total) : null)
+    : (v.precio_venta_final && fin.costo_total
+      ? Number(v.precio_venta_final) - fin.costo_total
+      : null)
   const catEntries = Object.entries(fin.gastos_por_categoria).sort((a, b) => b[1] - a[1])
   const verifPaga = verificacionPaga(verificaciones, v.id)
   const pendientes = tareas
@@ -434,9 +444,24 @@ function VehicleDialogBody({
                   <Dato label="Precio publicado" value={v.precio_publicado ? fmt(v.precio_publicado) : null} />
                   <Dato label="Precio venta final" value={v.precio_venta_final ? fmt(v.precio_venta_final) : null} />
                   <Dato label="Fecha venta" value={fmtFecha(v.fecha_venta)} />
+                  {comisionConsignacion != null && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Comisión (nuestra)</p>
+                      <p className="text-sm font-medium">
+                        {fmt(comisionConsignacion)}
+                        {fin.comision_cobrada <= 0 && (
+                          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                            estimada ({comisionPct}%)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  )}
                   {margen != null && (
                     <div>
-                      <p className="text-xs text-muted-foreground">Margen</p>
+                      <p className="text-xs text-muted-foreground">
+                        {fin.es_consignacion ? 'Margen (comisión − gastos)' : 'Margen'}
+                      </p>
                       <p className={`text-sm font-medium ${margen >= 0 ? 'text-success' : 'text-destructive'}`}>
                         {margen >= 0 ? '+' : ''}{fmt(margen)}
                       </p>

@@ -39,11 +39,12 @@ const TRAMITE_VARIANT: Record<string, 'success' | 'warning' | 'info' | 'secondar
   pendiente: 'warning',
 }
 
-// "DD/MM HH:MM" desde el ISO naive de la DB, por slicing: determinístico en
+// "DD/MM/YY HH:MM" desde el ISO naive de la DB, por slicing: determinístico en
 // server y browser (toLocaleString varía entre ICUs y rompe la hidratación).
+// Con año: un turno del 14/07 visto meses después no decía de qué año era.
 function fmtTurno(iso?: string | null): string {
   if (!iso || iso.length < 16 || iso[10] !== 'T') return (iso ?? '').slice(0, 10)
-  return `${iso.slice(8, 10)}/${iso.slice(5, 7)} ${iso.slice(11, 16)}`
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)} ${iso.slice(11, 16)}`
 }
 
 function autoLabel(v: any): string {

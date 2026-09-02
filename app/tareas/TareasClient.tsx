@@ -7,6 +7,7 @@ import {
   type MiembroEquipo,
 } from '@/lib/equipo'
 import { fmtDM as fmtFecha, fmtHora, localDayKey, parseAny } from '@/lib/date'
+import { useDeepLinkId, useScrollToDeepLink } from '@/lib/deep-link'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -107,7 +108,11 @@ function AsignadoBadge({ nombre, size = 'sm' }: { nombre: string; size?: 'sm' | 
   )
 }
 
-function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) => string | null }) {
+function TareaRow({ t, autoNombre, destacar = false }: {
+  t: any; autoNombre: (id: number | null) => string | null
+  /** Llegó por deep-link (?id= desde el Tablero): se resalta y se scrollea. */
+  destacar?: boolean
+}) {
   const router = useRouter()
   const { defAssignee } = useEquipo()
   const [completing, setCompleting] = useState(false)
@@ -131,7 +136,10 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
   }
 
   return (
-    <div className={`flex items-start justify-between px-3 py-2.5 ${left}`}>
+    <div
+      id={`tarea-${t.id}`}
+      className={`flex items-start justify-between px-3 py-2.5 ${left} ${destacar ? 'bg-primary/5 ring-1 ring-inset ring-primary/30' : ''}`}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
@@ -177,7 +185,7 @@ function TareaRow({ t, autoNombre }: { t: any; autoNombre: (id: number | null) =
 
 type SortMode = 'prioridad' | 'vence' | 'auto' | 'persona'
 
-function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
+function ListView({ tareas, vehicles, deepId }: { tareas: any[]; vehicles: any[]; deepId: number | null }) {
   // Grouped by person by default. The team shares this dashboard with no per-user
   // login, so "whose is it" is the question being asked; priority is a filter you
   // reach for, not the shape of the list.
@@ -285,7 +293,7 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {byPrioridad().map(([p, ts]) => (
             <Section key={p} title={`${PRIORIDAD_LABEL[p]} (${ts.length})`}>
-              {ts.map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} />)}
+              {ts.map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} destacar={t.id === deepId} />)}
             </Section>
           ))}
           {activas.length === 0 && <p className="text-sm text-muted-foreground">Sin tareas pendientes.</p>}
@@ -298,12 +306,12 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {conFecha.length > 0 && (
               <Section title={`Con fecha límite (${conFecha.length})`}>
-                {conFecha.map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} />)}
+                {conFecha.map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} destacar={t.id === deepId} />)}
               </Section>
             )}
             {sinFecha.length > 0 && (
               <Section title={`Sin fecha (${sinFecha.length})`}>
-                {sinFecha.map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} />)}
+                {sinFecha.map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} destacar={t.id === deepId} />)}
               </Section>
             )}
             {activas.length === 0 && <p className="text-sm text-muted-foreground">Sin tareas pendientes.</p>}
@@ -317,7 +325,7 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
             <Section key={key} title={`${label} (${tasks.length})`}>
               {tasks
                 .sort((a, b) => (PRIORIDAD_RANK[a.prioridad] ?? 3) - (PRIORIDAD_RANK[b.prioridad] ?? 3))
-                .map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} />)}
+                .map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} destacar={t.id === deepId} />)}
             </Section>
           ))}
           {activas.length === 0 && <p className="text-sm text-muted-foreground">Sin tareas pendientes.</p>}
@@ -340,7 +348,7 @@ function ListView({ tareas, vehicles }: { tareas: any[]; vehicles: any[] }) {
               <CardContent className="divide-y divide-border p-0">
                 {tasks
                   .sort((a, b) => (PRIORIDAD_RANK[a.prioridad] ?? 3) - (PRIORIDAD_RANK[b.prioridad] ?? 3))
-                  .map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} />)}
+                  .map(t => <TareaRow key={t.id} t={t} autoNombre={autoNombre} destacar={t.id === deepId} />)}
               </CardContent>
             </Card>
           ))}
@@ -552,6 +560,9 @@ export default function TareasClient({
 }) {
   const [view, setView] = useState<'lista' | 'calendario'>('lista')
   const [showNueva, setShowNueva] = useState(false)
+  // ?id= desde el Tablero: la fila se resalta y se scrollea hasta ella.
+  const deepId = useDeepLinkId()
+  useScrollToDeepLink(deepId, 'tarea')
   const ctx = useMemo(
     () => ({ equipo, defAssignee, destacados }),
     [equipo, defAssignee, destacados],
@@ -584,7 +595,7 @@ export default function TareasClient({
       <NuevaTareaDialog open={showNueva} onOpenChange={setShowNueva} vehicles={vehicles} />
 
       {view === 'lista'
-        ? <ListView tareas={tareas} vehicles={vehicles} />
+        ? <ListView tareas={tareas} vehicles={vehicles} deepId={deepId} />
         : <CalendarView tareas={tareas} vehicles={vehicles} />
       }
     </div>

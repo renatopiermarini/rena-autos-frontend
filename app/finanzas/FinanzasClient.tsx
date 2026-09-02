@@ -332,7 +332,7 @@ function ResumenTab({
                   </span>
                   <div className="flex shrink-0 items-center gap-3">
                     <TipoAmount tipo={m.tipo} monto={m.monto} />
-                    <span className="text-xs text-muted-foreground font-mono tabular-nums">{fmtFecha(m.created_at)}</span>
+                    <span className="text-xs text-muted-foreground font-mono tabular-nums">{fmtFecha(m.created_at) || '—'}</span>
                   </div>
                 </div>
               </div>
@@ -1040,7 +1040,7 @@ function VehicleFinancialDetail({
                 </div>
                 <div className="flex items-center gap-2 text-xs whitespace-nowrap shrink-0">
                   <TipoAmount tipo={m.tipo} monto={m.monto} size="xs" />
-                  <span className="text-muted-foreground font-mono tabular-nums">{fmtFecha(m.created_at)}</span>
+                  <span className="text-muted-foreground font-mono tabular-nums">{fmtFecha(m.created_at) || '—'}</span>
                 </div>
               </div>
             ))}
@@ -1352,7 +1352,7 @@ function MovimientosTab({
                             {isOpen
                               ? <ChevronUpIcon className="size-3" aria-hidden />
                               : <ChevronDownIcon className="size-3" aria-hidden />}
-                            {fmtFecha(m.created_at)}
+                            {fmtFecha(m.created_at) || '—'}
                           </button>
                         </td>
                         <td className={`px-3 py-2 text-xs ${m.tipo === 'ingreso' ? 'text-success' : 'text-destructive'}`}>{m.tipo}</td>

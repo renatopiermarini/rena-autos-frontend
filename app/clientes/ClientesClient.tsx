@@ -96,7 +96,11 @@ function ClienteRow({ c }: { c: any }) {
           className="flex items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {open ? <ChevronUpIcon className="size-3 text-muted-foreground" aria-hidden /> : <ChevronDownIcon className="size-3 text-muted-foreground" aria-hidden />}
-          <span className="text-sm font-medium">{c.nombre}</span>
+          {/* Filas sin nombre (el bot guardó sólo el teléfono): placeholder
+              visible en vez de una fila que parece vacía/rota. */}
+          {c.nombre?.trim()
+            ? <span className="text-sm font-medium">{c.nombre}</span>
+            : <span className="text-sm italic text-muted-foreground">Sin nombre{c.telefono ? '' : ` · #${c.id}`}</span>}
           {c.es_acreedor ? <Badge variant="destructive">acreedor</Badge> : null}
         </button>
         <div className="flex items-center gap-4 flex-wrap justify-end">
@@ -224,7 +228,9 @@ function InteresadoRow({ i }: { i: any }) {
             : <ChevronDownIcon className="size-3 text-muted-foreground shrink-0" aria-hidden />
           )}
           <span className="min-w-0 block">
-            <span className="text-sm font-medium">{i.nombre}</span>
+            {i.nombre?.trim()
+              ? <span className="text-sm font-medium">{i.nombre}</span>
+              : <span className="text-sm italic text-muted-foreground">Sin nombre{i.telefono ? '' : ` · #${i.id}`}</span>}
             {(i.marca_buscada || i.modelo_buscado) && (
               <span className="text-xs text-muted-foreground ml-2">
                 busca: {[i.marca_buscada, i.modelo_buscado, i.año_min && `desde ${i.año_min}`].filter(Boolean).join(' ')}

@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import { backendHabilitado } from '@/lib/backend'
 import ChatClient from './ChatClient'
 
@@ -7,8 +7,9 @@ import ChatClient from './ChatClient'
  *
  * La pantalla existe sólo si la instancia tiene backend (BACKEND_URL +
  * BACKEND_API_KEY) — el mismo gate que decide si el nav dibuja el ítem "Chat".
- * Sin las env, llegar acá es escribir la URL a mano: se vuelve al tablero, igual
- * que hace /mensajes cuando su instancia no la tiene.
+ * Sin las env es un 404, no un redirect al tablero: el redirect silencioso
+ * hacía que /chat pareciera una ruta catch-all rota en vez de una pantalla
+ * que esta instancia no tiene (QA 2026-09-02).
  *
  * La lectura de las env pasa ACÁ, en el server component: BACKEND_API_KEY no
  * puede cruzar al browser (ver lib/backend.ts).
@@ -16,6 +17,6 @@ import ChatClient from './ChatClient'
 export const dynamic = 'force-dynamic'
 
 export default function ChatPage() {
-  if (!backendHabilitado()) redirect('/')
+  if (!backendHabilitado()) notFound()
   return <ChatClient />
 }

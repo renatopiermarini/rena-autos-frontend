@@ -243,30 +243,43 @@ export function MonthBoard({
               )
 
               if (it.kind === 'tarea' && onToggleTarea) {
+                // El toggle es SÓLO el checkbox: cuando la fila entera era el
+                // botón, un click para "ver la tarea" la completaba sin querer.
+                // La fila lleva al detalle en /tareas, como las visitas.
+                const rowCls = cn(
+                  'group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                  it.urgent && !it.done && 'bg-destructive/[0.07]',
+                )
+                const check = (
+                  <button
+                    type="button"
+                    onClick={e => { e.preventDefault(); e.stopPropagation(); onToggleTarea(it.id, !it.done) }}
+                    aria-pressed={!!it.done}
+                    aria-label={it.done ? 'Reabrir tarea' : 'Marcar como completada'}
+                    title={it.done ? 'Reabrir tarea' : 'Marcar como completada'}
+                    className={cn(
+                      'grid size-5 shrink-0 place-items-center rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      it.done
+                        ? 'border-success bg-success text-success-foreground'
+                        : 'border-border hover:border-foreground/60 group-hover:border-foreground/40',
+                    )}
+                  >
+                    {it.done && <CheckIcon className="size-3.5" aria-hidden />}
+                  </button>
+                )
                 return (
                   <li key={`${it.kind}-${it.id}`}>
-                    <button
-                      type="button"
-                      onClick={() => onToggleTarea(it.id, !it.done)}
-                      aria-pressed={!!it.done}
-                      className={cn(
-                        'group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                        it.urgent && !it.done && 'bg-destructive/[0.07]',
-                      )}
-                    >
-                      {body}
-                      <span
-                        className={cn(
-                          'grid size-5 shrink-0 place-items-center rounded border transition-colors',
-                          it.done
-                            ? 'border-success bg-success text-success-foreground'
-                            : 'border-border group-hover:border-foreground/40',
-                        )}
-                        aria-hidden
-                      >
-                        {it.done && <CheckIcon className="size-3.5" />}
-                      </span>
-                    </button>
+                    {it.href ? (
+                      <Link href={it.href} className={rowCls}>
+                        {body}
+                        {check}
+                      </Link>
+                    ) : (
+                      <div className={rowCls}>
+                        {body}
+                        {check}
+                      </div>
+                    )}
                   </li>
                 )
               }

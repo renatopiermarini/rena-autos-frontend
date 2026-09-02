@@ -82,8 +82,13 @@ function VisitaRow({
           <span className="text-sm text-muted-foreground whitespace-nowrap">— {interesadoLabel(v.interesado_id)}</span>
         </button>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          <span className={`inline-flex items-center gap-1 text-xs ${v.email_enviado ? 'text-success' : 'text-muted-foreground'}`}>
-            <MailIcon className="size-3" /> {v.email_enviado ? 'enviado' : 'pendiente'}
+          {/* "pendiente" a secas al lado del pill de resultado "pendiente" leía
+              como un duplicado; el texto dice de qué es el estado. */}
+          <span
+            className={`inline-flex items-center gap-1 text-xs ${v.email_enviado ? 'text-success' : 'text-muted-foreground'}`}
+            title={v.email_enviado ? 'Recordatorio por mail enviado' : 'Recordatorio por mail sin enviar'}
+          >
+            <MailIcon className="size-3" aria-hidden /> {v.email_enviado ? 'mail enviado' : 'sin mail'}
           </span>
           <Badge variant={RESULTADO_VARIANT[resultado] ?? 'outline'}>{resultado}</Badge>
           <span className="text-xs text-muted-foreground tabular-nums">{fmtDateTime(v.fecha)}</span>
@@ -235,7 +240,14 @@ export default function VisitasClient({
   visitas, vehicles, interesados,
 }: { visitas: any[]; vehicles: any[]; interesados: any[] }) {
   const [showNueva, setShowNueva] = useState(false)
-  const [filter, setFilter] = useState<Filtro>('proximas')
+  // "proximas" es el default útil… salvo cuando no hay ninguna: abrir la
+  // pantalla en "Sin visitas" con 47 visitas cargadas lee como pantalla rota.
+  const [filter, setFilter] = useState<Filtro>(() => {
+    const ahora = Date.now()
+    const hayProximas = visitas.some(v =>
+      v.fecha && new Date(v.fecha).getTime() >= ahora && v.resultado === 'pendiente')
+    return hayProximas ? 'proximas' : 'todas'
+  })
 
   // Arriving from the agenda with ?id=. The default "proximas" filter excludes past
   // visitas, so a click on a past one would land on a list that does not contain it —

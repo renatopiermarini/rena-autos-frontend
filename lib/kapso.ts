@@ -298,6 +298,9 @@ export type VehicleFinancials = {
   margen_esperado: number | null
   prestamos_asociados: any[]
   es_consignacion: boolean
+  /** Σ ingresos categoría 'commission' del auto — lo que la agencia cobró de
+   *  verdad en una consignación vendida (el precio de venta es del dueño). */
+  comision_cobrada: number
 }
 
 // Mirror of the backend's _ledger_costo — the ONE cost definition. Rules:
@@ -330,11 +333,15 @@ export function computeVehicleFinancials(
   let compra_movs = 0
   let otros_egresos = 0
   let gastos_cliente = 0
+  let comision_cobrada = 0
   for (const m of movimientos) {
     if (coerceId(m.vehicle_id) !== vid) continue
-    if (m.tipo !== 'egreso') continue
     const monto = Number(m.monto ?? 0)
     const cat = m.categoria || 'sin_categoria'
+    if (m.tipo !== 'egreso') {
+      if (m.tipo === 'ingreso' && cat === 'commission') comision_cobrada += monto
+      continue
+    }
     if (cat === 'vehicle_purchase') { compra_movs += monto; continue }
     if (cat === 'client_expense')   { gastos_cliente += monto; continue }
     if (cat === 'vehicle_expense')  { gastos_total += monto }
@@ -375,6 +382,7 @@ export function computeVehicleFinancials(
     margen_esperado,
     prestamos_asociados,
     es_consignacion,
+    comision_cobrada: round2(comision_cobrada),
   }
 }
 
