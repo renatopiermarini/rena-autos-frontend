@@ -1,6 +1,6 @@
 import {
   getVehicles, getTareas, getClientes, getMovimientos, getPrestamos,
-  getEquipo, getConfigNegocio, getCuentas, cuentasInfo,
+  getEquipo, getConfigNegocio, getCuentas, cuentasInfo, getVerificaciones,
 } from '@/lib/kapso'
 import { equipoFromRows, resolveDefaultAssignee } from '@/lib/equipo'
 import { comisionConsignacionPct } from '@/lib/venta'
@@ -10,10 +10,10 @@ export default async function Stock() {
   // `cuentas` es para el alta y para la venta: hay que elegir de qué caja sale
   // la compra y a cuál entra el ingreso. Sin la tabla, cuentasInfo cae en las
   // tres de siempre (cash/nexo/fiwind).
-  const [vehicles, tareas, clientes, movimientos, prestamos, equipoRows, config, cuentasRows] =
+  const [vehicles, tareas, clientes, movimientos, prestamos, equipoRows, config, cuentasRows, verificaciones] =
     await Promise.all([
       getVehicles(), getTareas(), getClientes(), getMovimientos(), getPrestamos(),
-      getEquipo(), getConfigNegocio(), getCuentas(),
+      getEquipo(), getConfigNegocio(), getCuentas(), getVerificaciones(),
     ])
   // El detalle de un auto solo consume movimientos ligados a un vehículo
   // (computeVehicleFinancials) o a un préstamo (computeLoanPosition). Serializar
@@ -24,6 +24,7 @@ export default async function Stock() {
   return (
     <StockClient
       vehicles={vehicles}
+      verificaciones={verificaciones}
       tareas={tareas}
       clientes={clientes}
       movimientos={movimientosVinculados}

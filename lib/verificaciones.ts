@@ -13,3 +13,19 @@ export const esExterna = (v: any) =>
 
 // Sin auto asignado → transitorio: el Tablero y la tabla lo alertan.
 export const sinAuto = (v: any) => sinVehiculo(v) && !esExterna(v)
+
+// ¿La verificación de este auto está paga? Derivado de verificaciones_mecanicas
+// (la fuente de verdad se edita en /verificaciones; el stock sólo lo muestra):
+// 'paga' si el auto tiene alguna verificación pagada, 'falta' si tiene pero
+// ninguna paga, null si no tiene ninguna.
+export function verificacionPaga(
+  verificaciones: any[], vehicleId: number,
+): 'paga' | 'falta' | null {
+  // FK coercionada a Number en ambos lados: en D1 vehicle_id puede volver como
+  // texto según la fila (mismo problema que _coerce_int en el backend).
+  const delAuto = verificaciones.filter(
+    v => !sinVehiculo(v) && Number(v.vehicle_id) === Number(vehicleId),
+  )
+  if (delAuto.length === 0) return null
+  return delAuto.some(v => v?.estado === 'pagada') ? 'paga' : 'falta'
+}

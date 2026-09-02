@@ -5,6 +5,7 @@ import { computeVehicleFinancials, computeLoanPosition, type CuentaInfo } from '
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 import { diasEnStock, tarjetaVehiculo } from '@/lib/stock'
+import { verificacionPaga } from '@/lib/verificaciones'
 import { DEFAULT_ASSIGNEE } from '@/lib/equipo'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -185,6 +186,8 @@ function FSelect({ label, value, onChange, options }: {
 
 type VehicleDetailProps = {
   v: any; clientes: any[]; vehicles: any[]; movimientos: any[]; prestamos: any[]; tareas?: any[]
+  /** Filas de verificaciones_mecanicas — para derivar "verificación paga sí/no". */
+  verificaciones?: any[]
   cuentas?: CuentaInfo[]; comisionPct?: number
   /** ¿La instancia tiene backend de contratos? Sin él, no hay botón. */
   documentosHabilitado?: boolean
@@ -198,7 +201,7 @@ type VehicleDetailProps = {
  * detalle, exactamente igual, se usa desde los dos lados.
  */
 function VehicleDetailBody({
-  v, clientes, vehicles, movimientos, prestamos, tareas = [],
+  v, clientes, vehicles, movimientos, prestamos, tareas = [], verificaciones = [],
   cuentas = [], comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false,
 }: VehicleDetailProps) {
   const router = useRouter()
@@ -263,6 +266,7 @@ function VehicleDetailBody({
   // v.costo_total — la cache se desincroniza (incidente 130i: 2.368 vs 16.722)
   // y el margen salía de ahí.
   const fin = computeVehicleFinancials(v.id, vehicles, movimientos, prestamos)
+  const verifPaga = verificacionPaga(verificaciones, v.id)
   const margen = v.precio_venta_final && fin.costo_total
     ? Number(v.precio_venta_final) - fin.costo_total
     : null
@@ -341,6 +345,15 @@ function VehicleDetailBody({
           )}
           <Field label="Fecha ingreso" value={fmtFecha(v.fecha_ingreso)} />
           <Field label="Fecha venta" value={fmtFecha(v.fecha_venta)} />
+          {/* Derivado de verificaciones_mecanicas: se paga desde /verificaciones. */}
+          {verifPaga != null && (
+            <div>
+              <p className="text-xs text-muted-foreground">Verificación paga</p>
+              <p className={`text-sm font-medium ${verifPaga === 'paga' ? 'text-success' : 'text-destructive'}`}>
+                {verifPaga === 'paga' ? 'Sí' : 'No'}
+              </p>
+            </div>
+          )}
           <Field label="Propietario" value={cliente?.nombre} />
           <Field label="Comprador" value={comprador?.nombre} />
           {v.notas && (
@@ -545,7 +558,7 @@ function VehicleDetailBody({
 function VehicleDetailRow(props: VehicleDetailProps) {
   return (
     <tr>
-      <td colSpan={9} className="p-0 bg-muted/30 border-b border-border">
+      <td colSpan={10} className="p-0 bg-muted/30 border-b border-border">
         <VehicleDetailBody {...props} />
       </td>
     </tr>
@@ -554,11 +567,12 @@ function VehicleDetailRow(props: VehicleDetailProps) {
 
 function VehicleTable({
   vehicles, tareas, clientes, movimientos, prestamos, expanded, onToggle, defAssignee,
-  cuentas, comisionPct, documentosHabilitado,
+  cuentas, comisionPct, documentosHabilitado, verificaciones,
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos: any[]; prestamos: any[]
   expanded: Set<number>; onToggle: (id: number) => void; defAssignee: string
   cuentas: CuentaInfo[]; comisionPct: number; documentosHabilitado: boolean
+  verificaciones: any[]
 }) {
   function tareasAuto(vid: number) {
     return tareas.filter(t => t.vehicle_id === vid && t.estado !== 'completada')
@@ -618,7 +632,8 @@ function VehicleTable({
             {isOpen && (
               <VehicleDetailBody
                 v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos}
-                prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct}
+                prestamos={prestamos} tareas={tareas} verificaciones={verificaciones}
+                cuentas={cuentas} comisionPct={comisionPct}
                 documentosHabilitado={documentosHabilitado}
               />
             )}
@@ -641,6 +656,7 @@ function VehicleTable({
             <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-center hidden sm:table-cell" title="Lavado">Lav</th>
             <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-center hidden sm:table-cell">Fotos</th>
             <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-center hidden sm:table-cell" title="Publicado">Pub</th>
+            <th className="px-3 py-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground text-center hidden sm:table-cell" title="Verificación paga">Verif. paga</th>
           </tr>
         </thead>
         <tbody>
@@ -649,6 +665,7 @@ function VehicleTable({
             const pendientesPorTipo = (tipo: string) =>
               pendientes.filter(t => t.tipo === tipo).map(t => t.id)
             const isOpen = expanded.has(v.id)
+            const verifPaga = verificacionPaga(verificaciones, v.id)
             return (
               <Fragment key={v.id}>
                 <tr
@@ -696,8 +713,17 @@ function VehicleTable({
                   <td className="py-2 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="lavado"    value={!!v.lavado}    pendingTareaIds={pendientesPorTipo('lavado')} defAssignee={defAssignee} /></td>
                   <td className="py-2 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="fotos_ok"  value={!!v.fotos_ok}  pendingTareaIds={pendientesPorTipo('fotos')} defAssignee={defAssignee} /></td>
                   <td className="py-2 px-3 text-center hidden sm:table-cell"><ToggleCheck vehicleId={v.id} field="publicado" value={!!v.publicado} pendingTareaIds={pendientesPorTipo('publicacion')} defAssignee={defAssignee} /></td>
+                  {/* Sólo lectura: la verificación se marca paga desde /verificaciones
+                      (estado + fecha_pago), no con un toggle sobre el auto. */}
+                  <td className="py-2 px-3 text-center hidden sm:table-cell">
+                    {verifPaga == null
+                      ? <span className="text-muted-foreground/40" title="Sin verificación registrada">—</span>
+                      : verifPaga === 'paga'
+                      ? <span className="text-success font-medium" title="Verificación paga">Sí</span>
+                      : <span className="text-destructive font-medium" title="Verificación sin pagar">No</span>}
+                  </td>
                 </tr>
-                {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} documentosHabilitado={documentosHabilitado} />}
+                {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} verificaciones={verificaciones} cuentas={cuentas} comisionPct={comisionPct} documentosHabilitado={documentosHabilitado} />}
               </Fragment>
             )
           })}
@@ -736,8 +762,12 @@ const ESTADO_ORDER = [
 export default function StockClient({
   vehicles, tareas, clientes, movimientos = [], prestamos = [], defAssignee = DEFAULT_ASSIGNEE,
   cuentas = [], comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false,
+  verificaciones = [],
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos?: any[]; prestamos?: any[]
+  // Filas crudas de verificaciones_mecanicas: de acá sale el "Verificación
+  // paga sí/no" por auto (derivado, se edita en /verificaciones).
+  verificaciones?: any[]
   // A quién se le anota haber completado una tarea al tildar el check. Sale de
   // config_negocio.default_assignee; sin la tabla, 'rena' como siempre.
   defAssignee?: string
@@ -894,6 +924,7 @@ export default function StockClient({
               cuentas={cuentas}
               comisionPct={comisionPct}
               documentosHabilitado={documentosHabilitado}
+              verificaciones={verificaciones}
             />
           </CardContent>
         </Card>
@@ -916,6 +947,7 @@ export default function StockClient({
                     cuentas={cuentas}
                     comisionPct={comisionPct}
                     documentosHabilitado={documentosHabilitado}
+                    verificaciones={verificaciones}
                   />
                 </CardContent>
               </Card>
@@ -970,7 +1002,7 @@ export default function StockClient({
                             {fmtFecha(v.fecha_venta)}
                           </td>
                         </tr>
-                        {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} cuentas={cuentas} comisionPct={comisionPct} documentosHabilitado={documentosHabilitado} />}
+                        {isOpen && <VehicleDetailRow v={v} clientes={clientes} vehicles={vehicles} movimientos={movimientos} prestamos={prestamos} tareas={tareas} verificaciones={verificaciones} cuentas={cuentas} comisionPct={comisionPct} documentosHabilitado={documentosHabilitado} />}
                       </Fragment>
                     )
                   })}
