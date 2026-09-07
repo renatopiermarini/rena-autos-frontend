@@ -272,10 +272,12 @@ function VehicleDialogBody({
     <Dialog open {...dialogProps}>
     <DialogContent
       showCloseButton={false}
-      // Full-screen: pisa el centrado + max-w del DialogContent base. p-0/gap-0
-      // porque el layout interno (header fijo + cuerpo con scroll propio) maneja
-      // sus paddings.
-      className="top-0 left-0 h-dvh max-h-dvh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_1fr] gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none"
+      // "Ventana" casi full-screen (como una app en la Mac): ocupa casi todo el
+      // viewport pero deja ver el nav arriba y un margen abajo, para no perder
+      // el contexto de dónde uno está. En celular sí es full-screen (no hay
+      // lugar para el margen). p-0/gap-0 porque el layout interno (header fijo
+      // + cuerpo con scroll propio) maneja sus paddings. Pisa el max-w-sm base.
+      className="top-0 left-0 h-dvh max-h-dvh w-screen max-w-none translate-x-0 translate-y-0 grid-rows-[auto_1fr] gap-0 overflow-hidden rounded-none border-0 p-0 sm:top-1/2 sm:left-1/2 sm:h-[calc(100dvh-9rem)] sm:max-h-[calc(100dvh-9rem)] sm:w-[calc(100%-5rem)] sm:max-w-[1600px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:border sm:shadow-2xl"
     >
       {/* ── Header ── */}
       <div className="border-b border-border">
