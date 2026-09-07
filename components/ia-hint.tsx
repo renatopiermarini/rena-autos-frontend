@@ -1,5 +1,5 @@
 'use client'
-import { SparklesIcon } from 'lucide-react'
+import { SparklesIcon, TriangleAlertIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -13,7 +13,9 @@ import { cn } from '@/lib/utils'
  *
  *   · `CAMPO_IA_CLS`      clases para el control (borde `info`);
  *   · `IaChip`            "Sugerido por IA" al lado del label;
- *   · `IaSugerenciasBar`  arriba del form: cuántos campos y "Limpiar".
+ *   · `IaSugerenciasBar`  arriba del form: cuántos campos y "Limpiar";
+ *   · `IaAdvertencias`    lo que la IA no pudo resolver ("no encontré a Juan"),
+ *                         en `warning` (ámbar = esperando a alguien).
  */
 
 /** Para el `className` del Input/select mientras el campo está en `camposIa`. */
@@ -59,5 +61,25 @@ export function IaSugerenciasBar({
         Limpiar sugerencias
       </Button>
     </div>
+  )
+}
+
+export function IaAdvertencias({ items, className }: { items: string[]; className?: string }) {
+  if (!items || items.length === 0) return null
+  return (
+    <ul
+      role="alert"
+      className={cn(
+        'space-y-1 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs',
+        className,
+      )}
+    >
+      {items.map((a, i) => (
+        <li key={`${i}-${a}`} className="flex items-start gap-2">
+          <TriangleAlertIcon aria-hidden className="mt-0.5 size-3.5 shrink-0 text-warning" />
+          <span>{a}</span>
+        </li>
+      ))}
+    </ul>
   )
 }

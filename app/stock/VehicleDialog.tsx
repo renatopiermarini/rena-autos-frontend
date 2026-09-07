@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { computeVehicleFinancials, computeLoanPosition, round2 } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
@@ -9,6 +9,11 @@ import { verificacionPaga } from '@/lib/verificaciones'
 import { money, fmtN } from '@/lib/money'
 import { COMISION_PCT_DEFAULT, comisionVenta } from '@/lib/venta'
 import { formSucio, MENSAJE_DESCARTAR } from '@/lib/dirty'
+import { aplicarSugerencia, limpiarSugerencias, marcarTocado, type CamposIa } from '@/lib/ia'
+import { sugerenciaVehiculo, type VehiculoExtraido } from '@/lib/ia-formularios'
+import { IaDropzone } from '@/components/ia-dropzone'
+import { CAMPO_IA_CLS, IaChip, IaSugerenciasBar } from '@/components/ia-hint'
+import { cn } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogClose, DialogTitle, useDirtyClose,
 } from '@/components/ui/dialog'
@@ -95,13 +100,18 @@ function Dato({ label, value }: { label: string; value: any }) {
   )
 }
 
-function FInput({ label, value, onChange, type = 'text' }: {
+function FInput({ label, value, onChange, type = 'text', ia = false }: {
   label: string; value: string; onChange: (v: string) => void; type?: string
+  /** Lo puso la IA y nadie lo tocó: chip + borde `info` (components/ia-hint). */
+  ia?: boolean
 }) {
   return (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <Input type={type} value={value} onChange={e => onChange(e.target.value)} />
+      <span className="flex items-center gap-2">
+        <Label>{label}</Label>
+        {ia && <IaChip />}
+      </span>
+      <Input type={type} value={value} onChange={e => onChange(e.target.value)} className={cn(ia && CAMPO_IA_CLS)} />
     </div>
   )
 }
@@ -129,6 +139,8 @@ export type VehicleDialogProps = {
   comisionPct?: number
   /** ¿La instancia tiene backend de contratos? Sin él, no hay botón. */
   documentosHabilitado?: boolean
+  /** ¿Hay backend de IA? Sin él, el dropzone de "Completar desde la tarjeta" no existe. */
+  ia?: boolean
 }
 
 export default function VehicleDialog(props: VehicleDialogProps) {
@@ -143,7 +155,7 @@ export default function VehicleDialog(props: VehicleDialogProps) {
 function VehicleDialogBody({
   v, onOpenChange, clientes, vehicles, movimientos, prestamos, tareas = [],
   verificaciones = [], comisionPct = COMISION_PCT_DEFAULT,
-  documentosHabilitado = false,
+  documentosHabilitado = false, ia = false,
 }: VehicleDialogProps) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
@@ -168,6 +180,11 @@ function VehicleDialogBody({
     drive_url: v.drive_url ?? '',
   }
   const [form, setForm] = useState(inicial)
+  type FormEdicion = typeof inicial
+  const [camposIa, setCamposIa] = useState<CamposIa<FormEdicion>>(new Set())
+  // La IA contesta segundos después: se aplica sobre el form de ese momento.
+  const formRef = useRef(form)
+  formRef.current = form
 
   // Papeles: estado optimista por ítem (se tildan directo, sin pasar por Editar).
   const [docs, setDocs] = useState<Record<string, boolean>>(
@@ -181,7 +198,26 @@ function VehicleDialogBody({
   })
 
   function set(field: string) {
-    return (val: string) => setForm(f => ({ ...f, [field]: val }))
+    return (val: string) => {
+      setForm(f => ({ ...f, [field]: val }))
+      setCamposIa(c => marcarTocado(c, field as keyof FormEdicion))
+    }
+  }
+  const esIa = (field: keyof FormEdicion) => camposIa.has(field)
+
+  // "Completar desde la tarjeta": sólo llena lo que está VACÍO en la ficha
+  // (lib/ia.aplicarSugerencia sin `pisar`). Lo cargado no se toca.
+  const onTarjeta = useCallback((data: VehiculoExtraido) => {
+    const r = aplicarSugerencia(formRef.current, sugerenciaVehiculo(data))
+    setForm(r.form)
+    setCamposIa(c => new Set([...Array.from(c), ...Array.from(r.camposIa)]))
+    if (r.camposIa.size === 0) toast.info('La cédula no trajo nada que faltara en la ficha.')
+  }, [])
+
+  function limpiarIa() {
+    const r = limpiarSugerencias(form, camposIa, inicial)
+    setForm(r.form)
+    setCamposIa(r.camposIa)
   }
 
   // "Cancelar" con cambios: misma pregunta que las puertas del diálogo, pero
@@ -189,6 +225,7 @@ function VehicleDialogBody({
   function cancelarEdicion() {
     if (formSucio(form, inicial) && !window.confirm(MENSAJE_DESCARTAR)) return
     setForm(inicial)
+    setCamposIa(new Set())
     setEditing(false)
   }
 
@@ -330,15 +367,26 @@ function VehicleDialogBody({
       {editing ? (
         <div className="min-h-0 overflow-y-auto">
           <div className="mx-auto w-full max-w-4xl px-4 py-5 md:px-8">
+            {ia && (
+              <IaDropzone<VehiculoExtraido>
+                accion="vehiculo-desde-documento"
+                label="Completar desde la tarjeta"
+                hint="Soltá la cédula: se llenan sólo los datos que faltan (dominio, color, motor, chasis) · hasta 10 MB · también Ctrl+V"
+                onResultado={onTarjeta}
+                disabled={saving}
+                className="mb-4"
+              />
+            )}
+            <IaSugerenciasBar cantidad={camposIa.size} onLimpiar={limpiarIa} className="mb-4" />
             <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
               <div className="col-span-2 sm:col-span-3 lg:col-span-4">
                 <FSelect label="Estado" value={form.estado} onChange={set('estado')} options={ESTADOS} />
               </div>
               <FInput label="KM" value={form.km} onChange={set('km')} type="number" />
-              <FInput label="Color" value={form.color} onChange={set('color')} />
-              <FInput label="Dominio" value={form.dominio} onChange={set('dominio')} />
-              <FInput label="N° motor" value={form.numero_motor} onChange={set('numero_motor')} />
-              <FInput label="N° chasis" value={form.numero_chasis} onChange={set('numero_chasis')} />
+              <FInput label="Color" value={form.color} onChange={set('color')} ia={esIa('color')} />
+              <FInput label="Dominio" value={form.dominio} onChange={set('dominio')} ia={esIa('dominio')} />
+              <FInput label="N° motor" value={form.numero_motor} onChange={set('numero_motor')} ia={esIa('numero_motor')} />
+              <FInput label="N° chasis" value={form.numero_chasis} onChange={set('numero_chasis')} ia={esIa('numero_chasis')} />
               <FInput label="Precio compra" value={form.precio_compra} onChange={set('precio_compra')} type="number" />
               <FInput label="Precio objetivo" value={form.precio_venta_objetivo} onChange={set('precio_venta_objetivo')} type="number" />
               <FInput label="Precio publicado" value={form.precio_publicado} onChange={set('precio_publicado')} type="number" />

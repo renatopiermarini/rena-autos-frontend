@@ -3,6 +3,7 @@ import { cloneElement, isValidElement, useId } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { CAMPO_IA_CLS, IaChip } from '@/components/ia-hint'
 import { cn } from '@/lib/utils'
 
 /**
@@ -19,7 +20,7 @@ export const nativeSelectCls =
   'h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-base md:text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20'
 
 export function FField({
-  label, children, hint, error, className = '', controlId,
+  label, children, hint, error, className = '', controlId, ia = false,
 }: {
   label: string
   children: React.ReactNode
@@ -29,24 +30,30 @@ export function FField({
   className?: string
   /** id del control al que apunta el label; sin él, un hijo único sin id recibe uno generado */
   controlId?: string
+  /** El valor lo puso la IA y nadie lo tocó todavía: chip al lado del label + borde `info` (components/ia-hint). */
+  ia?: boolean
 }) {
   const autoId = useId()
   const descId = useId()
   const describe = error || hint ? descId : undefined
   let id = controlId
   let content = children
-  if (!id && isValidElement(children)) {
-    const childProps = children.props as { id?: string; 'aria-describedby'?: string }
-    id = childProps.id ?? autoId
-    content = cloneElement(children as React.ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>, {
+  if (isValidElement(children) && (!id || ia)) {
+    const childProps = children.props as { id?: string; 'aria-describedby'?: string; className?: string }
+    id = id ?? childProps.id ?? autoId
+    content = cloneElement(children as React.ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean; className?: string }>, {
       id,
       'aria-describedby': childProps['aria-describedby'] ?? describe,
       ...(error ? { 'aria-invalid': true } : {}),
+      ...(ia ? { className: cn(childProps.className, CAMPO_IA_CLS) } : {}),
     })
   }
   return (
     <div className={cn('space-y-1.5', className)}>
-      <Label htmlFor={id} className="text-xs text-muted-foreground uppercase tracking-wide">{label}</Label>
+      <span className="flex items-center gap-2">
+        <Label htmlFor={id} className="text-xs text-muted-foreground uppercase tracking-wide">{label}</Label>
+        {ia && <IaChip />}
+      </span>
       {content}
       {error
         ? <p id={descId} className="text-xs text-destructive">{error}</p>
@@ -56,7 +63,7 @@ export function FField({
 }
 
 export function FInput({
-  label, value, onChange, hint, error, className, ...props
+  label, value, onChange, hint, error, className, ia, ...props
 }: {
   label: string
   value: string
@@ -64,16 +71,17 @@ export function FInput({
   hint?: string
   error?: string
   className?: string
+  ia?: boolean
 } & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange' | 'className'>) {
   return (
-    <FField label={label} hint={hint} error={error} className={className}>
+    <FField label={label} hint={hint} error={error} className={className} ia={ia}>
       <Input value={value} onChange={e => onChange(e.target.value)} {...props} />
     </FField>
   )
 }
 
 export function FTextarea({
-  label, value, onChange, hint, error, className, rows = 3, ...props
+  label, value, onChange, hint, error, className, rows = 3, ia, ...props
 }: {
   label: string
   value: string
@@ -82,16 +90,17 @@ export function FTextarea({
   error?: string
   className?: string
   rows?: number
+  ia?: boolean
 } & Omit<React.ComponentProps<typeof Textarea>, 'value' | 'onChange' | 'className' | 'rows'>) {
   return (
-    <FField label={label} hint={hint} error={error} className={className}>
+    <FField label={label} hint={hint} error={error} className={className} ia={ia}>
       <Textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} {...props} />
     </FField>
   )
 }
 
 export function FSelect({
-  label, value, onChange, options, hint, error, className,
+  label, value, onChange, options, hint, error, className, ia,
 }: {
   label: string
   value: string
@@ -100,9 +109,10 @@ export function FSelect({
   hint?: string
   error?: string
   className?: string
+  ia?: boolean
 }) {
   return (
-    <FField label={label} hint={hint} error={error} className={className}>
+    <FField label={label} hint={hint} error={error} className={className} ia={ia}>
       <select value={value} onChange={e => onChange(e.target.value)} className={nativeSelectCls}>
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>

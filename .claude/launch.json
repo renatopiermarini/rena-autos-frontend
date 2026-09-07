@@ -4,7 +4,23 @@
     {
       "name": "rena-autos",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "rena-autos-ia-sin-backend",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "BACKEND_URL=http://127.0.0.1:1",
+        "BACKEND_API_KEY=x",
+        "npm",
+        "run",
+        "dev"
+      ],
       "port": 3000,
       "autoPort": true
     }

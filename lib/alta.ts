@@ -41,6 +41,9 @@ export type AltaVehiculoForm = {
   km: string
   dominio: string
   color: string
+  /** Los dos números de la cédula: columnas reales de `vehicles`, los pide el contrato. */
+  numero_motor: string
+  numero_chasis: string
   tipo_operacion: string
   cliente_id: string
   estado: string
@@ -59,11 +62,14 @@ export type AltaClienteForm = {
   dni: string
   cuil: string
   direccion: string
+  /** Texto libre ("DD/MM/AAAA" como lo trae el DNI): así lo guarda `clientes.fecha_nacimiento`. */
+  fecha_nacimiento: string
   notas: string
 }
 
 export const VEHICULO_FORM_VACIO: AltaVehiculoForm = {
   marca: '', modelo: '', version: '', año: '', km: '', dominio: '', color: '',
+  numero_motor: '', numero_chasis: '',
   tipo_operacion: 'propio', cliente_id: '', estado: ESTADO_VEHICULO_DEFAULT,
   precio_compra: '', precio_publicado: '', precio_venta_objetivo: '',
   fecha_ingreso: '',
@@ -92,7 +98,7 @@ export const OFERTA_FORM_VACIO: AltaOfertaForm = {
 
 export const CLIENTE_FORM_VACIO: AltaClienteForm = {
   nombre: '', tipo: 'comprador', telefono: '', whatsapp: '', email: '',
-  dni: '', cuil: '', direccion: '', notas: '',
+  dni: '', cuil: '', direccion: '', fecha_nacimiento: '', notas: '',
 }
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/
@@ -184,6 +190,10 @@ export function validarAltaVehiculo(form: AltaVehiculoForm, nowIso: string): Alt
   if (dominio) row.dominio = dominio
   const color = (form.color ?? '').trim()
   if (color) row.color = color
+  const numero_motor = (form.numero_motor ?? '').trim()
+  if (numero_motor) row.numero_motor = numero_motor
+  const numero_chasis = (form.numero_chasis ?? '').trim()
+  if (numero_chasis) row.numero_chasis = numero_chasis
   // Sólo la consignación tiene dueño: el select ni se muestra para un propio, y
   // un cliente_id que quedó de haber tocado el tipo y vuelto atrás no puede
   // colarse en la fila.
@@ -236,7 +246,7 @@ export function validarAltaCliente(form: AltaClienteForm, nowIso: string): AltaR
     updated_at: nowIso,
   }
   const opcionales: (keyof AltaClienteForm)[] = [
-    'telefono', 'whatsapp', 'email', 'dni', 'cuil', 'direccion', 'notas',
+    'telefono', 'whatsapp', 'email', 'dni', 'cuil', 'direccion', 'fecha_nacimiento', 'notas',
   ]
   for (const campo of opcionales) {
     const v = (form[campo] ?? '').trim()

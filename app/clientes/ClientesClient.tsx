@@ -1,6 +1,12 @@
 'use client'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDeepLinkFlag, useDeepLinkId, useScrollToDeepLink } from '@/lib/deep-link'
+import { aplicarSugerencia, limpiarSugerencias, marcarTocado, type CamposIa } from '@/lib/ia'
+import { sugerenciaCliente, type ClienteExtraido } from '@/lib/ia-formularios'
+import { IaDropzone } from '@/components/ia-dropzone'
+import { CAMPO_IA_CLS, IaChip, IaSugerenciasBar } from '@/components/ia-hint'
+import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,13 +38,35 @@ function Field({ label, value }: { label: string; value: any }) {
   )
 }
 
-function ClienteRow({ c }: { c: any }) {
+/** Un campo de la edición inline; `ia` = lo puso la IA y nadie lo tocó (chip + borde info). */
+function Campo({ label, ia, children, className }: {
+  label: string; ia?: boolean; children: React.ReactNode; className?: string
+}) {
+  return (
+    <div className={cn('space-y-1.5', className)}>
+      <span className="flex items-center gap-2">
+        <Label>{label}</Label>
+        {ia && <IaChip />}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+function ClienteRow({ c, ia = false, deepLink = false, abrirDni = false }: {
+  c: any
+  ia?: boolean
+  /** Llegó por `?id=`: abre la ficha y la resalta. */
+  deepLink?: boolean
+  /** `?id=&dni=1` (desde el error de un contrato): abre directo en edición, con el dropzone del DNI a la vista. */
+  abrirDni?: boolean
+}) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState(false)
+  const [open, setOpen] = useState(deepLink)
+  const [editing, setEditing] = useState(deepLink && abrirDni && ia)
   const [saving, setSaving] = useState(false)
 
-  const [form, setForm] = useState({
+  const inicial = {
     nombre: c.nombre ?? '',
     telefono: c.telefono ?? '',
     whatsapp: c.whatsapp ?? '',
@@ -47,13 +75,51 @@ function ClienteRow({ c }: { c: any }) {
     dni: c.dni ?? '',
     cuil: c.cuil ?? '',
     direccion: c.direccion ?? '',
+    fecha_nacimiento: c.fecha_nacimiento ?? '',
     tipo: c.tipo ?? 'comprador',
     notas: c.notas ?? '',
     es_acreedor: c.es_acreedor ? '1' : '0',
-  })
+  }
+  type FormEdicion = typeof inicial
+  const [form, setForm] = useState<FormEdicion>(inicial)
+  const [camposIa, setCamposIa] = useState<CamposIa<FormEdicion>>(new Set())
+  // La IA contesta segundos después: se aplica sobre el form de ese momento.
+  const formRef = useRef(form)
+  formRef.current = form
 
-  function set(field: string) {
-    return (val: string) => setForm(f => ({ ...f, [field]: val }))
+  // Los deep links se leen después de montar (lib/deep-link): abrir cuando llegan.
+  useEffect(() => {
+    if (!deepLink) return
+    setOpen(true)
+    if (abrirDni && ia) setEditing(true)
+  }, [deepLink, abrirDni, ia])
+
+  function set(field: keyof FormEdicion) {
+    return (val: string) => {
+      setForm(f => ({ ...f, [field]: val }))
+      setCamposIa(x => marcarTocado(x, field))
+    }
+  }
+  const esIa = (field: keyof FormEdicion) => camposIa.has(field)
+
+  // El DNI llena SÓLO lo que está vacío en la ficha (aplicarSugerencia sin pisar).
+  const onDni = useCallback((data: ClienteExtraido) => {
+    const r = aplicarSugerencia(formRef.current, sugerenciaCliente(data))
+    setForm(r.form)
+    setCamposIa(x => new Set([...Array.from(x), ...Array.from(r.camposIa)]))
+    if (r.camposIa.size === 0) toast.info('El DNI no trajo nada que faltara en la ficha.')
+  }, [])
+
+  function limpiarIa() {
+    const r = limpiarSugerencias(form, camposIa, inicial)
+    setForm(r.form)
+    setCamposIa(r.camposIa)
+  }
+
+  function cancelarEdicion() {
+    setForm(inicial)
+    setCamposIa(new Set())
+    setEditing(false)
   }
 
   async function save() {
@@ -74,6 +140,7 @@ function ClienteRow({ c }: { c: any }) {
     setSaving(false)
     if (res.ok) {
       setEditing(false)
+      setCamposIa(new Set())
       toast.success('Cliente actualizado')
       router.refresh()
     } else {
@@ -83,7 +150,10 @@ function ClienteRow({ c }: { c: any }) {
   }
 
   return (
-    <div className="border-b border-border last:border-0">
+    <div
+      id={`cliente-${c.id}`}
+      className={cn('border-b border-border last:border-0', deepLink && 'bg-primary/5 ring-1 ring-inset ring-primary/30')}
+    >
       <div
         onClick={() => !editing && setOpen(o => !o)}
         className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/50 transition-colors"
@@ -117,6 +187,7 @@ function ClienteRow({ c }: { c: any }) {
             <Field label="Instagram" value={c.instagram} />
             <Field label="DNI" value={c.dni} />
             <Field label="CUIL" value={c.cuil} />
+            <Field label="Fecha de nacimiento" value={c.fecha_nacimiento} />
             <Field label="Dirección" value={c.direccion} />
             {c.notas && (
               <div className="col-span-2 lg:col-span-4">
@@ -138,47 +209,58 @@ function ClienteRow({ c }: { c: any }) {
 
       {open && editing && (
         <div className="px-10 pb-5 pt-3 bg-muted/30">
+          {ia && (
+            <IaDropzone<ClienteExtraido>
+              accion="cliente-desde-dni"
+              campos={['frente', 'dorso']}
+              label="Completar desde el DNI"
+              hint="Soltá una o dos fotos (primero el frente): se llenan sólo los datos que faltan · hasta 10 MB · también Ctrl+V"
+              onResultado={onDni}
+              disabled={saving}
+              className="mb-4"
+            />
+          )}
+          <IaSugerenciasBar cantidad={camposIa.size} onLimpiar={limpiarIa} className="mb-4" />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
-            <div className="space-y-1.5">
-              <Label>Nombre</Label>
-              <Input value={form.nombre} onChange={e => set('nombre')(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Tipo</Label>
+            <Campo label="Nombre" ia={esIa('nombre')}>
+              <Input value={form.nombre} onChange={e => set('nombre')(e.target.value)} className={cn(esIa('nombre') && CAMPO_IA_CLS)} />
+            </Campo>
+            <Campo label="Tipo">
               <select value={form.tipo} onChange={e => set('tipo')(e.target.value)} className={nativeSelectCls}>
                 <option value="comprador">comprador</option>
                 <option value="vendedor">vendedor</option>
                 <option value="acreedor">acreedor</option>
               </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Teléfono</Label>
+            </Campo>
+            <Campo label="Teléfono">
               <Input value={form.telefono} onChange={e => set('telefono')(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>WhatsApp</Label>
+            </Campo>
+            <Campo label="WhatsApp">
               <Input value={form.whatsapp} onChange={e => set('whatsapp')(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
+            </Campo>
+            <Campo label="Email">
               <Input type="email" value={form.email} onChange={e => set('email')(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Instagram</Label>
+            </Campo>
+            <Campo label="Instagram">
               <Input value={form.instagram} onChange={e => set('instagram')(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>DNI</Label>
-              <Input value={form.dni} onChange={e => set('dni')(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>CUIL</Label>
-              <Input value={form.cuil} onChange={e => set('cuil')(e.target.value)} />
-            </div>
-            <div className="col-span-2 space-y-1.5">
-              <Label>Dirección</Label>
-              <Input value={form.direccion} onChange={e => set('direccion')(e.target.value)} />
-            </div>
+            </Campo>
+            <Campo label="DNI" ia={esIa('dni')}>
+              <Input value={form.dni} onChange={e => set('dni')(e.target.value)} className={cn(esIa('dni') && CAMPO_IA_CLS)} />
+            </Campo>
+            <Campo label="CUIL" ia={esIa('cuil')}>
+              <Input value={form.cuil} onChange={e => set('cuil')(e.target.value)} className={cn(esIa('cuil') && CAMPO_IA_CLS)} />
+            </Campo>
+            <Campo label="Fecha de nacimiento" ia={esIa('fecha_nacimiento')}>
+              <Input
+                value={form.fecha_nacimiento}
+                onChange={e => set('fecha_nacimiento')(e.target.value)}
+                placeholder="DD/MM/AAAA"
+                className={cn(esIa('fecha_nacimiento') && CAMPO_IA_CLS)}
+              />
+            </Campo>
+            <Campo label="Dirección" ia={esIa('direccion')} className="col-span-2">
+              <Input value={form.direccion} onChange={e => set('direccion')(e.target.value)} className={cn(esIa('direccion') && CAMPO_IA_CLS)} />
+            </Campo>
             <div className="flex items-center gap-2 pt-6">
               <input
                 type="checkbox"
@@ -198,7 +280,7 @@ function ClienteRow({ c }: { c: any }) {
             <Button onClick={save} disabled={saving}>
               {saving ? 'Guardando…' : 'Guardar'}
             </Button>
-            <Button variant="outline" onClick={() => setEditing(false)}>Cancelar</Button>
+            <Button variant="outline" onClick={cancelarEdicion}>Cancelar</Button>
           </div>
         </div>
       )}
@@ -268,9 +350,20 @@ function InteresadoRow({ i }: { i: any }) {
   )
 }
 
-export default function ClientesClient({ clientes, interesados }: { clientes: any[]; interesados: any[] }) {
+export default function ClientesClient({
+  clientes, interesados, ia = false,
+}: {
+  clientes: any[]; interesados: any[]
+  /** ¿Hay backend de IA? Enciende el dropzone del DNI (alta y edición). */
+  ia?: boolean
+}) {
   const interesadosActivos = interesados.filter(i => i.estado !== 'compro' && i.estado !== 'perdido')
   const [showNew, setShowNew] = useState(false)
+  // `?id=<cliente>` abre la ficha; `&dni=1` (desde el error de un contrato que
+  // pide DNI/CUIL/domicilio) la abre directo en edición con el dropzone del DNI.
+  const deepId = useDeepLinkId()
+  const abrirDni = useDeepLinkFlag('dni')
+  useScrollToDeepLink(deepId, 'cliente')
 
   return (
     <div className="space-y-8">
@@ -279,7 +372,7 @@ export default function ClientesClient({ clientes, interesados }: { clientes: an
         <Button onClick={() => setShowNew(true)}><PlusIcon /> Nuevo cliente</Button>
       </div>
 
-      <NuevoClienteDialog open={showNew} onOpenChange={setShowNew} />
+      <NuevoClienteDialog open={showNew} onOpenChange={setShowNew} ia={ia} />
 
       <section>
         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
@@ -287,7 +380,9 @@ export default function ClientesClient({ clientes, interesados }: { clientes: an
         </p>
         <Card size="sm">
           <CardContent className="p-0">
-            {clientes.map(c => <ClienteRow key={c.id} c={c} />)}
+            {clientes.map(c => (
+              <ClienteRow key={c.id} c={c} ia={ia} deepLink={c.id === deepId} abrirDni={abrirDni} />
+            ))}
             {clientes.length === 0 && (
               <EmptyState icon={ContactIcon} title="Sin clientes registrados" className="py-6" />
             )}

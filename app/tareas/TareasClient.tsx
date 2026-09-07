@@ -1,5 +1,5 @@
 'use client'
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { patchRecordDetailed, postRecord } from '@/lib/kapso'
 import {
@@ -7,7 +7,12 @@ import {
   type MiembroEquipo,
 } from '@/lib/equipo'
 import { fmtDM as fmtFecha, fmtHora, localDayKey, parseAny } from '@/lib/date'
-import { useDeepLinkId, useScrollToDeepLink } from '@/lib/deep-link'
+import { useDeepLinkId, useDeepLinkParam, useScrollToDeepLink } from '@/lib/deep-link'
+import { limpiarSugerencias, marcarTocado, type CamposIa } from '@/lib/ia'
+import { aplicarSugerenciaConDefaults, sugerenciaTarea, type AgendaParseada, type TareaForm } from '@/lib/ia-formularios'
+import { catalogoVehiculos } from '@/lib/ia-match'
+import { AgregarRapido } from '@/components/agregar-rapido'
+import { IaAdvertencias, IaSugerenciasBar } from '@/components/ia-hint'
 import { MonthGrid } from '@/components/calendar/MonthGrid'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -429,12 +434,18 @@ export function CalendarView({ tareas, vehicles }: { tareas: any[]; vehicles: an
 // ── Nueva Tarea dialog ────────────────────────────────────────────────────────
 
 function NuevaTareaDialog({
-  open, onOpenChange, vehicles,
-}: { open: boolean; onOpenChange: (o: boolean) => void; vehicles: any[] }) {
+  open, onOpenChange, vehicles, inicial, advertencias = [],
+}: {
+  open: boolean; onOpenChange: (o: boolean) => void; vehicles: any[]
+  /** Lo que "Agregar rápido" entendió: se siembra como sugerido (borde info + chip). */
+  inicial?: Partial<TareaForm>
+  /** Lo que la IA no pudo resolver ("juan no es del equipo"). */
+  advertencias?: string[]
+}) {
   const router = useRouter()
   const { equipo, defAssignee } = useEquipo()
   const [saving, setSaving] = useState(false)
-  const vacio = {
+  const vacio: TareaForm = {
     titulo: '',
     descripcion: '',
     tipo: 'otro',
@@ -443,13 +454,39 @@ function NuevaTareaDialog({
     vehicle_id: '',
     fecha_vencimiento: '',
   }
-  const [form, setForm] = useState(vacio)
+  const [form, setForm] = useState<TareaForm>(vacio)
+  const [camposIa, setCamposIa] = useState<CamposIa<TareaForm>>(new Set())
   const [errTitulo, setErrTitulo] = useState('')
   // Escape / click afuera / X / Cancelar preguntan antes de tirar lo cargado.
-  const { dialogProps, cerrar } = useDirtyClose({ sucio: formSucio(form, vacio), onOpenChange })
+  // El inicial del guard es el form VACÍO: lo que sembró la IA también se perdería.
+  const { dialogProps, cerrar } = useDirtyClose({
+    sucio: formSucio(form, vacio),
+    onOpenChange: o => { onOpenChange(o); if (!o) { setForm(vacio); setCamposIa(new Set()) } },
+  })
 
-  function set(field: string, value: string) {
+  // Al abrir con semilla: los selects en su default cuentan como vacíos.
+  useEffect(() => {
+    if (!open || !inicial) return
+    const r = aplicarSugerenciaConDefaults(
+      { ...vacio },
+      inicial,
+      { tipo: 'otro', prioridad: 'media', asignado: defAssignee },
+    )
+    setForm(r.form)
+    setCamposIa(r.camposIa)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, inicial])
+
+  function set(field: keyof TareaForm, value: string) {
     setForm(f => ({ ...f, [field]: value }))
+    setCamposIa(c => marcarTocado(c, field))
+  }
+  const esIa = (field: keyof TareaForm) => camposIa.has(field)
+
+  function limpiarIa() {
+    const r = limpiarSugerencias(form, camposIa, vacio)
+    setForm(r.form)
+    setCamposIa(r.camposIa)
   }
 
   async function save() {
@@ -472,9 +509,10 @@ function NuevaTareaDialog({
       toast.success('Tarea creada')
       onOpenChange(false)
       setForm(vacio)
+      setCamposIa(new Set())
       router.refresh()
     } else {
-      toast.error('Error al guardar.')
+      toast.error(res.error || 'Error al guardar.')
     }
   }
 
@@ -484,8 +522,10 @@ function NuevaTareaDialog({
         <DialogHeader>
           <DialogTitle>Nueva tarea</DialogTitle>
         </DialogHeader>
+        <IaSugerenciasBar cantidad={camposIa.size} onLimpiar={limpiarIa} />
+        <IaAdvertencias items={advertencias} />
         <div className="grid grid-cols-2 gap-3">
-          <FField label="Título *" error={errTitulo} className="col-span-2">
+          <FField label="Título *" error={errTitulo} className="col-span-2" ia={esIa('titulo')}>
             <Input
               required
               value={form.titulo}
@@ -493,7 +533,7 @@ function NuevaTareaDialog({
               placeholder="Ej: Lavar el Audi A3"
             />
           </FField>
-          <FField label="Tipo">
+          <FField label="Tipo" ia={esIa('tipo')}>
             <select className={nativeSelectCls} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
               <option value="lavado">Lavado</option>
               <option value="fotos">Fotos</option>
@@ -503,7 +543,7 @@ function NuevaTareaDialog({
               <option value="otro">Otro</option>
             </select>
           </FField>
-          <FField label="Prioridad">
+          <FField label="Prioridad" ia={esIa('prioridad')}>
             <select className={nativeSelectCls} value={form.prioridad} onChange={e => set('prioridad', e.target.value)}>
               <option value="urgente">Urgente</option>
               <option value="alta">Alta</option>
@@ -511,7 +551,7 @@ function NuevaTareaDialog({
               <option value="baja">Baja</option>
             </select>
           </FField>
-          <FField label="Asignado">
+          <FField label="Asignado" ia={esIa('asignado')}>
             <select className={nativeSelectCls} value={form.asignado} onChange={e => set('asignado', e.target.value)}>
               {equipo.map(m => (
                 <option key={m.clave} value={m.clave}>{m.label}</option>
@@ -519,7 +559,7 @@ function NuevaTareaDialog({
               <option value="">Sin asignar</option>
             </select>
           </FField>
-          <FField label="Auto (opcional)">
+          <FField label="Auto (opcional)" ia={esIa('vehicle_id')}>
             <select className={nativeSelectCls} value={form.vehicle_id} onChange={e => set('vehicle_id', e.target.value)}>
               <option value="">—</option>
               {vehicles
@@ -531,10 +571,10 @@ function NuevaTareaDialog({
                 ))}
             </select>
           </FField>
-          <FField label="Fecha límite (opcional)" className="col-span-2">
+          <FField label="Fecha límite (opcional)" className="col-span-2" ia={esIa('fecha_vencimiento')}>
             <Input type="date" value={form.fecha_vencimiento} onChange={e => set('fecha_vencimiento', e.target.value)} />
           </FField>
-          <FField label="Descripción (opcional)" className="col-span-2">
+          <FField label="Descripción (opcional)" className="col-span-2" ia={esIa('descripcion')}>
             <Textarea rows={3} value={form.descripcion} onChange={e => set('descripcion', e.target.value)} />
           </FField>
         </div>
@@ -551,15 +591,39 @@ function NuevaTareaDialog({
 
 export default function TareasClient({
   tareas, vehicles, equipo = DEFAULT_EQUIPO, defAssignee = DEFAULT_ASSIGNEE,
-  destacados = DEFAULT_DESTACADOS,
+  destacados = DEFAULT_DESTACADOS, ia = false,
 }: {
   tareas: any[]; vehicles: any[]
   // Vienen del server (tabla `equipo` + config_negocio). Los defaults son la red
   // de seguridad: si la page no los pasa, se ve lo de siempre.
   equipo?: MiembroEquipo[]; defAssignee?: string; destacados?: string[]
+  /** ¿Hay backend de IA? Enciende "Agregar rápido" arriba de la lista. */
+  ia?: boolean
 }) {
   const [view, setView] = useState<'lista' | 'calendario'>('lista')
   const [showNueva, setShowNueva] = useState(false)
+  // La semilla de "Agregar rápido" para NuevaTareaDialog. Se limpia al cerrar
+  // para que "Nueva tarea" a mano abra vacío.
+  const [semilla, setSemilla] = useState<{ campos: Partial<TareaForm>; advertencias: string[] } | null>(null)
+  const catalogos = useMemo(() => ({
+    vehicles: catalogoVehiculos(vehicles),
+    // Esta pantalla no carga interesados; una tarea no los necesita.
+    interesados: [] as { id: number; label: string }[],
+    equipo: equipo.map(m => m.clave),
+  }), [vehicles, equipo])
+  // `?rapido=<texto>` desde Visitas ("eso parece una tarea"): se ejecuta al montar.
+  const rapidoInicial = useDeepLinkParam('rapido')
+
+  function onRapido(data: AgendaParseada) {
+    const { campos, advertencias } = sugerenciaTarea(data, equipo.map(m => m.clave))
+    setSemilla({ campos, advertencias })
+    setShowNueva(true)
+  }
+
+  function onOpenChangeNueva(o: boolean) {
+    setShowNueva(o)
+    if (!o) setSemilla(null)
+  }
   // ?id= desde el Tablero: la fila se resalta y se scrollea hasta ella.
   const deepId = useDeepLinkId()
   useScrollToDeepLink(deepId, 'tarea')
@@ -592,7 +656,23 @@ export default function TareasClient({
         </div>
       </div>
 
-      <NuevaTareaDialog open={showNueva} onOpenChange={setShowNueva} vehicles={vehicles} />
+      {ia && (
+        <AgregarRapido
+          pantalla="tarea"
+          catalogos={catalogos}
+          onResultado={onRapido}
+          textoInicial={rapidoInicial}
+          placeholder="Agregar rápido: “lavar el Golf mañana a las 9, para Fran”"
+        />
+      )}
+
+      <NuevaTareaDialog
+        open={showNueva}
+        onOpenChange={onOpenChangeNueva}
+        vehicles={vehicles}
+        inicial={semilla?.campos}
+        advertencias={semilla?.advertencias}
+      />
 
       {view === 'lista'
         ? <ListView tareas={tareas} vehicles={vehicles} deepId={deepId} />
