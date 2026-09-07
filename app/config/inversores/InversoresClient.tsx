@@ -108,8 +108,8 @@ export default function InversoresClient({
         <Button onClick={() => setOpen(true)}><PlusIcon /> Nuevo inversor</Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        Los inversores son clientes marcados como acreedores: se editan también desde Clientes y
-        sus préstamos salen de Finanzas.
+        Los inversores son clientes marcados como acreedores: se editan también desde Clientes.
+        Sus préstamos se cargan con Claude sobre la base y se consultan en Finanzas.
       </p>
 
       <Card size="sm">
@@ -155,7 +155,7 @@ export default function InversoresClient({
             <EmptyState
               icon={HandCoinsIcon}
               title="Sin inversores cargados"
-              hint="Un inversor es un cliente marcado como acreedor; sus préstamos se registran en Finanzas."
+              hint="Un inversor es un cliente marcado como acreedor; sus préstamos los carga Claude y se consultan en Finanzas."
               className="py-8"
             />
           )}
@@ -168,7 +168,7 @@ export default function InversoresClient({
             <DialogTitle>Nuevo inversor</DialogTitle>
             <DialogDescription>
               Se crea como cliente con tipo &quot;acreedor&quot;. Los préstamos se cargan después
-              desde Finanzas.
+              con Claude sobre la base.
             </DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">

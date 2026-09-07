@@ -8,7 +8,7 @@ import { computeLiquidacionConsignacion } from './kapso'
 const NOW = '2026-08-27T15:00:00.000Z'
 
 function form(over: Partial<VentaForm> = {}): VentaForm {
-  return { ...VENTA_FORM_VACIO, precio_venta_final: '10000', cuenta: 'cash', ...over }
+  return { ...VENTA_FORM_VACIO, precio_venta_final: '10000', ...over }
 }
 
 const PROPIO = { id: 7, marca: 'Chevrolet', modelo: 'Cruze', dominio: 'AB123CD', tipo_operacion: 'propio' }
@@ -50,7 +50,7 @@ describe('comisionVenta', () => {
 })
 
 describe('planVenta — auto propio', () => {
-  it('marca vendido y mete el PRECIO ENTERO como ingreso de venta', () => {
+  it('marca vendido y desglosa el PRECIO ENTERO como ingreso de venta', () => {
     const r = plan(planVenta(form({ fecha_venta: '2026-08-27', comprador_id: '3' }), PROPIO, OPTS))
     expect(r.patch).toEqual({
       estado: 'vendido',
@@ -59,15 +59,11 @@ describe('planVenta — auto propio', () => {
       fecha_venta: '2026-08-27',
       comprador_id: 3,
     })
-    expect(r.movimientos).toEqual([{
-      tipo: 'ingreso',
-      categoria: 'venta',
-      monto: 10000,
-      vehicle_id: 7,
-      cuenta: 'cash',
-      descripcion: 'Venta Chevrolet Cruze (AB123CD)',
-      fecha: '2026-08-27',
-    }])
+    expect(r.asientos).toEqual([{ categoria: 'venta', monto: 10000 }])
+    expect(r.paraClaude).toBe(
+      'Venta Chevrolet Cruze (AB123CD) [vehicle_id 7] — 2026-08-27\n' +
+      '- ingreso USD 10.000 (venta)',
+    )
     expect(r.desglose.entra_a_caja).toBe(10000)
     expect(r.desglose.es_consignacion).toBe(false)
     expect(r.desglose.comision).toBe(0)
@@ -76,29 +72,27 @@ describe('planVenta — auto propio', () => {
   it('omite fecha_venta y comprador_id cuando el usuario no los cargó', () => {
     const r = plan(planVenta(form(), PROPIO, OPTS))
     expect(r.patch).toEqual({ estado: 'vendido', precio_venta_final: 10000, updated_at: NOW })
-    expect(r.movimientos[0].fecha).toBeUndefined()
+    // Sin fecha, la cabecera del texto tampoco la inventa.
+    expect(r.paraClaude.split('\n')[0]).toBe('Venta Chevrolet Cruze (AB123CD) [vehicle_id 7]')
   })
 
   it('ignora el check de gastos: un propio no tiene dueño a quien reintegrarle', () => {
     const r = plan(planVenta(
       form({ cobrar_gastos: true }), PROPIO, { ...OPTS, gastosAdelantados: 300 },
     ))
-    expect(r.movimientos).toHaveLength(1)
-    expect(r.movimientos[0].categoria).toBe('venta')
+    expect(r.asientos).toHaveLength(1)
+    expect(r.asientos[0].categoria).toBe('venta')
   })
 })
 
 describe('planVenta — consignación', () => {
   it('NO mete el precio entero: entra sólo la comisión', () => {
     const r = plan(planVenta(form({ precio_venta_final: '20000' }), CONSIG, OPTS))
-    expect(r.movimientos).toEqual([{
-      tipo: 'ingreso',
-      categoria: 'commission',
-      monto: 1000,
-      vehicle_id: 9,
-      cuenta: 'cash',
-      descripcion: 'Comisión 5% venta VW Amarok',
-    }])
+    expect(r.asientos).toEqual([{ categoria: 'commission', monto: 1000 }])
+    expect(r.paraClaude).toBe(
+      'Venta VW Amarok [vehicle_id 9] — consignación\n' +
+      '- ingreso USD 1.000 (commission, 5%)',
+    )
     expect(r.desglose.entra_a_caja).toBe(1000)
     expect(r.desglose.resto_dueno).toBe(19000)
     // El precio de venta sí queda en el auto: es el precio real de la operación.
@@ -107,9 +101,9 @@ describe('planVenta — consignación', () => {
 
   it('usa el pct de config, no el 5 hardcodeado', () => {
     const r = plan(planVenta(form({ precio_venta_final: '20000' }), CONSIG, { ...OPTS, comisionPct: 8 }))
-    expect(r.movimientos[0].monto).toBe(1600)
+    expect(r.asientos[0].monto).toBe(1600)
     expect(r.desglose.comision_pct).toBe(8)
-    expect(r.movimientos[0].descripcion).toBe('Comisión 8% venta VW Amarok')
+    expect(r.paraClaude).toContain('(commission, 8%)')
   })
 
   it('con el check tildado suma el reintegro de gastos a nombre del dueño', () => {
@@ -118,16 +112,10 @@ describe('planVenta — consignación', () => {
       CONSIG,
       { ...OPTS, gastosAdelantados: 350.5 },
     ))
-    expect(r.movimientos).toHaveLength(2)
-    expect(r.movimientos[1]).toEqual({
-      tipo: 'ingreso',
-      categoria: 'client_repayment',
-      monto: 350.5,
-      vehicle_id: 9,
-      cliente_id: 4,
-      cuenta: 'cash',
-      descripcion: 'Reintegro de gastos adelantados VW Amarok',
-    })
+    expect(r.asientos).toHaveLength(2)
+    expect(r.asientos[1]).toEqual({ categoria: 'client_repayment', monto: 350.5, cliente_id: 4 })
+    // Centavos con dos decimales, como money(): Claude carga 350.50, no 350.5.
+    expect(r.paraClaude.split('\n')[2]).toBe('- ingreso USD 350,50 (client_repayment, cliente_id 4)')
     expect(r.desglose.entra_a_caja).toBe(1350.5)
     expect(r.desglose.neto_al_dueno).toBe(18649.5)
   })
@@ -136,7 +124,7 @@ describe('planVenta — consignación', () => {
     const r = plan(planVenta(
       form({ precio_venta_final: '20000' }), CONSIG, { ...OPTS, gastosAdelantados: 350 },
     ))
-    expect(r.movimientos).toHaveLength(1)
+    expect(r.asientos).toHaveLength(1)
     expect(r.desglose.gastos_adelantados).toBe(350)
     expect(r.desglose.entra_a_caja).toBe(1000)
   })
@@ -150,9 +138,9 @@ describe('planVenta — consignación', () => {
     expect(r).toMatchObject({ ok: false })
   })
 
-  it('sin gastos, el check tildado no agrega un movimiento de $0', () => {
+  it('sin gastos, el check tildado no agrega un asiento de $0', () => {
     const r = plan(planVenta(form({ cobrar_gastos: true }), CONSIG, OPTS))
-    expect(r.movimientos).toHaveLength(1)
+    expect(r.asientos).toHaveLength(1)
   })
 })
 
@@ -162,10 +150,6 @@ describe('planVenta — validación', () => {
     expect(planVenta(form({ precio_venta_final: '0' }), PROPIO, OPTS)).toMatchObject({ ok: false })
     expect(planVenta(form({ precio_venta_final: '-5' }), PROPIO, OPTS)).toMatchObject({ ok: false })
     expect(planVenta(form({ precio_venta_final: 'diez mil' }), PROPIO, OPTS)).toMatchObject({ ok: false })
-  })
-
-  it('exige cuenta destino', () => {
-    expect(planVenta(form({ cuenta: '' }), PROPIO, OPTS)).toMatchObject({ ok: false })
   })
 
   it('exige fecha YYYY-MM-DD si viene', () => {

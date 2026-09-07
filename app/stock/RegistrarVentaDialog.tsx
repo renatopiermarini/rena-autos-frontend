@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { capFirst, computeLiquidacionConsignacion, type CuentaInfo } from '@/lib/kapso'
+import { computeLiquidacionConsignacion } from '@/lib/kapso'
 import { todayKey } from '@/lib/date'
 import {
   planVenta, comisionVenta, autoLabelVenta, VENTA_FORM_VACIO, type VentaForm,
@@ -12,27 +12,28 @@ import {
   useDirtyClose,
 } from '@/components/ui/dialog'
 import { formSucio } from '@/lib/dirty'
-import { FField, FInput, FSelect, FCheckbox, nativeSelectCls } from '@/components/form-fields'
+import { FField, FInput, FCheckbox, nativeSelectCls } from '@/components/form-fields'
 import { toast } from 'sonner'
+import { CopyIcon } from 'lucide-react'
 import { money } from '@/lib/money'
+import { copiarTexto } from '@/lib/clipboard'
 
 /**
  * Registrar la venta de un auto desde su ficha en /stock.
  *
- * Escribe hasta TRES filas y ninguna transacción las envuelve: el PATCH del
- * vehículo (estado=vendido + precio + comprador) y uno o dos movimientos por
- * /api/finanzas/movimiento (la única puerta que setea afecta_balance=1). Si el
- * ledger falla después de que el auto quedó vendido se dice EXACTAMENTE qué
- * quedó hecho y qué no — mismo criterio que NuevoAutoDialog.
+ * Escribe UNA fila: el PATCH del vehículo (estado=vendido + precio + comprador
+ * + fecha). La plata NO se asienta desde acá: Finanzas es solo consulta y los
+ * movimientos los carga Claude por SQL. Lo que el diálogo hace con la caja es
+ * MOSTRAR el desglose ("Para registrar con Claude") y dejarlo copiar.
  *
  * La regla de plata (propio = precio entero, consignación = sólo la comisión)
- * vive en lib/venta.ts, que es lo que testean los tests. Acá sólo se muestra el
- * desglose ANTES de confirmar: en una consignación el usuario tiene que ver que
- * a la caja entran $X y no los $Y que le pagó el comprador.
+ * vive en lib/venta.ts, que es lo que testean los tests. En una consignación el
+ * usuario tiene que ver que a la caja entran $X y no los $Y que le pagó el
+ * comprador.
  */
 
 export default function RegistrarVentaDialog({
-  open, onOpenChange, vehiculo, vehicles, movimientos, clientes, cuentas, comisionPct,
+  open, onOpenChange, vehiculo, vehicles, movimientos, clientes, comisionPct,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -40,7 +41,6 @@ export default function RegistrarVentaDialog({
   vehicles: any[]
   movimientos: any[]
   clientes: any[]
-  cuentas: CuentaInfo[]
   comisionPct: number
 }) {
   const router = useRouter()
@@ -69,7 +69,6 @@ export default function RegistrarVentaDialog({
       // NO se usa de default: es lo que se pedía, no lo que se cobró.
       precio_venta_final: vehiculo?.precio_venta_final ? String(vehiculo.precio_venta_final) : '',
       comprador_id: vehiculo?.comprador_id ? String(vehiculo.comprador_id) : '',
-      cuenta: cuentas[0]?.clave ?? '',
     }
     setForm(sembrado)
     setInicial(sembrado)
@@ -84,6 +83,21 @@ export default function RegistrarVentaDialog({
   const precioOk = Number.isFinite(precioNum) && precioNum > 0
   const comision = precioOk ? comisionVenta(precioNum, comisionPct) : 0
   const restoDueno = precioOk ? Math.round((precioNum - comision) * 100) / 100 : 0
+
+  // El texto para Claude sale del MISMO plan que se va a confirmar: no hay una
+  // segunda regla de plata acá. Sin precio usable no hay plan (y no hay texto).
+  const planActual = planVenta(form, vehiculo, {
+    comisionPct,
+    gastosAdelantados,
+    nowIso: '',
+  })
+  const paraClaude = planActual.ok ? planActual.paraClaude : null
+
+  async function copiar() {
+    if (!paraClaude) return
+    if (await copiarTexto(paraClaude)) toast.success('Copiado — pegalo en Claude')
+    else toast.error('No se pudo copiar: seleccioná el texto y copialo a mano.')
+  }
 
   const { dialogProps, cerrar } = useDirtyClose({
     sucio: formSucio(form, inicial),
@@ -104,47 +118,13 @@ export default function RegistrarVentaDialog({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(r.patch),
     })
+    setSaving(false)
     if (!patch.ok) {
       const json = await patch.json().catch(() => ({} as any))
-      setSaving(false)
-      // Nada quedó escrito: el ledger ni se tocó.
       toast.error(json.message || json.error || 'No se pudo marcar el auto como vendido')
       return
     }
-    toast.success('Auto marcado como vendido')
-
-    // Los movimientos van de a uno y en orden (comisión primero, reintegro
-    // después): si el segundo falla el primero ya está y hay que decirlo.
-    const hechos: string[] = []
-    for (const mov of r.movimientos) {
-      const etiqueta = mov.categoria === 'commission'
-        ? 'la comisión'
-        : mov.categoria === 'client_repayment'
-          ? 'el reintegro de gastos'
-          : 'el ingreso de la venta'
-      const res = await fetch('/api/finanzas/movimiento', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(mov),
-      })
-      if (res.ok) { hechos.push(etiqueta); continue }
-      const json = await res.json().catch(() => ({} as any))
-      const yaHecho = hechos.length > 0 ? ` (${hechos.join(' y ')} sí)` : ''
-      toast.error(
-        `La venta quedó marcada, ${etiqueta} no${yaHecho} — cargalo desde Finanzas. ` +
-        `(${json.message || json.error || `Error ${res.status}`})`,
-        { duration: 12000 },
-      )
-      setSaving(false)
-      onOpenChange(false)
-      router.refresh()
-      return
-    }
-    if (hechos.length > 0) {
-      toast.success(`Entró a caja ${hechos.join(' y ')}`)
-    }
-
-    setSaving(false)
+    toast.success('Auto marcado como vendido — la plata se registra con Claude')
     onOpenChange(false)
     router.refresh()
   }
@@ -155,8 +135,8 @@ export default function RegistrarVentaDialog({
         <DialogHeader>
           <DialogTitle>Registrar venta</DialogTitle>
           <DialogDescription>
-            {autoLabelVenta(vehiculo)} — marca el auto como vendido y asienta lo que entra a la
-            caja.
+            {autoLabelVenta(vehiculo)} — marca el auto como vendido. La plata no se asienta
+            desde acá: se registra con Claude.
           </DialogDescription>
         </DialogHeader>
 
@@ -186,12 +166,6 @@ export default function RegistrarVentaDialog({
               ))}
             </select>
           </FField>
-          <FSelect
-            label="Entra a *"
-            value={form.cuenta}
-            onChange={v => set('cuenta', v)}
-            options={cuentas.map(c => ({ value: c.clave, label: capFirst(c.label) }))}
-          />
         </div>
 
         {esConsignacion && (
@@ -224,6 +198,24 @@ export default function RegistrarVentaDialog({
             )}
           </div>
         )}
+
+        <div className="rounded-lg border border-border p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-2xs uppercase tracking-wide text-muted-foreground">
+              Para registrar con Claude
+            </p>
+            <Button size="xs" variant="outline" onClick={copiar} disabled={!paraClaude}>
+              <CopyIcon /> Copiar
+            </Button>
+          </div>
+          {paraClaude ? (
+            <pre className="whitespace-pre-wrap font-mono text-xs text-foreground">{paraClaude}</pre>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Cargá el precio de venta para ver qué hay que asentar.
+            </p>
+          )}
+        </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={cerrar} disabled={saving}>Cancelar</Button>

@@ -9,9 +9,8 @@
  * mismos headers, misma paginación, misma política de errores.
  *
  * Todo esto es SERVER-SIDE. La API key de Kapso y la DATABASE_URL nunca salen
- * del servidor; los componentes cliente siguen hablando con /api/db y
- * /api/finanzas/movimiento (ver el alias `postgres: false` del bundle de
- * browser en next.config.js).
+ * del servidor; los componentes cliente siguen hablando con /api/db (ver el
+ * alias `postgres: false` del bundle de browser en next.config.js).
  *
  * ── Contrato de retorno ──────────────────────────────────────────────────────
  *

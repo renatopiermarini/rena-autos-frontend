@@ -6,9 +6,8 @@ import CuentasClient from './CuentasClient'
 // una cuenta desactivada tiene que seguir viéndose para poder reactivarla.
 //
 // Los movimientos son para el saldo DERIVADO por cuenta (no hay columna de
-// saldo que leer: el saldo se calcula del ledger, ver saldoDeCuenta). Sin ellos
-// "Ajustar saldo" no sabría contra qué comparar el saldo real que tipea el
-// usuario.
+// saldo que leer: el saldo se calcula del ledger, ver saldoDeCuenta). Se
+// muestra, no se ajusta: un cuadre es un movimiento 'ajuste' que carga Claude.
 export default async function ConfigCuentas() {
   const [cuentas, movimientos] = await Promise.all([getCuentasRows(), getMovimientos()])
   return (

@@ -1,7 +1,6 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { type CuentaInfo } from '@/lib/kapso'
 import { fmtDMY as fmtFecha } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 import { diasEnStock, tarjetaVehiculo } from '@/lib/stock'
@@ -274,7 +273,7 @@ const ESTADO_ORDER = [
 
 export default function StockClient({
   vehicles, tareas, clientes, movimientos = [], prestamos = [], defAssignee = DEFAULT_ASSIGNEE,
-  cuentas = [], comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false,
+  comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false,
   verificaciones = [],
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos?: any[]; prestamos?: any[]
@@ -284,9 +283,6 @@ export default function StockClient({
   // A quién se le anota haber completado una tarea al tildar el check. Sale de
   // config_negocio.default_assignee; sin la tabla, 'rena' como siempre.
   defAssignee?: string
-  // Cajas de la contabilidad, para el egreso opcional del alta y para el ingreso
-  // de la venta. Sin tabla `cuentas`, cuentasInfo cae en DEFAULT_CUENTAS.
-  cuentas?: CuentaInfo[]
   // % de comisión de consignación (config_negocio.comision_consignacion_pct).
   // Sin la tabla, el 5 de siempre.
   comisionPct?: number
@@ -363,7 +359,6 @@ export default function StockClient({
         open={showNew}
         onOpenChange={setShowNew}
         clientes={clientes}
-        cuentas={cuentas}
       />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -509,7 +504,6 @@ export default function StockClient({
         prestamos={prestamos}
         tareas={tareas}
         verificaciones={verificaciones}
-        cuentas={cuentas}
         comisionPct={comisionPct}
         documentosHabilitado={documentosHabilitado}
       />

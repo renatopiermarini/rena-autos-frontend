@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { computeVehicleFinancials, computeLoanPosition, round2, type CuentaInfo } from '@/lib/kapso'
+import { computeVehicleFinancials, computeLoanPosition, round2 } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 import { diasEnStock } from '@/lib/stock'
@@ -126,7 +126,7 @@ export type VehicleDialogProps = {
   clientes: any[]; vehicles: any[]; movimientos: any[]; prestamos: any[]; tareas?: any[]
   /** Filas de verificaciones_mecanicas — para el "Verificación paga sí/no". */
   verificaciones?: any[]
-  cuentas?: CuentaInfo[]; comisionPct?: number
+  comisionPct?: number
   /** ¿La instancia tiene backend de contratos? Sin él, no hay botón. */
   documentosHabilitado?: boolean
 }
@@ -142,7 +142,7 @@ export default function VehicleDialog(props: VehicleDialogProps) {
 
 function VehicleDialogBody({
   v, onOpenChange, clientes, vehicles, movimientos, prestamos, tareas = [],
-  verificaciones = [], cuentas = [], comisionPct = COMISION_PCT_DEFAULT,
+  verificaciones = [], comisionPct = COMISION_PCT_DEFAULT,
   documentosHabilitado = false,
 }: VehicleDialogProps) {
   const router = useRouter()
@@ -590,7 +590,6 @@ function VehicleDialogBody({
         vehicles={vehicles}
         movimientos={movimientos}
         clientes={clientes}
-        cuentas={cuentas}
         comisionPct={comisionPct}
       />
 

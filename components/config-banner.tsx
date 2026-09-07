@@ -27,3 +27,17 @@ export function RestartNotice({ children }: { children: React.ReactNode }) {
     </div>
   )
 }
+
+/**
+ * Finanzas es solo consulta: los movimientos, los préstamos y los ajustes de
+ * saldo los carga Claude por SQL sobre la base. El dashboard muestra el ledger
+ * y no lo toca — este aviso es lo que evita buscar el botón que ya no existe.
+ */
+export function SoloConsultaNotice({ className = '' }: { className?: string }) {
+  return (
+    <div className={`flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground ${className}`}>
+      <InfoIcon className="size-4 mt-0.5 shrink-0" />
+      <p>Solo consulta. Los movimientos y préstamos se cargan con Claude sobre la base.</p>
+    </div>
+  )
+}

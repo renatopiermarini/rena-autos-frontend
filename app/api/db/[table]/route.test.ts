@@ -83,6 +83,16 @@ describe('proxy /api/db/[table]', () => {
     expect(calls).toHaveLength(0)
   })
 
+  it('rechaza `prestamos`: los préstamos los carga Claude por SQL, no el dashboard', async () => {
+    const calls = mockKapso(() => ({ body: { data: [] } }))
+    const res = await POST(
+      req('http://x/api/db/prestamos', 'POST', { acreedor_id: 1, monto_original: 100 }),
+      ctx('prestamos'),
+    )
+    expect(res.status).toBe(403)
+    expect(calls).toHaveLength(0)
+  })
+
   it('valida los enums antes de escribir', async () => {
     const calls = mockKapso(() => ({ body: { data: [] } }))
     const res = await POST(

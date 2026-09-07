@@ -1,19 +1,18 @@
 import {
   getVehicles, getTareas, getClientes, getMovimientos, getPrestamos,
-  getEquipo, getConfigNegocio, getCuentas, cuentasInfo, getVerificaciones,
+  getEquipo, getConfigNegocio, getVerificaciones,
 } from '@/lib/kapso'
 import { equipoFromRows, resolveDefaultAssignee } from '@/lib/equipo'
 import { comisionConsignacionPct } from '@/lib/venta'
 import StockClient from './StockClient'
 
 export default async function Stock() {
-  // `cuentas` es para el alta y para la venta: hay que elegir de qué caja sale
-  // la compra y a cuál entra el ingreso. Sin la tabla, cuentasInfo cae en las
-  // tres de siempre (cash/nexo/fiwind).
-  const [vehicles, tareas, clientes, movimientos, prestamos, equipoRows, config, cuentasRows, verificaciones] =
+  // Ni el alta ni la venta tocan la caja (Finanzas es solo consulta), así que
+  // esta página ya no necesita la tabla `cuentas`.
+  const [vehicles, tareas, clientes, movimientos, prestamos, equipoRows, config, verificaciones] =
     await Promise.all([
       getVehicles(), getTareas(), getClientes(), getMovimientos(), getPrestamos(),
-      getEquipo(), getConfigNegocio(), getCuentas(), getVerificaciones(),
+      getEquipo(), getConfigNegocio(), getVerificaciones(),
     ])
   // El detalle de un auto solo consume movimientos ligados a un vehículo
   // (computeVehicleFinancials) o a un préstamo (computeLoanPosition). Serializar
@@ -30,7 +29,6 @@ export default async function Stock() {
       movimientos={movimientosVinculados}
       prestamos={prestamos}
       defAssignee={resolveDefaultAssignee(config, equipoFromRows(equipoRows))}
-      cuentas={cuentasInfo(cuentasRows)}
       comisionPct={comisionConsignacionPct(config)}
       // Los contratos los genera el backend del bot (POST /api/documentos/generar,
       // header X-API-Key). La instancia que no tenga las dos env no muestra el

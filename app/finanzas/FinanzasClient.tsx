@@ -1,31 +1,20 @@
 'use client'
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import {
   computeVehicleFinancials, computeLoanPosition, computePatrimonio,
-  computeLiquidacionConsignacion, affectsBalance, postRecord, capFirst,
+  computeLiquidacionConsignacion, affectsBalance, capFirst,
   type CuentaInfo,
 } from '@/lib/kapso'
-import {
-  validarMovimiento, CATEGORIAS_ELEGIBLES, CAT_VEHICLE_LINKED, CAT_LOAN_TIPO,
-  CAT_CLIENTE_LINKED,
-} from '@/lib/movimiento'
-import { fmtDMY as fmtFecha, todayKey } from '@/lib/date'
+import { fmtDMY as fmtFecha } from '@/lib/date'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TooltipProvider, InfoTip } from '@/components/ui/tooltip'
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-  useDirtyClose,
-} from '@/components/ui/dialog'
-import { formSucio } from '@/lib/dirty'
-import { FField, FInput, FTextarea, nativeSelectCls as fieldSelectCls } from '@/components/form-fields'
-import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, AlertTriangleIcon, PlusIcon } from 'lucide-react'
+import { SoloConsultaNotice } from '@/components/config-banner'
+import { ChevronDownIcon, ChevronUpIcon, AlertTriangleIcon } from 'lucide-react'
 import { money } from '@/lib/money'
 import { Th as ThBase } from '@/components/table-cells'
 import { tipoOperacionLabel } from '@/lib/estados'
@@ -96,8 +85,6 @@ export default function FinanzasClient({
   cuentas: CuentaInfo[]; umbralCaja?: number
 }) {
   const [tab, setTab] = useState<Tab>('resumen')
-  const [nuevoMov, setNuevoMov] = useState(false)
-  const [nuevoPrestamo, setNuevoPrestamo] = useState(false)
   const cuentaKeys = useMemo(() => cuentas.map(c => c.clave), [cuentas])
 
   const clientesById = useMemo(
@@ -119,32 +106,11 @@ export default function FinanzasClient({
   return (
     <TooltipProvider>
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Finanzas</h1>
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => setNuevoMov(true)}>
-            <PlusIcon className="size-4" /> Nuevo movimiento
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setNuevoPrestamo(true)}>
-            <PlusIcon className="size-4" /> Nuevo préstamo
-          </Button>
-        </div>
-      </div>
+      <h1 className="text-2xl font-semibold tracking-tight">Finanzas</h1>
 
-      <NuevoMovimientoDialog
-        open={nuevoMov}
-        onOpenChange={setNuevoMov}
-        cuentas={cuentas}
-        vehicles={vehicles}
-        clientes={clientes}
-        prestamos={prestamos}
-      />
-      <NuevoPrestamoDialog
-        open={nuevoPrestamo}
-        onOpenChange={setNuevoPrestamo}
-        clientes={clientes}
-        vehicles={vehicles}
-      />
+      {/* Esta pantalla no escribe: el ledger, los préstamos y los ajustes de
+          saldo los carga Claude por SQL sobre la base (ver PRODUCT.md). */}
+      <SoloConsultaNotice />
 
       <Tabs value={tab} onValueChange={(v: any) => setTab(v as Tab)}>
         <TabsList variant="line">
@@ -1056,113 +1022,16 @@ function VehicleFinancialDetail({
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const
 
 /**
- * Edición inline de un movimiento — el ledger dejó de ser de solo lectura: la
- * corrección de un monto mal tipeado era "inventá un contraasiento en prosa"
- * (hay cuatro "Ajuste de saldo" en la DB que son exactamente eso). Editables:
- * monto, cuenta, tipo y nota. Categoría y vínculos no: para eso, eliminar y
- * volver a cargar (los guards de vínculos son del alta).
+ * Detalle de un movimiento al expandir la fila: la nota completa (en la fila
+ * vive truncada). Solo lectura — corregir o borrar un asiento es trabajo de
+ * Claude sobre la base, no de esta pantalla.
  */
-function MovimientoEdit({
-  m, cuentas, onDone,
-}: { m: any; cuentas: CuentaInfo[]; onDone: () => void }) {
-  const [monto, setMonto] = useState(String(m.monto ?? ''))
-  const [cuenta, setCuenta] = useState(String(m.cuenta ?? ''))
-  const [tipo, setTipo] = useState(String(m.tipo ?? 'egreso'))
-  const [nota, setNota] = useState(String(m.nota ?? ''))
-  const [saving, setSaving] = useState(false)
-  const [confirmDel, setConfirmDel] = useState(false)
-  const [errMonto, setErrMonto] = useState('')
-
-  async function guardar() {
-    const n = Number(monto)
-    if (!Number.isFinite(n) || n <= 0) {
-      setErrMonto('El monto debe ser mayor que 0.')
-      toast.error('El monto debe ser mayor que 0.')
-      return
-    }
-    setErrMonto('')
-    setSaving(true)
-    const res = await fetch(`/api/finanzas/movimiento?id=${m.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ monto: n, cuenta, tipo, nota }),
-    })
-    setSaving(false)
-    if (res.ok) { toast.success('Movimiento actualizado'); onDone() }
-    else {
-      const err = await res.json().catch(() => ({} as any))
-      toast.error(err.message || 'Error al guardar.')
-    }
-  }
-
-  async function eliminar() {
-    setSaving(true)
-    const res = await fetch(`/api/finanzas/movimiento?id=${m.id}`, { method: 'DELETE' })
-    setSaving(false)
-    setConfirmDel(false)
-    if (res.ok) { toast.success('Movimiento eliminado'); onDone() }
-    else {
-      const err = await res.json().catch(() => ({} as any))
-      toast.error(err.message || 'Error al eliminar.')
-    }
-  }
-
+function MovimientoDetalle({ m }: { m: any }) {
   return (
-    <div className="px-3 pb-4 pt-3 bg-muted/30 border-b space-y-3">
-      {/* La nota completa, que en la fila vive truncada. */}
-      {m.nota && <p className="text-sm text-muted-foreground max-w-prose">{m.nota}</p>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-3">
-        <FInput
-          label="Monto (USD)"
-          type="number"
-          min="0"
-          step="0.01"
-          value={monto}
-          onChange={v => { setMonto(v); if (Number(v) > 0) setErrMonto('') }}
-          error={errMonto}
-        />
-        <FField label="Cuenta">
-          <select value={cuenta} onChange={e => setCuenta(e.target.value)} className={fieldSelectCls}>
-            {cuentas.map(c => <option key={c.clave} value={c.clave}>{capFirst(c.label)}</option>)}
-          </select>
-        </FField>
-        <FField label="Tipo">
-          <select value={tipo} onChange={e => setTipo(e.target.value)} className={fieldSelectCls}>
-            <option value="ingreso">Ingreso</option>
-            <option value="egreso">Egreso</option>
-          </select>
-        </FField>
-        <FInput label="Nota" value={nota} onChange={setNota} />
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
-        <p className="text-xs text-muted-foreground">
-          Categoría y vínculos no se editan: si están mal, eliminá el movimiento y cargalo de nuevo.
-        </p>
-        <div className="flex gap-2">
-          <Button size="sm" variant="ghost" onClick={() => setConfirmDel(true)} className="text-destructive hover:text-destructive">
-            Eliminar
-          </Button>
-          <Button size="sm" onClick={guardar} disabled={saving}>
-            {saving ? 'Guardando…' : 'Guardar'}
-          </Button>
-        </div>
-      </div>
-
-      <Dialog open={confirmDel} onOpenChange={setConfirmDel}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Eliminar movimiento</DialogTitle>
-            <DialogDescription>
-              {m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'} de {money(m.monto)} en {capFirst(String(m.cuenta ?? ''))} · {fmtFecha(m.created_at)}
-              {m.nota ? ` — "${m.nota}"` : ''}. El saldo se recalcula del ledger: esta acción no se puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDel(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={eliminar} disabled={saving}>Eliminar movimiento</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+    <div className="px-3 pb-3 pt-2 bg-muted/30 border-b">
+      {m.nota
+        ? <p className="text-sm text-muted-foreground max-w-prose whitespace-pre-wrap">{m.nota}</p>
+        : <p className="text-xs text-muted-foreground/60">Sin nota.</p>}
     </div>
   )
 }
@@ -1170,7 +1039,6 @@ function MovimientoEdit({
 function MovimientosTab({
   movimientos, vehiclesById, cuentas,
 }: { movimientos: any[]; vehiclesById: any; cuentas: CuentaInfo[] }) {
-  const router = useRouter()
   const [openId, setOpenId] = useState<number | null>(null)
   const [cats, setCats]         = useState<Set<string>>(new Set())
   const [cuenta, setCuenta]     = useState<string>('')
@@ -1369,11 +1237,7 @@ function MovimientosTab({
                       {isOpen && (
                         <tr>
                           <td colSpan={7} className="p-0">
-                            <MovimientoEdit
-                              m={m}
-                              cuentas={cuentas}
-                              onDone={() => { setOpenId(null); router.refresh() }}
-                            />
+                            <MovimientoDetalle m={m} />
                           </td>
                         </tr>
                       )}
@@ -1419,326 +1283,5 @@ function MovimientosTab({
         </CardContent>
       </Card>
     </div>
-  )
-}
-
-// ── Altas: movimiento y préstamo ──────────────────────────────────────────────
-//
-// Hasta ahora todo lo de plata se cargaba por WhatsApp. Estos dos diálogos son
-// la MISMA escritura desde el dashboard: el movimiento va por una route propia
-// (/api/finanzas/movimiento) que valida como el bot y setea afecta_balance=1; el
-// préstamo va por el proxy genérico, que ya tiene `prestamos` con sus enums.
-
-const TIPO_OPTIONS = [
-  { value: 'egreso', label: 'Egreso (sale plata)' },
-  { value: 'ingreso', label: 'Ingreso (entra plata)' },
-]
-
-function NuevoMovimientoDialog({
-  open, onOpenChange, cuentas, vehicles, clientes, prestamos,
-}: {
-  open: boolean; onOpenChange: (o: boolean) => void
-  cuentas: CuentaInfo[]; vehicles: any[]; clientes: any[]; prestamos: any[]
-}) {
-  const router = useRouter()
-  const [saving, setSaving] = useState(false)
-  const vacio = {
-    tipo: 'egreso', cuenta: cuentas[0]?.clave ?? '', monto: '',
-    categoria: 'general_expense', fecha: '', descripcion: '',
-    vehicle_id: '', cliente_id: '', prestamo_id: '',
-  }
-  const [form, setForm] = useState(vacio)
-  const set = (campo: keyof typeof vacio, valor: string) => setForm(f => ({ ...f, [campo]: valor }))
-  // Escape / click afuera / X / Cancelar preguntan antes de tirar lo cargado.
-  const { dialogProps, cerrar } = useDirtyClose({ sucio: formSucio(form, vacio), onOpenChange })
-
-  // Qué vínculos pide cada categoría: las mismas reglas que valida la route y
-  // que valida el bot. Los selects que la categoría no necesita no se muestran.
-  const pideAuto = CAT_VEHICLE_LINKED.has(form.categoria) || form.categoria === 'client_expense'
-  const pideCliente = CAT_CLIENTE_LINKED.has(form.categoria)
-  const pidePrestamo = form.categoria in CAT_LOAN_TIPO
-
-  function setCategoria(valor: string) {
-    setForm(f => ({
-      ...f,
-      categoria: valor,
-      // Una categoría de préstamo tiene dirección fija (un pago de interés es
-      // un egreso, siempre): se acomoda sola en vez de rebotar al guardar.
-      tipo: CAT_LOAN_TIPO[valor] ?? f.tipo,
-      // Y se limpian los vínculos que la categoría nueva ya no usa.
-      vehicle_id: CAT_VEHICLE_LINKED.has(valor) || valor === 'client_expense' ? f.vehicle_id : '',
-      cliente_id: CAT_CLIENTE_LINKED.has(valor) ? f.cliente_id : '',
-      prestamo_id: valor in CAT_LOAN_TIPO ? f.prestamo_id : '',
-    }))
-  }
-
-  async function guardar() {
-    const body: Record<string, any> = {
-      tipo: form.tipo,
-      cuenta: form.cuenta,
-      monto: form.monto === '' ? null : Number(form.monto),
-      categoria: form.categoria,
-      fecha: form.fecha || null,
-      descripcion: form.descripcion,
-      vehicle_id: form.vehicle_id || null,
-      cliente_id: form.cliente_id || null,
-      prestamo_id: form.prestamo_id || null,
-    }
-    // Pre-chequeo con la MISMA función pura que corre en el server: el error
-    // sale al toque y con el mismo texto, sin ida y vuelta.
-    const check = validarMovimiento(body, cuentas.map(c => c.clave), todayKey(), new Date().toISOString())
-    if (!check.ok) { toast.error(check.error); return }
-
-    setSaving(true)
-    const res = await fetch('/api/finanzas/movimiento', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const json = await res.json().catch(() => ({} as any))
-    setSaving(false)
-    if (res.ok) {
-      toast.success('Movimiento registrado')
-      onOpenChange(false)
-      setForm(vacio)
-      router.refresh()
-    } else {
-      toast.error(json.message || json.error || 'No se pudo registrar el movimiento')
-    }
-  }
-
-  return (
-    <Dialog open={open} {...dialogProps}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Nuevo movimiento</DialogTitle>
-          <DialogDescription>
-            Se guarda en el mismo ledger que escribe el bot y mueve el saldo de la cuenta.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FField label="Tipo">
-            <select value={form.tipo} onChange={e => set('tipo', e.target.value)} className={fieldSelectCls}>
-              {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </FField>
-          <FField label="Cuenta">
-            <select value={form.cuenta} onChange={e => set('cuenta', e.target.value)} className={fieldSelectCls}>
-              {cuentas.map(c => <option key={c.clave} value={c.clave}>{capFirst(c.label)}</option>)}
-            </select>
-          </FField>
-          <FField label="Categoría">
-            <select value={form.categoria} onChange={e => setCategoria(e.target.value)} className={fieldSelectCls}>
-              {CATEGORIAS_ELEGIBLES.map(c => (
-                <option key={c} value={c}>{CAT_LABEL[c] ?? c}</option>
-              ))}
-            </select>
-          </FField>
-          <FInput
-            label="Monto (USD)"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.monto}
-            onChange={v => set('monto', v)}
-          />
-          {pideAuto && (
-            <FField label="Auto *" hint="La categoría lo exige: sin el auto, el costo del vehículo queda mal.">
-              <select value={form.vehicle_id} onChange={e => set('vehicle_id', e.target.value)} className={fieldSelectCls}>
-                <option value="">—</option>
-                {vehicles.map((v: any) => (
-                  <option key={v.id} value={v.id}>{autoLabel(v)}</option>
-                ))}
-              </select>
-            </FField>
-          )}
-          {pideCliente && (
-            <FField label="Cliente *" hint="Queda como cuenta corriente del cliente.">
-              <select value={form.cliente_id} onChange={e => set('cliente_id', e.target.value)} className={fieldSelectCls}>
-                <option value="">—</option>
-                {clientes.map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.nombre}</option>
-                ))}
-              </select>
-            </FField>
-          )}
-          {pidePrestamo && (
-            <FField label="Préstamo *" hint="Los pagos bajan solos el capital vivo y el interés adeudado.">
-              <select value={form.prestamo_id} onChange={e => set('prestamo_id', e.target.value)} className={fieldSelectCls}>
-                <option value="">—</option>
-                {prestamos
-                  .filter((p: any) => p.estado !== 'pagado')
-                  .map((p: any) => (
-                    <option key={p.id} value={p.id}>
-                      {clientes.find((c: any) => c.id === p.acreedor_id)?.nombre ?? `Préstamo #${p.id}`} · {fmt(p.monto_original)}
-                    </option>
-                  ))}
-              </select>
-            </FField>
-          )}
-          <FInput
-            label="Fecha"
-            type="date"
-            value={form.fecha}
-            onChange={v => set('fecha', v)}
-            hint="Vacío = hoy."
-          />
-          <FTextarea
-            label="Descripción"
-            className="md:col-span-2"
-            rows={2}
-            value={form.descripcion}
-            onChange={v => set('descripcion', v)}
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={cerrar}>Cancelar</Button>
-          <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-const MODALIDAD_OPTIONS = [
-  { value: 'mensual', label: 'Mensual (cuota fija el 1 de cada mes)' },
-  { value: 'al_final', label: 'Al final (devenga por día, se salda con el capital)' },
-]
-
-function NuevoPrestamoDialog({
-  open, onOpenChange, clientes, vehicles,
-}: {
-  open: boolean; onOpenChange: (o: boolean) => void; clientes: any[]; vehicles: any[]
-}) {
-  const router = useRouter()
-  const [saving, setSaving] = useState(false)
-  // fecha_inicio arranca vacía y se completa con hoy AL GUARDAR: todayKey() usa
-  // la hora local, y en el prerender del server (UTC) daría el día de mañana
-  // después de las 21 AR.
-  const vacio = {
-    acreedor_id: '', monto_original: '', tasa_interes_anual: '',
-    modalidad: 'mensual', fecha_inicio: '', vehicle_id: '', notas: '',
-  }
-  const [form, setForm] = useState(vacio)
-  const [errores, setErrores] = useState<Partial<Record<keyof typeof vacio, string>>>({})
-  const set = (campo: keyof typeof vacio, valor: string) => {
-    setForm(f => ({ ...f, [campo]: valor }))
-    setErrores(e => (e[campo] ? { ...e, [campo]: undefined } : e))
-  }
-  const { dialogProps, cerrar } = useDirtyClose({ sucio: formSucio(form, vacio), onOpenChange })
-
-  // Los acreedores son los clientes marcados como tales. Si nadie está marcado
-  // (o la marca vive sólo en `tipo`), se ofrece la lista completa antes que un
-  // desplegable vacío.
-  const acreedores = clientes.filter((c: any) => c.es_acreedor || c.tipo === 'acreedor')
-  const opcionesAcreedor = acreedores.length > 0 ? acreedores : clientes
-
-  async function guardar() {
-    const acreedor_id = Number(form.acreedor_id)
-    if (!Number.isInteger(acreedor_id) || acreedor_id <= 0) { setErrores({ acreedor_id: 'Elegí el acreedor.' }); toast.error('Elegí el acreedor.'); return }
-    const monto = Number(form.monto_original)
-    if (!Number.isFinite(monto) || monto <= 0) { setErrores({ monto_original: 'El monto debe ser mayor que 0.' }); toast.error('El monto debe ser mayor que 0.'); return }
-    const tasa = form.tasa_interes_anual === '' ? 0 : Number(form.tasa_interes_anual)
-    if (!Number.isFinite(tasa) || tasa < 0) { setErrores({ tasa_interes_anual: 'La tasa debe ser un número.' }); toast.error('La tasa debe ser un número.'); return }
-    setErrores({})
-
-    setSaving(true)
-    const payload: Record<string, any> = {
-      acreedor_id,
-      monto_original: monto,
-      // La tasa canónica es en PORCENTAJE (15 = 15% anual), igual que en el bot.
-      tasa_interes_anual: tasa,
-      modalidad: form.modalidad,
-      estado: 'activo',
-      fecha_inicio: form.fecha_inicio || todayKey(),
-    }
-    if (form.vehicle_id) payload.vehicle_id = Number(form.vehicle_id)
-    if (form.notas.trim()) payload.notas = form.notas.trim()
-    // `monto_pagado` NO se manda: es un cache derivado del ledger. Los pagos se
-    // registran como movimientos loan_repayment / loan_interest.
-    const res = await postRecord('prestamos', payload)
-    setSaving(false)
-    if (res.ok) {
-      toast.success('Préstamo registrado')
-      onOpenChange(false)
-      setForm(vacio)
-      router.refresh()
-    } else {
-      toast.error(res.error || 'No se pudo registrar el préstamo')
-    }
-  }
-
-  return (
-    <Dialog open={open} {...dialogProps}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Nuevo préstamo</DialogTitle>
-          <DialogDescription>
-            Sólo el préstamo. La plata que entra se registra aparte, como movimiento
-            &quot;Préstamo recibido&quot; vinculado a él.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FField label="Acreedor" error={errores.acreedor_id}>
-            <select value={form.acreedor_id} onChange={e => set('acreedor_id', e.target.value)} className={fieldSelectCls}>
-              <option value="">—</option>
-              {opcionesAcreedor.map((c: any) => (
-                <option key={c.id} value={c.id}>{c.nombre}</option>
-              ))}
-            </select>
-          </FField>
-          <FInput
-            label="Monto (USD)"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.monto_original}
-            onChange={v => set('monto_original', v)}
-            error={errores.monto_original}
-          />
-          <FInput
-            label="Tasa anual (%)"
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.tasa_interes_anual}
-            onChange={v => set('tasa_interes_anual', v)}
-            hint="En porcentaje: 15 = 15% anual, nunca 0,15."
-            error={errores.tasa_interes_anual}
-          />
-          <FField label="Modalidad">
-            <select value={form.modalidad} onChange={e => set('modalidad', e.target.value)} className={fieldSelectCls}>
-              {MODALIDAD_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </FField>
-          <FInput
-            label="Fecha de inicio"
-            type="date"
-            value={form.fecha_inicio}
-            onChange={v => set('fecha_inicio', v)}
-            hint="La fecha real del desembolso: de ahí arranca el interés. Vacío = hoy."
-          />
-          <FField label="Auto que financia (opcional)">
-            <select value={form.vehicle_id} onChange={e => set('vehicle_id', e.target.value)} className={fieldSelectCls}>
-              <option value="">Capital general</option>
-              {vehicles.map((v: any) => (
-                <option key={v.id} value={v.id}>{autoLabel(v)}</option>
-              ))}
-            </select>
-          </FField>
-          <FTextarea
-            label="Notas"
-            className="md:col-span-2"
-            rows={2}
-            value={form.notas}
-            onChange={v => set('notas', v)}
-          />
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={cerrar}>Cancelar</Button>
-          <Button onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Registrar'}</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }

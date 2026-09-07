@@ -1,12 +1,11 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { postRecord, capFirst, type CuentaInfo } from '@/lib/kapso'
+import { postRecord } from '@/lib/kapso'
 import { estadoMeta } from '@/lib/estados'
 import { todayKey } from '@/lib/date'
 import {
-  validarAltaVehiculo, ofreceRegistrarCompra, movimientoCompra,
-  normalizarDominio, esErrorColumnaVersion, sinColumnaVersion,
+  validarAltaVehiculo, normalizarDominio, esErrorColumnaVersion, sinColumnaVersion,
   ESTADOS_VEHICULO, VEHICULO_FORM_VACIO, type AltaVehiculoForm,
 } from '@/lib/alta'
 import { Button } from '@/components/ui/button'
@@ -15,7 +14,7 @@ import {
   useDirtyClose,
 } from '@/components/ui/dialog'
 import { formSucio } from '@/lib/dirty'
-import { FField, FInput, FSelect, FCheckbox, nativeSelectCls } from '@/components/form-fields'
+import { FField, FInput, FSelect, nativeSelectCls } from '@/components/form-fields'
 import { toast } from 'sonner'
 
 /**
@@ -25,10 +24,9 @@ import { toast } from 'sonner'
  * su propia copia local de FInput/FSelect (con otra firma que las compartidas):
  * meter el diálogo ahí obligaba a renombrar una de las dos.
  *
- * Escribe hasta DOS filas: el vehículo (proxy /api/db/vehicles) y, si se tilda
- * el check, el egreso de la compra (/api/finanzas/movimiento, la única puerta
- * que setea afecta_balance=1). No hay transacción entre las dos, así que si la
- * segunda falla se dice EXACTAMENTE qué quedó hecho y qué no.
+ * Escribe UNA fila: el vehículo (proxy /api/db/vehicles). El egreso de la
+ * compra NO se asienta desde acá: Finanzas es solo consulta y la plata la carga
+ * Claude por SQL sobre la base (ver PRODUCT.md).
  */
 
 const TIPO_OPERACION_OPTIONS = [
@@ -39,20 +37,17 @@ const TIPO_OPERACION_OPTIONS = [
 const ESTADO_OPTIONS = ESTADOS_VEHICULO.map(e => ({ value: e, label: estadoMeta(e).label }))
 
 export default function NuevoAutoDialog({
-  open, onOpenChange, clientes, cuentas,
+  open, onOpenChange, clientes,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   clientes: any[]
-  cuentas: CuentaInfo[]
 }) {
   const router = useRouter()
   const [form, setForm] = useState<AltaVehiculoForm>(VEHICULO_FORM_VACIO)
   // Cómo quedó el form al ABRIRSE (con la fecha ya sembrada): contra esto se
   // decide si hay algo tipeado que se perdería al cerrar. Sembrar no es ensuciar.
   const [inicial, setInicial] = useState<AltaVehiculoForm>(VEHICULO_FORM_VACIO)
-  const [registrarCompra, setRegistrarCompra] = useState(true)
-  const [cuenta, setCuenta] = useState(cuentas[0]?.clave ?? '')
   const [saving, setSaving] = useState(false)
 
   // La fecha de hoy se calcula en el cliente (todayKey usa la hora LOCAL; en el
@@ -68,24 +63,18 @@ export default function NuevoAutoDialog({
     setForm(f => ({ ...f, [campo]: valor }))
 
   const esConsignacion = form.tipo_operacion === 'consignacion'
-  const ofreceCompra = ofreceRegistrarCompra(form)
 
   function reset() {
     const sembrado = { ...VEHICULO_FORM_VACIO, fecha_ingreso: todayKey() }
     setForm(sembrado)
     setInicial(sembrado)
-    setRegistrarCompra(true)
-    setCuenta(cuentas[0]?.clave ?? '')
   }
 
   // Cerrar es cerrar: por el botón, por Escape o clickeando afuera, el form
   // vuelve a cero. Si no, el próximo "Nuevo auto" abre con lo tipeado antes.
   // Pero ANTES se pregunta si había algo cargado: doce campos tipeados no se
   // tiran por un roce fuera del modal (ver lib/dirty.ts).
-  const sucio = formSucio(
-    { ...form, registrarCompra, cuenta },
-    { ...inicial, registrarCompra: true, cuenta: cuentas[0]?.clave ?? '' },
-  )
+  const sucio = formSucio(form, inicial)
   const { dialogProps, cerrar } = useDirtyClose({
     sucio,
     onOpenChange: o => { onOpenChange(o); if (!o) reset() },
@@ -94,10 +83,6 @@ export default function NuevoAutoDialog({
   async function crear() {
     const validado = validarAltaVehiculo(form, new Date().toISOString())
     if (!validado.ok) { toast.error(validado.error); return }
-    if (ofreceCompra && registrarCompra && !cuenta) {
-      toast.error('Elegí de qué cuenta sale la compra.')
-      return
-    }
 
     setSaving(true)
     let res = await postRecord('vehicles', validado.row)
@@ -113,34 +98,10 @@ export default function NuevoAutoDialog({
       return
     }
 
-    const vehicleId = Number(res.data?.data?.id ?? res.data?.id)
     if (versionPegada) {
       toast.success('Auto creado (la versión quedó dentro del modelo)')
     } else {
       toast.success('Auto creado')
-    }
-
-    if (ofreceCompra && registrarCompra) {
-      if (!Number.isInteger(vehicleId) || vehicleId <= 0) {
-        // Sin id no hay a qué colgarle el egreso, y un movimiento de
-        // vehicle_purchase sin auto lo rechaza la route igual.
-        toast.error('El auto se creó, pero no se pudo leer su id: la compra en caja no se registró. Cargala desde Finanzas.')
-      } else {
-        const r = await fetch('/api/finanzas/movimiento', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(movimientoCompra(form, vehicleId, cuenta)),
-        })
-        const json = await r.json().catch(() => ({} as any))
-        if (r.ok) {
-          toast.success('Compra registrada en caja')
-        } else {
-          toast.error(
-            `El auto se creó, la compra en caja no — cargala desde Finanzas. (${json.message || json.error || `Error ${r.status}`})`,
-            { duration: 12000 },
-          )
-        }
-      }
     }
 
     setSaving(false)
@@ -217,26 +178,6 @@ export default function NuevoAutoDialog({
           <FInput label="Precio objetivo (USD)" type="number" min="0" step="0.01" value={form.precio_venta_objetivo} onChange={v => set('precio_venta_objetivo', v)} />
           <FInput label="Fecha de ingreso" type="date" value={form.fecha_ingreso} onChange={v => set('fecha_ingreso', v)} />
         </div>
-
-        {ofreceCompra && (
-          <div className="rounded-lg border border-border p-3 space-y-3">
-            <FCheckbox
-              id="registrar-compra"
-              label="Registrar la compra en caja"
-              checked={registrarCompra}
-              onChange={setRegistrarCompra}
-              hint="Asienta el egreso en el ledger, con el auto vinculado, para que el costo del vehículo sea real."
-            />
-            {registrarCompra && (
-              <FSelect
-                label="Sale de"
-                value={cuenta}
-                onChange={setCuenta}
-                options={cuentas.map(c => ({ value: c.clave, label: capFirst(c.label) }))}
-              />
-            )}
-          </div>
-        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={cerrar}>Cancelar</Button>

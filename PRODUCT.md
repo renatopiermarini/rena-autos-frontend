@@ -33,7 +33,7 @@ The design consequence is load-bearing: **every screen is read by someone who is
 | Ofertas | Offers made/received, pending responses |
 | Visitas | Scheduled vehicle viewings |
 | Clientes | People, incl. deudor/acreedor standing |
-| Finanzas | Balances, movimientos, préstamos, cost vs sale |
+| Finanzas | Balances, movimientos, préstamos, cost vs sale — read-only: asientos, préstamos y ajustes los carga Claude por SQL |
 | Tareas | To-dos with priority |
 | KB | Knowledge base entries |
 | Transferencias | Title-transfer appointments (turnos) |
@@ -69,7 +69,7 @@ The design consequence is load-bearing: **every screen is read by someone who is
 
 1. **Three people, one shared truth.** No roles and no per-user identity, so the interface itself has to make state unambiguous. Anything only Renato would understand is a defect.
 2. **Read-first, but the write path is a stated goal.** The bot captures; the dashboard is where you see state, catch problems, and — increasingly — fix them. Manual entry being awkward is a known deficiency to design away, not a constraint to honor.
-3. **The dashboard is one of two writers.** The bot writes the same rows. Design for state that changed while you weren't looking.
+3. **The dashboard is one of two writers.** The bot writes the same rows. Design for state that changed while you weren't looking. Exception: Finanzas is read-only here — movimientos, préstamos and balance adjustments are written only by Claude, via SQL.
 4. **Business vocabulary is not UI copy.** `estado` labels are the company's own terms ("Consignación", "Propios"). Never "improve" them for readability.
 5. **Correctness rules are duplicated on purpose.** Scheduling and date logic mirror the Python backend. Touching them is a backend concern, not a design one.
 

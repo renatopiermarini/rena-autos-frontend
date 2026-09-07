@@ -7,7 +7,11 @@ import { dbGet, dbPost, dbPatch, dbDelete, dbCount, DbError, matches } from '@/l
 // Las validaciones, el orden de los guards y los códigos de error de acá NO
 // dependen del backend: son las mismas para las dos instancias.
 
-const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'prestamos', 'cotizaciones'])
+// Ni `movimientos_contabilidad` ni `prestamos` están acá a propósito: Finanzas
+// es solo consulta en el dashboard y la plata (ledger, préstamos, ajustes) la
+// carga Claude por SQL sobre la base. Un POST crudo de un movimiento dejaría la
+// fila sin afecta_balance=1, invisible para el saldo.
+const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'cotizaciones'])
 
 // Live-verified enum sets — mirrors the bot (rena-autos-api tools/kapso_tools.py
 // ENUMS, prod survey 2026-07-07). "equipo" in asignado is real (broadcast bucket).
@@ -29,10 +33,6 @@ const ENUMS: Record<string, Record<string, string[]>> = {
   clientes: { tipo: ['vendedor', 'comprador', 'acreedor'] },
   verificaciones_mecanicas: { estado: ['pendiente', 'hecha', 'pagada'] },
   kb_entries: { tipo: ['proceso', 'faq', 'plantilla', 'leccion_aprendida'] },
-  prestamos: {
-    estado: ['activo', 'pagado', 'vencido'],
-    modalidad: ['mensual', 'al_final'],
-  },
   // El ciclo lo escribe el bot (esperando → pendiente); el dashboard sólo
   // cierra (enviada = ya se le pasó el precio al cliente final, o descartada).
   cotizaciones: { estado: ['esperando', 'pendiente', 'enviada', 'descartada'] },
@@ -283,7 +283,6 @@ async function valueLinked409(table: string, key: string, value: number): Promis
 // conservan la invalidación global.
 const RUTAS_POR_TABLA: Record<string, string[]> = {
   movimientos_contabilidad: ['/', '/finanzas', '/stock', '/config/cuentas', '/config/inversores'],
-  prestamos:                ['/', '/finanzas', '/stock'],
   tareas:                   ['/', '/tareas', '/stock'],
   visitas:                  ['/', '/visitas'],
   interesados:              ['/', '/interesados', '/visitas'],

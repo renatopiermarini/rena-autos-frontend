@@ -386,9 +386,9 @@ export function computeVehicleFinancials(
   }
 }
 
-// Exportado: lib/venta.ts y lib/ajuste.ts redondean la MISMA plata que este
-// módulo (la comisión de una consignación, el saldo derivado de una cuenta). Con
-// dos round2 distintos el diálogo mostraría un centavo y el ledger guardaría otro.
+// Exportado: lib/venta.ts redondea la MISMA plata que este módulo (la comisión
+// de una consignación). Con dos round2 distintos el diálogo mostraría un
+// centavo y la liquidación otro.
 export function round2(n: number) { return Math.round(n * 100) / 100 }
 
 // Tasa anual as PERCENT (15). The canonical unit is percent; the legacy

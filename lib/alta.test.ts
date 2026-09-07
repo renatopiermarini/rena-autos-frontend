@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  validarAltaVehiculo, validarAltaCliente, validarAltaOferta, ofreceRegistrarCompra,
-  movimientoCompra, normalizarDominio, esErrorColumnaVersion, sinColumnaVersion,
+  validarAltaVehiculo, validarAltaCliente, validarAltaOferta,
+  normalizarDominio, esErrorColumnaVersion, sinColumnaVersion,
   VEHICULO_FORM_VACIO, CLIENTE_FORM_VACIO, OFERTA_FORM_VACIO,
   type AltaVehiculoForm, type AltaClienteForm, type AltaOfertaForm,
 } from './alta'
@@ -95,39 +95,6 @@ describe('validarAltaVehiculo', () => {
     const r = row(validarAltaVehiculo(veh({ fecha_ingreso: '2026-08-25' }), NOW))
     expect(r.fecha_ingreso).toBe('2026-08-25')
     expect(validarAltaVehiculo(veh({ fecha_ingreso: '25/08/2026' }), NOW)).toMatchObject({ ok: false })
-  })
-})
-
-describe('ofreceRegistrarCompra', () => {
-  it('sólo con auto propio y precio de compra > 0', () => {
-    expect(ofreceRegistrarCompra({ tipo_operacion: 'propio', precio_compra: '12000' })).toBe(true)
-    expect(ofreceRegistrarCompra({ tipo_operacion: 'propio', precio_compra: '0' })).toBe(false)
-    expect(ofreceRegistrarCompra({ tipo_operacion: 'propio', precio_compra: '' })).toBe(false)
-    expect(ofreceRegistrarCompra({ tipo_operacion: 'propio', precio_compra: 'x' })).toBe(false)
-    // En consignación el auto no lo pagó la agencia: no hay egreso de caja.
-    expect(ofreceRegistrarCompra({ tipo_operacion: 'consignacion', precio_compra: '12000' })).toBe(false)
-  })
-})
-
-describe('movimientoCompra', () => {
-  it('arma el egreso que espera /api/finanzas/movimiento', () => {
-    const body = movimientoCompra(
-      veh({ precio_compra: '12000', fecha_ingreso: '2026-08-20' }), 42, 'cash',
-    )
-    expect(body).toEqual({
-      tipo: 'egreso',
-      categoria: 'vehicle_purchase',
-      cuenta: 'cash',
-      monto: 12000,
-      vehicle_id: 42,
-      descripcion: 'Compra Chevrolet Cruze',
-      fecha: '2026-08-20',
-    })
-  })
-
-  it('sin fecha de ingreso no manda fecha (la route la resuelve como hoy)', () => {
-    const body = movimientoCompra(veh({ precio_compra: '12000' }), 42, 'nexo')
-    expect(Object.keys(body)).not.toContain('fecha')
   })
 })
 

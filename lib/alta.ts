@@ -3,9 +3,8 @@
  *
  * Módulo PURO (sin Next, sin fetch, sin env). Lo usan los diálogos de /stock y
  * /clientes para armar el payload, y los tests para fijar las reglas. La
- * validación de verdad la hace el proxy (/api/db/[table], enums server-side) y
- * la route de finanzas; esto es el espejo client-side, para que el error se vea
- * antes de viajar.
+ * validación de verdad la hace el proxy (/api/db/[table], enums server-side);
+ * esto es el espejo client-side, para que el error se vea antes de viajar.
  *
  * Por qué existe: la instancia de Renato carga autos por WhatsApp (el bot), pero
  * la instancia nueva (TM Motors) sólo tiene el dashboard — sin un alta acá no
@@ -192,42 +191,6 @@ export function validarAltaVehiculo(form: AltaVehiculoForm, nowIso: string): Alt
   if (fecha_ingreso) row.fecha_ingreso = fecha_ingreso
 
   return { ok: true, row }
-}
-
-/**
- * ¿Se ofrece registrar la compra en caja? Sólo tiene sentido para un auto
- * PROPIO con precio de compra > 0: en consignación la plata no sale de la caja
- * (el auto es del consignante), y sin precio no hay monto que asentar.
- */
-export function ofreceRegistrarCompra(form: Pick<AltaVehiculoForm, 'tipo_operacion' | 'precio_compra'>): boolean {
-  if (form.tipo_operacion !== 'propio') return false
-  const n = Number((form.precio_compra ?? '').trim())
-  return Number.isFinite(n) && n > 0
-}
-
-/**
- * Body del egreso que acompaña al alta, para POSTear a /api/finanzas/movimiento
- * (NO al proxy genérico: `movimientos_contabilidad` no está en su ALLOWED, y esa
- * route es la que setea afecta_balance=1).
- */
-export function movimientoCompra(
-  form: AltaVehiculoForm,
-  vehicleId: number,
-  cuenta: string,
-): Record<string, any> {
-  const body: Record<string, any> = {
-    tipo: 'egreso',
-    categoria: 'vehicle_purchase',
-    cuenta,
-    monto: Number(form.precio_compra),
-    vehicle_id: vehicleId,
-    descripcion: `Compra ${(form.marca ?? '').trim()} ${(form.modelo ?? '').trim()}`.trim(),
-  }
-  // La compra se asienta el día que entró el auto, no el día que se cargó la
-  // pantalla. validarMovimiento ancla una fecha pasada al mediodía AR.
-  const fecha = (form.fecha_ingreso ?? '').trim()
-  if (FECHA_RE.test(fecha)) body.fecha = fecha
-  return body
 }
 
 /**
