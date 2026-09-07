@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { type Notificacion, hastaIdVisible, textoBadge, tiempoRelativo } from '@/lib/chat'
+import { type Notificacion, hastaIdVisible, textoBadge, tiempoRelativo } from '@/lib/notificaciones'
 import { cn } from '@/lib/utils'
 import { BellIcon } from 'lucide-react'
 
@@ -46,7 +46,7 @@ export function NotificacionesBell() {
     }
   }, [])
 
-  // Poll SÓLO con la pestaña visible, igual que el chat.
+  // Poll SÓLO con la pestaña visible: en segundo plano no hay nadie mirando.
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null
     const arrancar = () => {

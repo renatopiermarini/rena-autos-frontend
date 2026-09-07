@@ -7,8 +7,6 @@ import { MainNav } from '@/components/main-nav'
 import { ThemeProvider } from '@/components/theme-provider'
 import { getConfigNegocio } from '@/lib/kapso'
 import { brandingFrom } from '@/lib/branding'
-import { mensajesHabilitados } from '@/lib/mensajes'
-import { cotizacionesHabilitadas } from '@/lib/cotizaciones'
 import { backendHabilitado } from '@/lib/backend'
 
 // IBM Plex: la voz "herramienta de operaciones" del design system (ver DESIGN.md).
@@ -32,10 +30,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Una sola lectura de config_negocio para todo lo que el nav necesita saber
-  // de la instancia: cómo se llama (branding) y qué pantallas tiene.
-  const config = await getConfigNegocio()
-  const branding = brandingFrom(config)
+  // config_negocio sólo para el branding del nav: qué pantallas hay ya no
+  // depende de la instancia (main es sólo Renato).
+  const branding = brandingFrom(await getConfigNegocio())
   return (
     <html lang="es" className={cn('font-sans', plexSans.variable, plexMono.variable)} suppressHydrationWarning>
       <body className="bg-background text-foreground min-h-screen antialiased">
@@ -48,13 +45,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <MainNav
             iniciales={branding.iniciales}
             titulo={branding.titulo}
-            mensajes={mensajesHabilitados(config)}
-            cotizaciones={cotizacionesHabilitadas(config)}
-            // El chat y la campana viven del backend del bot. Se lee ACÁ, en el
-            // server, porque BACKEND_API_KEY no puede cruzar al browser — igual
-            // que `documentosHabilitado` en app/stock/page.tsx, y por la misma
+            // La campana vive del backend del bot. Se lee ACÁ, en el server,
+            // porque BACKEND_API_KEY no puede cruzar al browser — igual que
+            // `documentosHabilitado` en app/stock/page.tsx, y por la misma
             // razón (ver lib/backend.ts).
-            chat={backendHabilitado()}
+            backend={backendHabilitado()}
           />
           <main className="mx-auto w-full max-w-[1600px] px-4 sm:px-8 py-6">{children}</main>
           <Toaster position="top-right" richColors />

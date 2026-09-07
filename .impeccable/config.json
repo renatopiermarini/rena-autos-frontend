@@ -4,14 +4,6 @@
     "ignoreFiles": [],
     "ignoreValues": [
       {
-        "rule": "bounce-easing",
-        "value": "animate-bounce",
-        "files": [
-          "app/chat/ChatClient.tsx"
-        ],
-        "createdAt": "2026-08-29T19:21:53.058Z"
-      },
-      {
         "rule": "ai-color-palette",
         "value": "*",
         "files": [

@@ -4,19 +4,19 @@
  * POR QUÉ EXISTE: `BACKEND_API_KEY` es la clave que abre TODO el REST del bot.
  * Si viajara al browser —como NEXT_PUBLIC_, en un fetch del cliente o incrustada
  * en el HTML— quedaría a la vista de cualquiera que abra el inspector. Así que
- * el browser le habla a su propio origen (`/api/chat/...`) y estas rutas de Next
- * son las únicas que conocen la key.
+ * el browser le habla a su propio origen (`/api/ia/...`, `/api/notificaciones`)
+ * y estas rutas de Next son las únicas que conocen la key.
  *
  * Es la misma política que ya aplicaba app/api/documentos/route.ts; esto la
- * factoriza porque el chat y la campana suman seis rutas más.
+ * factoriza porque la campana y los proxies de IA suman varias rutas más.
  *
  * Auth: el middleware de sesión cubre todo menos /login y /api/login, así que
  * estas rutas están detrás de la cookie del dashboard igual que /api/db.
  *
  * FEATURE OPCIONAL: la instancia sin las dos env responde 501 y ni siquiera
- * intenta el fetch. El nav no dibuja el ítem "Chat" ni la campana (mismo gate,
- * leído en el layout), así que el 501 es el cinturón: sólo lo ve quien postee
- * a mano.
+ * intenta el fetch. El nav no dibuja la campana (mismo gate, leído en el
+ * layout) y los formularios traducen el 501 a "esta instancia no tiene backend"
+ * (lib/ia-cliente.ts), así que nadie ve el JSON crudo.
  */
 import { NextResponse } from 'next/server'
 
@@ -31,9 +31,9 @@ export function backendConfig(): BackendConfig | null {
 }
 
 /**
- * ¿Esta instancia tiene backend? Lo llaman los server components (el layout,
- * la page de /chat) para decidir si la pantalla existe. NO puede llamarse desde
- * un client component: ahí `process.env.BACKEND_URL` es `undefined`.
+ * ¿Esta instancia tiene backend? Lo llama el layout (server) para decidir si
+ * la campana existe. NO puede llamarse desde un client component: ahí
+ * `process.env.BACKEND_URL` es `undefined`.
  */
 export function backendHabilitado(): boolean {
   return backendConfig() !== null
@@ -42,7 +42,7 @@ export function backendHabilitado(): boolean {
 /**
  * El 501 de "esta instancia no tiene esta función". No es un error: es un no.
  *
- * `slug` nombra la función en el código de error ("chat_no_configurado") y en
+ * `slug` nombra la función en el código de error ("ia_no_configurado") y en
  * la explicación. Casi nadie lo ve: el nav no dibuja lo que no está.
  */
 export function sinBackend(slug: string): NextResponse {
@@ -71,8 +71,8 @@ export function backendCaido(e: unknown): NextResponse {
  * body, mismo content-type.
  *
  * El passthrough textual no es pereza: los errores del backend traen `detail`
- * en criollo (el 503 del chat sin ANTHROPIC_API_KEY explica exactamente qué
- * falta) y traducirlos acá sería perder esa información o mentirla.
+ * en criollo (el 503 de la IA por cost cap explica exactamente cuándo se
+ * reanuda) y traducirlos acá sería perder esa información o mentirla.
  *
  * Lo único que NO se copia son las cabeceras de la request original: la API key
  * se pone acá y la cookie del dashboard no tiene nada que hacer del otro lado.

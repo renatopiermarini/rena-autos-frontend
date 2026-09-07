@@ -43,6 +43,8 @@ The design consequence is load-bearing: **every screen is read by someone who is
 
 **Confirmed:** the bot carries most of the data entry. The dashboard is read-first — its main job is seeing state and catching problems.
 
+**Confirmed (2026-09-07):** there is no chat with the bot inside the dashboard anymore. AI lives in the forms — a dropzone or a pasted text pre-fills the form and marks the suggested fields; the human reviews and saves through the usual path. The notification bell stays: it is the only surface where a proactive aviso from the backend shows up.
+
 **Confirmed pain point:** manual input in the dashboard is weak and the team wants it improved. So the dashboard is read-first *by circumstance, not by intent* — the write path is underbuilt rather than deliberately minimal. Treat "make manual entry good" as an active goal, not a nice-to-have. The bot stays the primary capture path; the dashboard should be the better path for anything careful, bulk, or corrective.
 
 ## Capabilities and Constraints

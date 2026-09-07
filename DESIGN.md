@@ -17,8 +17,7 @@ Dark es el tema primario (`defaultTheme="dark"`, `enableSystem={false}`).
   Un `oklch(x 0 0)` nuevo es regresión al default shadcn.
 - **`--radius: 0.375rem`** (6px). Filoso = serio. Las primitivas usan
   `rounded-lg` (= el token). Excepciones permitidas y ninguna más: Badge pill
-  (`rounded-4xl`), burbujas de `/chat` (`rounded-2xl`), `rounded-full`,
-  skeletons con `rounded` pelado.
+  (`rounded-4xl`), `rounded-full`, skeletons con `rounded` pelado.
 - **Bordes dark en alpha** (`oklch(0.92 0.030 263 / 12%)`): un solo token
   composita bien sobre background (0.155), card (0.205) y popover (0.225).
   Popover va levantado sobre card para leer como capa.
@@ -78,7 +77,6 @@ Dark es el tema primario (`defaultTheme="dark"`, `enableSystem={false}`).
 
 ## No tocar
 
-- Idioma de burbujas de `/chat` (`rounded-2xl`, colores propios).
 - Badge pill (`rounded-4xl`, h-5).
 - Tarjetas móviles de Stock (split deliberado tabla/tarjetas).
 - Comportamiento de `money()` (locale es-AR, regla de decimales).

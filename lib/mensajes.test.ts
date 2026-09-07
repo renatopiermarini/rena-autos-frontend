@@ -1,35 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-  MENSAJES_CONFIG_KEY, TIPO_PLANTILLA,
-  mensajesHabilitados, plantillasDe, tituloPlantilla, tagsDe, filtrarPlantillas, esLargo,
+  TIPO_PLANTILLA, plantillasDe, tituloPlantilla, tagsDe, filtrarPlantillas, esLargo,
 } from './mensajes'
 
 const fila = (over: Record<string, any> = {}) => ({
   id: 1, tipo: TIPO_PLANTILLA, titulo: 'Seña', contenido: 'Hola, te paso los datos.',
   tags: null, autor: 'rena', ...over,
-})
-
-describe('mensajesHabilitados', () => {
-  it('sin config_negocio cargada dice que sí (instancia de Renato pre-DDL)', () => {
-    expect(mensajesHabilitados({})).toBe(true)
-    expect(mensajesHabilitados(undefined)).toBe(true)
-    expect(mensajesHabilitados(null)).toBe(true)
-  })
-
-  it('con config cargada y sin la clave dice que no (instancia nueva, ej. TM)', () => {
-    expect(mensajesHabilitados({ nombre: 'TM Autos', branding_titulo: 'TM' })).toBe(false)
-  })
-
-  it('con la clave en "1" dice que sí', () => {
-    expect(mensajesHabilitados({ nombre: 'TM', [MENSAJES_CONFIG_KEY]: '1' })).toBe(true)
-    expect(mensajesHabilitados({ nombre: 'TM', [MENSAJES_CONFIG_KEY]: ' 1 ' })).toBe(true)
-  })
-
-  it('cualquier otro valor apaga la pantalla', () => {
-    for (const v of ['0', '', 'true', 'si', 'no']) {
-      expect(mensajesHabilitados({ nombre: 'TM', [MENSAJES_CONFIG_KEY]: v })).toBe(false)
-    }
-  })
 })
 
 describe('plantillasDe', () => {

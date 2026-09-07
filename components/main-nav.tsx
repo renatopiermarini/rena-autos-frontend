@@ -5,41 +5,39 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { NotificacionesBell } from '@/components/notificaciones-bell'
-import { SettingsIcon, MessageSquareTextIcon, MessageCircleIcon } from 'lucide-react'
+import { SettingsIcon, MessageSquareTextIcon } from 'lucide-react'
 
-// Twelve top-level items was five too many. Interesados lives under Clientes,
-// Ofertas is gone, and the tablero replaced the separate calendario.
-//
 // ORDEN: lo diario primero. En 375px la barra corta cerca del cuarto ítem, así
-// que lo que quede después hay que ir a buscarlo scrolleando — y Finanzas, que
-// se abre todos los días, quedaba fuera de la pantalla. Adelante van las de
-// todos los días (Chat, Tablero, Stock, Finanzas, Visitas) y lo que se usa de
-// vez en cuando queda atrás. Configuración va última: con el ícono de engranaje
-// se reconoce sin leer la palabra.
+// que lo que quede después hay que ir a buscarlo scrolleando. Adelante van las
+// pantallas de todos los días (Tablero, Stock, Seguimientos, Visitas, Clientes,
+// Tareas) y las que se abren cuando hay que hacer un papel (Documentos,
+// Documentación). Finanzas baja: desde que el dashboard dejó de escribirla es
+// de consulta, no de carga diaria. Cotizaciones y Mensajes se abren cuando
+// llega un aviso o hay que contestar un WhatsApp; Verificaciones, cuando hay
+// turno. Configuración va última: con el ícono de engranaje se reconoce sin
+// leer la palabra.
+//
+// Sin gates por instancia: main es sólo Renato (Tincho vive en la branch
+// `tincho`), así que todo lo que está acá se ve siempre. Lo único que depende
+// del entorno es la campana — ver el prop `backend`.
 const NAV: { href: string; label: string; icon?: typeof SettingsIcon }[] = [
-  // Chat va PRIMERO, antes que el Tablero: es la puerta más rápida a todo lo
-  // demás (preguntar en criollo en vez de buscar la pantalla), y en 375px lo
-  // primero es lo único que se ve sin scrollear. Sólo está en las instancias
-  // con backend — ver el prop `chat`.
-  { href: '/chat',           label: 'Chat', icon: MessageCircleIcon },
   { href: '/',               label: 'Tablero'        },
   { href: '/stock',          label: 'Stock'          },
-  { href: '/finanzas',       label: 'Finanzas'       },
+  // Seguimientos como entidad propia (antes eran tareas tipo `seguimiento`
+  // que el Tablero escondía). La pantalla llega en la fase 5 del plan de IA
+  // distribuida; hasta entonces es un "Próximamente".
+  { href: '/seguimientos',   label: 'Seguimientos'   },
   { href: '/visitas',        label: 'Visitas'        },
   { href: '/clientes',       label: 'Clientes'       },
   { href: '/tareas',         label: 'Tareas'         },
-  // Cotizaciones con el colega (las llena el bot; acá se marcan enviadas). Va
-  // después de Tareas: se abre cuando llega el aviso, no todos los días. El
-  // nav queda en 12 ítems — el corte de 375px documentado arriba sigue pendiente.
-  { href: '/cotizaciones',   label: 'Cotizaciones'   },
-  // En el lugar que tenía "Guía" (pantalla eliminada). NO está en todas las
-  // instancias: ver el prop `mensajes` más abajo.
-  { href: '/mensajes',       label: 'Mensajes', icon: MessageSquareTextIcon },
-  // Portada de la demo Randazzo (papeles por auto + trámites + turnos). Acá
-  // SUMA en vez de reemplazar Finanzas/Visitas/Verificaciones como allá, y va
-  // en la zona ocasional para no empujar lo diario fuera de los 375px; el nav
-  // queda en 11 ítems, así que el corte documentado arriba empeora — pendiente.
+  // Documentos = generar contratos (recibo de seña, mandato, boleto, recibo de
+  // pago). Documentación = los papeles de cada auto. Son dos cosas distintas y
+  // van pegadas para que se encuentren juntas.
+  { href: '/documentos',     label: 'Documentos'     },
   { href: '/documentacion',  label: 'Documentación'  },
+  { href: '/finanzas',       label: 'Finanzas'       },
+  { href: '/cotizaciones',   label: 'Cotizaciones'   },
+  { href: '/mensajes',       label: 'Mensajes', icon: MessageSquareTextIcon },
   { href: '/verificaciones', label: 'Verificaciones' },
   { href: '/config/negocio', label: 'Configuración', icon: SettingsIcon },
 ]
@@ -51,39 +49,21 @@ const NAV: { href: string; label: string; icon?: typeof SettingsIcon }[] = [
 export function MainNav({
   iniciales = 'RP',
   titulo = 'Renato Piermarini Autos',
-  mensajes = true,
-  cotizaciones = true,
-  chat = false,
+  backend = false,
 }: {
   iniciales?: string
   titulo?: string
   /**
-   * ¿Esta instancia tiene "Mensajes frecuentes"? Lo decide el layout en el
-   * server con mensajesHabilitados(config_negocio) — igual que el branding, acá
-   * no se puede leer la DB. El default `true` es la instancia de Renato sin
-   * config cargada, que es la que hoy la usa.
-   */
-  mensajes?: boolean
-  /**
-   * ¿Esta instancia tiene "Cotizaciones" (colega cotizador)? Misma mecánica que
-   * `mensajes`: lo decide el layout con cotizacionesHabilitadas(config_negocio).
-   * Default `true` = instancia de Renato sin config cargada.
-   */
-  cotizaciones?: boolean
-  /**
-   * ¿Esta instancia tiene backend del bot (BACKEND_URL + BACKEND_API_KEY)?
-   * Enciende el ítem "Chat" Y la campana de avisos, que salen del mismo lugar.
+   * ¿Este entorno tiene backend del bot (BACKEND_URL + BACKEND_API_KEY)?
+   * Enciende SÓLO la campana de avisos: el nav es el mismo con o sin backend.
    * Lo decide el layout en el server: acá `process.env` no existe. El default
-   * `false` es a propósito — sin backend no hay nada del otro lado, y un ítem
-   * que lleva a una pantalla vacía es peor que no tenerlo.
+   * `false` es a propósito — sin backend no hay nada del otro lado, y una
+   * campana que siempre dice "No hay avisos" es peor que no tenerla.
    */
-  chat?: boolean
+  backend?: boolean
 } = {}) {
   const pathname = usePathname()
-  const items = NAV.filter(n =>
-    (n.href !== '/mensajes' || mensajes) &&
-    (n.href !== '/cotizaciones' || cotizaciones) &&
-    (n.href !== '/chat' || chat))
+  const items = NAV
 
   // Indicador de overflow: en el celular la barra cortaba en "Clie…" sin ninguna
   // señal de que había más ítems a la derecha. El degradé aparece SÓLO del lado
@@ -169,7 +149,7 @@ export function MainNav({
           />
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
-          {chat && <NotificacionesBell />}
+          {backend && <NotificacionesBell />}
           <ThemeToggle />
         </div>
       </div>

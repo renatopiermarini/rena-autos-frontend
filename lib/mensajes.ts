@@ -15,30 +15,6 @@
 /** El `tipo` de kb_entries que esta pantalla lee y escribe. Nunca otro. */
 export const TIPO_PLANTILLA = 'plantilla'
 
-/**
- * La clave de config_negocio que enciende la pantalla en una instancia con la
- * config ya cargada. Valor "1" = visible; cualquier otra cosa = oculta.
- */
-export const MENSAJES_CONFIG_KEY = 'mensajes_frecuentes'
-
-/**
- * ¿Esta instancia muestra "Mensajes frecuentes"?
- *
- * Es una pantalla de Renato, no del producto: TM (y cualquier agencia futura)
- * no la tiene. La regla, en el mismo espíritu que el branding:
- *
- *   · config_negocio SIN cargar (`{}`) ⇒ SÍ. Es la instancia de Renato
- *     pre-DDL, donde el fallback tiene que dejar el dashboard como está.
- *   · config_negocio cargada ⇒ sólo si `mensajes_frecuentes` vale "1".
- *
- * Así una instancia nueva (que arranca con su config sembrada) no ve la
- * pantalla sin que nadie la apague, y Renato la conserva sin tocar nada.
- */
-export function mensajesHabilitados(cfg: Record<string, string> | null | undefined): boolean {
-  if (!cfg || Object.keys(cfg).length === 0) return true
-  return (cfg[MENSAJES_CONFIG_KEY] ?? '').trim() === '1'
-}
-
 export type Plantilla = {
   id: number
   titulo: string | null

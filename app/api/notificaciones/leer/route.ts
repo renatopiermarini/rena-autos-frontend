@@ -6,7 +6,7 @@ import { backendConfig, proxyBackend, sinBackend } from '@/lib/backend'
  *
  * Por rango y no por fila porque así se usa la campana: se abre y se da por
  * visto lo que estaba. `hasta_id` es el id más alto que la lista llegó a PINTAR
- * (lib/chat.hastaIdVisible), así que un aviso que entró mientras el popover
+ * (lib/notificaciones.hastaIdVisible), así que un aviso que entró mientras el popover
  * estaba abierto no se marca leído sin que nadie lo haya visto.
  */
 export const dynamic = 'force-dynamic'
