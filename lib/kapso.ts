@@ -1,4 +1,13 @@
+import * as React from 'react'
 import { dbGet, DbError } from '@/lib/db'
+import { memoTtl } from '@/lib/memo'
+
+// Dedupe POR REQUEST: el layout y la page (o dos secciones de la misma page)
+// que leen la misma tabla en un render comparten UNA query. React.cache existe
+// en el React del app router; en vitest (React 18 estable) no, y ahí no hace
+// falta deduplicar.
+const porRequest: <F extends (...args: any[]) => any>(f: F) => F =
+  (React as any).cache ?? ((f: any) => f)
 
 // Toda la lectura pasa por lib/db.ts, que elige backend por DATABASE_URL. Sin
 // esa variable (la instancia de Renato) hace EXACTAMENTE los mismos fetch
@@ -12,7 +21,7 @@ import { dbGet, DbError } from '@/lib/db'
 // nunca muestra un dato viejo después de guardar. Si algún día molesta la
 // latencia, la solución es unstable_cache + revalidateTag en los writes, no
 // bajar el revalidate.
-async function get(table: string, revalidate: number = 30) {
+const getDedup = porRequest(async (table: string, revalidate: number) => {
   try {
     return await dbGet(table, {}, { revalidate })
   } catch (e) {
@@ -22,6 +31,10 @@ async function get(table: string, revalidate: number = 30) {
     if (e instanceof DbError) return e.partial ?? []
     throw e
   }
+})
+
+async function get(table: string, revalidate: number = 30) {
+  return getDedup(table, revalidate)
 }
 
 export async function getBalances()        { return get('balances', 60) }
@@ -103,9 +116,13 @@ export function activasOrdenadas(rows: any[], activeField: string): any[] {
 
 // Filas crudas (con id, activas e inactivas) — las pantallas de configuración
 // necesitan el id para el PATCH y las inactivas para poder reactivarlas.
-export async function getConfigNegocioRows() { return getSafe('config_negocio', 60) }
-export async function getCuentasRows()       { return getSafe('cuentas', 60) }
-export async function getEquipoRows()        { return getSafe('equipo', 60) }
+// Las tres tablas de configuración van con memo de 30 s (lib/memo.ts): el
+// layout las lee en cada navegación y cambian casi nunca. El proxy de
+// escrituras invalida el memo al tocarlas.
+const CONFIG_TTL_MS = 30_000
+export async function getConfigNegocioRows() { return memoTtl('config_negocio', CONFIG_TTL_MS, () => getSafe('config_negocio', 60)) }
+export async function getCuentasRows()       { return memoTtl('cuentas', CONFIG_TTL_MS, () => getSafe('cuentas', 60)) }
+export async function getEquipoRows()        { return memoTtl('equipo', CONFIG_TTL_MS, () => getSafe('equipo', 60)) }
 
 /** Config del negocio como record. `{}` si la tabla no existe todavía. */
 export async function getConfigNegocio(): Promise<Record<string, string>> {

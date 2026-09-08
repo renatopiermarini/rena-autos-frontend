@@ -194,8 +194,12 @@ async function kapsoWrite(
 //
 // SSL no se fuerza: viaja en la URL (`?sslmode=require`), que es como la
 // entrega Railway. Forzarlo acá rompería un Postgres local sin TLS.
+// `max: 6` y no 1: con 1 el pool serializa los Promise.all de cada page (el
+// Tablero lee 11 tablas) y cada lectura paga un round-trip entero a Railway.
+// Seis alcanza para las lecturas paralelas de una page y sigue lejos del tope
+// de conexiones de Postgres aunque haya varias lambdas tibias.
 const PG_OPTS = {
-  max: 1,
+  max: 6,
   idle_timeout: 20,
   max_lifetime: 60 * 30,
   connect_timeout: TIMEOUT_S,
@@ -370,32 +374,34 @@ function pgWhere(sql: Sql, filters: [string, any][]) {
   )
 }
 
+// Postgres no tiene el tope de ~200 filas por request de Kapso: leer una tabla
+// entera es UNA query. Paginar de a 200 como antes costaba un round-trip a
+// Railway por página (tareas = 4 viajes). `PG_MAX_ROWS` es sólo una guarda
+// anti-accidente (una tabla que la supere es una alerta, no un caso de uso).
+const PG_MAX_ROWS = 50_000
+
 async function pgGet(table: string, params: Record<string, any>): Promise<any[]> {
   const sql = sqlClient()
   await columnsOf(table)
   const where = pgWhere(sql, await pgFilters(table, params))
-  const limit = params?.limit === undefined ? PAGE_SIZE : Number(params.limit)
+  const explicito = params?.limit !== undefined || params?.offset !== undefined
   const single = params?.id !== undefined
 
-  const page = async (offset: number) => {
+  if (single || explicito) {
+    // `limit`/`offset` explícitos (o un id) conservan la semántica de página.
+    const limit = params?.limit === undefined ? PAGE_SIZE : Number(params.limit)
+    const offset = Number(params?.offset ?? 0)
     const rows = await sql`
       SELECT * FROM ${sql(table)} ${where} ORDER BY id LIMIT ${limit} OFFSET ${offset}
     `
     return rows.map(outRow)
   }
 
-  if (single) return page(Number(params.offset ?? 0))
-
-  const all: any[] = []
-  let offset = Number(params?.offset ?? 0)
-  for (let i = 0; i < MAX_PAGES; i++) {
-    const rows = await page(offset)
-    if (rows.length === 0) break
-    all.push(...rows)
-    if (rows.length < limit) break
-    offset += rows.length
+  const rows = await sql`SELECT * FROM ${sql(table)} ${where} ORDER BY id LIMIT ${PG_MAX_ROWS}`
+  if (rows.length >= PG_MAX_ROWS) {
+    console.warn(`[db] ${table}: ${rows.length} filas — se alcanzó PG_MAX_ROWS; puede haber más.`)
   }
-  return all
+  return rows.map(outRow)
 }
 
 // ── API pública ──────────────────────────────────────────────────────────────

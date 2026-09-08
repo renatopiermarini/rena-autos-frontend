@@ -296,8 +296,8 @@ describe('backend Postgres (con DATABASE_URL)', () => {
     const sql = fakePg(() => [])
     await dbGet('visitas', { vehicle_id: 5 })
     const q = queries(sql)[0]
-    expect(q.text).toBe('SELECT * FROM "visitas" WHERE "vehicle_id" = $1 ORDER BY id LIMIT $2 OFFSET $3')
-    expect(q.params).toEqual([5, 200, 0])
+    expect(q.text).toBe('SELECT * FROM "visitas" WHERE "vehicle_id" = $1 ORDER BY id LIMIT $2')
+    expect(q.params).toEqual([5, 50_000])
   })
 
   it('varios filtros se encadenan con AND, cada valor en su placeholder', async () => {
@@ -305,7 +305,7 @@ describe('backend Postgres (con DATABASE_URL)', () => {
     await dbGet('vehicles', { estado: 'publicado', marca: "O'Higgins" })
     const q = queries(sql)[0]
     expect(q.text).toContain('WHERE "estado" = $1 AND "marca" = $2')
-    expect(q.params).toEqual(['publicado', "O'Higgins", 200, 0])
+    expect(q.params).toEqual(['publicado', "O'Higgins", 50_000])
     // Ni una comilla del valor llegó al texto de la query.
     expect(q.text).not.toContain("O'Higgins")
   })
@@ -318,16 +318,18 @@ describe('backend Postgres (con DATABASE_URL)', () => {
     expect(q.params).toEqual([10, 20])
   })
 
-  it('pagina de a 200 como Kapso', async () => {
-    let served = 0
-    const sql = fakePg(() => {
-      const page = served < 400 ? rowsOf(200, served) : rowsOf(3, served)
-      served += page.length
-      return page
-    })
+  it('lee la tabla entera en UNA query (Postgres no topa en 200 como Kapso)', async () => {
+    const sql = fakePg(() => rowsOf(403, 0))
     const rows = await dbGet('vehicles')
     expect(rows).toHaveLength(403)
-    expect(queries(sql).map(q => q.params[q.params.length - 1])).toEqual([0, 200, 400])
+    expect(queries(sql)).toHaveLength(1)
+    expect(queries(sql)[0].text).not.toContain('OFFSET')
+  })
+
+  it('un id explícito sigue siendo una página con LIMIT/OFFSET', async () => {
+    const sql = fakePg(() => [{ id: 7 }])
+    await dbGet('vehicles', { id: 7 })
+    expect(queries(sql)[0].text).toContain('OFFSET')
   })
 
   it('normaliza la salida como el JSON de Kapso: booleanos 0/1, bigint number, fechas ISO', async () => {

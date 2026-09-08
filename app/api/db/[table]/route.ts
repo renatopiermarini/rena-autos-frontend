@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { CLAVE_RE, isValidClave, routesError } from '@/lib/routes-catalog'
 import { dbGet, dbPost, dbPatch, dbDelete, dbCount, DbError, matches } from '@/lib/db'
+import { memoInvalidar } from '@/lib/memo'
 
 // Toda la I/O pasa por lib/db.ts (Kapso REST o Postgres según DATABASE_URL).
 // Las validaciones, el orden de los guards y los códigos de error de acá NO
@@ -339,6 +340,8 @@ function bustCache(table?: string) {
   else revalidatePath('/', 'layout')
   // Un alta del equipo tiene que poder asignarse una tarea EN EL ACTO, no en 60 s.
   if (table === 'equipo') equipoCache = null
+  // Las tablas de configuración van con memo de 30 s en lib/kapso.ts.
+  if (table === 'equipo' || table === 'cuentas' || table === 'config_negocio') memoInvalidar(table)
 }
 
 // Respuesta de una escritura. El envoltorio `{ data }` es el de la REST de
