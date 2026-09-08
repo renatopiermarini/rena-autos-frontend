@@ -58,6 +58,13 @@ async function getSafe(table: string, revalidate: number): Promise<any[]> {
 // scripts/ddl_cotizaciones.sql en rena-autos-api), así que va por getSafe.
 export async function getCotizaciones() { return getSafe('cotizaciones', 15) }
 
+// Los archivos por auto viven en Postgres (`documentos`, con los bytes). El
+// dashboard lee SÓLO la vista `documentos_meta` (todo menos `contenido`): los
+// seams convierten bytea a string y arrastrarían megas de basura al browser.
+// Los bytes bajan por el proxy /api/documentos/[id]/descargar. En modo Kapso
+// la vista no existe → [] (getSafe), y las pantallas muestran "sin archivos".
+export async function getDocumentosMeta() { return getSafe('documentos_meta', 15) }
+
 // D1 devuelve los booleanos como 1/0, "1"/"0" o true/false según el driver.
 // Boolean('0') es true, así que se coerce siempre. Sin valor = activo (una fila
 // vieja sin la columna no debería desaparecer de la UI).

@@ -5,7 +5,7 @@
  * "si Kapso contesta mal, devolvé lo que se leyó" en vez de tirar la pantalla.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { getVehicles, getBalances, getConfigNegocioRows } from '@/lib/kapso'
+import { getVehicles, getBalances, getConfigNegocioRows, getDocumentosMeta } from '@/lib/kapso'
 
 const OLD_ENV = { ...process.env }
 
@@ -56,6 +56,14 @@ describe('lecturas del dashboard (backend Kapso)', () => {
   it('un 404 (tabla sin crear) es lista vacía', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonRes({ error: 'not found' }, 404)))
     await expect(getConfigNegocioRows()).resolves.toEqual([])
+  })
+
+  it('getDocumentosMeta lee la VISTA documentos_meta (nunca la tabla con los bytes) y sin ella es []', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonRes({ error: 'not found' }, 404))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(getDocumentosMeta()).resolves.toEqual([])
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/documentos_meta?')
+    expect(String(fetchMock.mock.calls[0][0])).not.toMatch(/\/documentos\?/)
   })
 
   it('una red caída la absorbe getSafe en las tablas de configuración', async () => {

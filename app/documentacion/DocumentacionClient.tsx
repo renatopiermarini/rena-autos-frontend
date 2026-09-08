@@ -8,11 +8,15 @@ import { fmtDMY } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon, FileCheck2Icon } from 'lucide-react'
+import { ChevronDownIcon, ChevronUpIcon, FileCheck2Icon } from 'lucide-react'
 import { EmptyState } from '@/components/empty-state'
+import { DocumentosLista } from '@/components/documentos-lista'
+import { DocumentoUpload } from '@/components/documento-upload'
+import { documentosDeVehiculo, type DocumentoMeta } from '@/lib/documentos'
 
 // Espejo de tools/documentacion_tools.py ITEMS (columnas doc_* de vehicles) y
-// de DOC_ITEMS en app/stock/StockClient.tsx. Cambiar allá y acá.
+// de DOC_ITEMS en app/stock/VehicleDialog.tsx (la tab Documentación de la
+// ficha). Cambiar allá y acá.
 const DOC_ITEMS: { key: string; label: string }[] = [
   { key: 'doc_formulario_08', label: 'Formulario 08 firmado y certificado' },
   { key: 'doc_cedulas', label: 'Cédulas titular y autorizados' },
@@ -53,7 +57,14 @@ function autoLabel(v: any): string {
   return v.dominio ? `${base} · ${v.dominio}` : base || `#${v.id}`
 }
 
-function FilaAuto({ v, onDone }: { v: any; onDone: () => void }) {
+function FilaAuto({ v, documentos, backend, onDone }: {
+  v: any
+  /** Los archivos guardados de ESTE auto (documentos_meta). */
+  documentos: DocumentoMeta[]
+  /** ¿Hay backend? Sin él no hay dropzone (subir requiere Postgres del otro lado). */
+  backend: boolean
+  onDone: () => void
+}) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const n = docCount(v)
@@ -80,7 +91,12 @@ function FilaAuto({ v, onDone }: { v: any; onDone: () => void }) {
               : <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />}
         <span className="font-medium">{autoLabel(v)}</span>
         <Badge variant={estadoMeta(v.estado).variant}>{estadoMeta(v.estado).label}</Badge>
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto flex items-center gap-3">
+          {documentos.length > 0 && (
+            <span className="text-xs font-mono tabular-nums text-muted-foreground">
+              {documentos.length} archivo{documentos.length === 1 ? '' : 's'}
+            </span>
+          )}
           {completo && <FileCheck2Icon className="size-4 text-success" />}
           <span className={completo ? 'text-success text-sm font-medium' : 'text-sm text-muted-foreground'}>
             Papeles · {n}/{DOC_ITEMS.length}
@@ -101,14 +117,18 @@ function FilaAuto({ v, onDone }: { v: any; onDone: () => void }) {
               <span className={docOk(v, d.key) ? '' : 'text-muted-foreground'}>{d.label}</span>
             </label>
           ))}
-          {v.drive_url ? (
-            <a href={v.drive_url} target="_blank" rel="noreferrer"
-               className="inline-flex items-center gap-1 text-sm text-primary hover:underline pt-1">
-              Abrir carpeta de Drive <ExternalLinkIcon className="size-3.5" />
-            </a>
-          ) : (
-            <p className="text-xs text-muted-foreground pt-1">Sin carpeta de Drive — se crea desde el chat.</p>
-          )}
+          <div className="pt-3 space-y-3">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+              Archivos ({documentos.length})
+            </p>
+            <DocumentosLista
+              documentos={documentos}
+              vacio={backend
+                ? 'Sin archivos todavía. Subí uno acá abajo o mandalo por WhatsApp al bot.'
+                : 'Sin archivos. Esta instancia no tiene backend: los papeles se guardan desde el bot.'}
+            />
+            {backend && <DocumentoUpload vehicleId={Number(v.id)} dominio={v.dominio} />}
+          </div>
         </div>
       )}
     </div>
@@ -116,9 +136,13 @@ function FilaAuto({ v, onDone }: { v: any; onDone: () => void }) {
 }
 
 export default function DocumentacionClient({
-  vehicles, tramites, turnos,
+  vehicles, tramites, turnos, documentos = [], backend = false,
 }: {
   vehicles: any[]; tramites: any[]; turnos: any[]
+  /** Filas de documentos_meta (todos los autos); cada acordeón filtra las suyas. */
+  documentos?: DocumentoMeta[]
+  /** ¿Hay backend (BACKEND_URL + BACKEND_API_KEY)? Enciende el dropzone de cada auto. */
+  backend?: boolean
 }) {
   const router = useRouter()
   const refresh = () => router.refresh()
@@ -164,7 +188,15 @@ export default function DocumentacionClient({
           <CardContent className="p-0">
             {activos.length === 0
               ? <EmptyState title="Sin autos activos" />
-              : activos.map((v: any) => <FilaAuto key={v.id} v={v} onDone={refresh} />)}
+              : activos.map((v: any) => (
+                <FilaAuto
+                  key={v.id}
+                  v={v}
+                  documentos={documentosDeVehiculo(documentos, v.id)}
+                  backend={backend}
+                  onDone={refresh}
+                />
+              ))}
           </CardContent>
         </Card>
       </section>
@@ -243,9 +275,10 @@ export default function DocumentacionClient({
       )}
 
       <p className="text-xs text-muted-foreground">
-        El checklist también se ve auto por auto en <Link href="/stock" className="text-primary hover:underline">Stock</Link>,
-        y el asistente del <Link href="/chat" className="text-primary hover:underline">Chat</Link> puede tildar papeles,
-        crear la carpeta de Drive y subir fotos de los papeles por WhatsApp.
+        Los papeles se suben acá o por WhatsApp al bot (que también tilda el checklist); los contratos
+        generados en <Link href="/documentos" className="text-primary hover:underline">Documentos</Link> quedan
+        guardados en el auto. El mismo checklist y los mismos archivos se ven en la ficha de cada auto
+        en <Link href="/stock" className="text-primary hover:underline">Stock</Link>.
       </p>
     </div>
   )

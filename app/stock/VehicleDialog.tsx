@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { computeVehicleFinancials, computeLoanPosition, round2 } from '@/lib/kapso'
 import { fmtDMY as fmtFecha, fmtDM as fmtFechaCorta } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
@@ -13,6 +14,9 @@ import { aplicarSugerencia, limpiarSugerencias, marcarTocado, type CamposIa } fr
 import { sugerenciaVehiculo, type VehiculoExtraido } from '@/lib/ia-formularios'
 import { IaDropzone } from '@/components/ia-dropzone'
 import { CAMPO_IA_CLS, IaChip, IaSugerenciasBar } from '@/components/ia-hint'
+import { DocumentosLista } from '@/components/documentos-lista'
+import { DocumentoUpload } from '@/components/documento-upload'
+import { documentosDeVehiculo, type DocumentoMeta } from '@/lib/documentos'
 import { cn } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogClose, DialogTitle, useDirtyClose,
@@ -24,17 +28,20 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { XIcon, FileTextIcon } from 'lucide-react'
+import { XIcon, FileSignatureIcon } from 'lucide-react'
 import RegistrarVentaDialog from './RegistrarVentaDialog'
-import DocumentoDialog from './DocumentoDialog'
 
 /**
  * Detalle de un auto como modal full-screen con tabs (Datos · Negocio ·
- * Papeles · Gastos). Reemplaza a la fila expandible de la tabla: el detalle
- * mezclaba papeles, plata y tareas en una sola grilla y se volvía ilegible.
+ * Documentación · Gastos). Reemplaza a la fila expandible de la tabla: el
+ * detalle mezclaba papeles, plata y tareas en una sola grilla y se volvía
+ * ilegible.
  *
  * Los papeles acá se tildan DIRECTO (PATCH por ítem, optimista) — antes había
- * que entrar a "Editar" para tocar un checkbox.
+ * que entrar a "Editar" para tocar un checkbox. Debajo del checklist van los
+ * archivos guardados del auto (vista documentos_meta, cargada server-side en
+ * app/stock/page.tsx) y el dropzone para subir uno más; los contratos se
+ * generan en /documentos y vuelven acá con origen "Generado".
  */
 
 const CAT_LABEL_FIN: Record<string, string> = {
@@ -137,10 +144,12 @@ export type VehicleDialogProps = {
   /** Filas de verificaciones_mecanicas — para el "Verificación paga sí/no". */
   verificaciones?: any[]
   comisionPct?: number
-  /** ¿La instancia tiene backend de contratos? Sin él, no hay botón. */
+  /** ¿La instancia tiene backend? Sin él, ni dropzone de papeles ni link a /documentos. */
   documentosHabilitado?: boolean
   /** ¿Hay backend de IA? Sin él, el dropzone de "Completar desde la tarjeta" no existe. */
   ia?: boolean
+  /** Filas de documentos_meta (todos los autos): la tab Documentación filtra las suyas. */
+  documentos?: DocumentoMeta[]
 }
 
 export default function VehicleDialog(props: VehicleDialogProps) {
@@ -155,13 +164,12 @@ export default function VehicleDialog(props: VehicleDialogProps) {
 function VehicleDialogBody({
   v, onOpenChange, clientes, vehicles, movimientos, prestamos, tareas = [],
   verificaciones = [], comisionPct = COMISION_PCT_DEFAULT,
-  documentosHabilitado = false, ia = false,
+  documentosHabilitado = false, ia = false, documentos = [],
 }: VehicleDialogProps) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showVenta, setShowVenta] = useState(false)
-  const [showDoc, setShowDoc] = useState(false)
 
   const inicial = {
     estado: v.estado ?? '',
@@ -177,7 +185,6 @@ function VehicleDialogBody({
     fecha_ingreso: v.fecha_ingreso ? v.fecha_ingreso.slice(0, 10) : '',
     fecha_venta: v.fecha_venta ? v.fecha_venta.slice(0, 10) : '',
     notas: v.notas ?? '',
-    drive_url: v.drive_url ?? '',
   }
   const [form, setForm] = useState(inicial)
   type FormEdicion = typeof inicial
@@ -304,6 +311,7 @@ function VehicleDialogBody({
     })
   const dias = diasEnStock(v.fecha_ingreso)
   const papelesOk = DOC_ITEMS.filter(d => docs[d.key]).length
+  const docsDelAuto = documentosDeVehiculo(documentos, v.id)
 
   return (
     <Dialog open {...dialogProps}>
@@ -346,11 +354,6 @@ function VehicleDialogBody({
                     precio está "Editar" (que no toca la caja). */}
                 {v.estado !== 'vendido' && (
                   <Button size="sm" onClick={() => setShowVenta(true)}>Registrar venta</Button>
-                )}
-                {documentosHabilitado && (
-                  <Button variant="outline" size="sm" onClick={() => setShowDoc(true)}>
-                    <FileTextIcon /> Documento
-                  </Button>
                 )}
               </>
             )}
@@ -397,9 +400,6 @@ function VehicleDialogBody({
                 <Label>Notas</Label>
                 <Textarea value={form.notas} onChange={e => set('notas')(e.target.value)} rows={2} />
               </div>
-              <div className="col-span-2 sm:col-span-3 lg:col-span-4">
-                <FInput label="Carpeta de Drive (link)" value={form.drive_url} onChange={set('drive_url')} type="url" />
-              </div>
             </div>
             <div className="mt-4 flex gap-2">
               <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
@@ -414,8 +414,8 @@ function VehicleDialogBody({
               <TabsList variant="line" className="h-10">
                 <TabsTrigger value="datos">Datos</TabsTrigger>
                 <TabsTrigger value="negocio">Negocio</TabsTrigger>
-                <TabsTrigger value="papeles">
-                  Papeles
+                <TabsTrigger value="documentacion">
+                  Documentación
                   <span className={`font-mono tabular-nums text-xs ${papelesOk === DOC_ITEMS.length ? 'text-success' : 'text-muted-foreground'}`}>
                     {papelesOk}/{DOC_ITEMS.length}
                   </span>
@@ -520,22 +520,18 @@ function VehicleDialogBody({
                 </div>
               </TabsContent>
 
-              <TabsContent value="papeles">
-                <div className="mb-3 flex items-center gap-3">
+              <TabsContent value="documentacion">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <p className="text-xs text-muted-foreground">
-                    Se guardan al tildar — no hace falta pasar por Editar.
+                    Se guardan al tildar — no hace falta pasar por Editar. Subir un papel de la lista lo tilda solo.
                   </p>
-                  {v.drive_url ? (
-                    <a
-                      href={v.drive_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary underline underline-offset-2"
+                  {documentosHabilitado && (
+                    <Link
+                      href={`/documentos?vehicle_id=${v.id}`}
+                      className="inline-flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
                     >
-                      Abrir carpeta de Drive ↗
-                    </a>
-                  ) : (
-                    <span className="text-xs text-muted-foreground/70">sin carpeta de Drive</span>
+                      <FileSignatureIcon aria-hidden className="size-3.5" /> Generar documento
+                    </Link>
                   )}
                 </div>
                 <ul className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
@@ -554,6 +550,21 @@ function VehicleDialogBody({
                     </li>
                   ))}
                 </ul>
+
+                <div className="mt-5 border-t border-border pt-4">
+                  <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                    Archivos ({docsDelAuto.length})
+                  </p>
+                  <DocumentosLista
+                    documentos={docsDelAuto}
+                    vacio={documentosHabilitado
+                      ? 'Sin archivos todavía. Subí uno acá abajo o mandalo por WhatsApp al bot.'
+                      : 'Sin archivos. Esta instancia no tiene backend: los papeles se guardan desde el bot.'}
+                  />
+                  {documentosHabilitado && (
+                    <DocumentoUpload vehicleId={Number(v.id)} dominio={v.dominio} className="mt-3" />
+                  )}
+                </div>
               </TabsContent>
 
               <TabsContent value="gastos">
@@ -641,14 +652,6 @@ function VehicleDialogBody({
         comisionPct={comisionPct}
       />
 
-      {documentosHabilitado && (
-        <DocumentoDialog
-          open={showDoc}
-          onOpenChange={setShowDoc}
-          vehiculo={v}
-          clientes={clientes}
-        />
-      )}
     </DialogContent>
     </Dialog>
   )

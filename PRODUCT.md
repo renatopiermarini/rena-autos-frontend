@@ -35,6 +35,8 @@ The design consequence is load-bearing: **every screen is read by someone who is
 | Visitas | Scheduled vehicle viewings |
 | Clientes | People, incl. deudor/acreedor standing |
 | Finanzas | Balances, movimientos, préstamos, cost vs sale — read-only: asientos, préstamos y ajustes los carga Claude por SQL |
+| Documentos | Generate contracts (recibo de seña, recibo de pago/saldo, mandato, boleto) from templates; live "faltantes" check against the backend before generating; generated files are saved to the car |
+| Documentación | Per-car paperwork: the 6-item checklist plus the uploaded files (photo/PDF, AI-classified, human-confirmed) stored in Postgres — no Drive folder anymore |
 | Tareas | To-dos with priority |
 | KB | Knowledge base entries |
 | Transferencias | Title-transfer appointments (turnos) |

@@ -1,6 +1,7 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDeepLinkId } from '@/lib/deep-link'
 import { fmtDMY as fmtFecha } from '@/lib/date'
 import { estadoMeta } from '@/lib/estados'
 import { diasEnStock, tarjetaVehiculo } from '@/lib/stock'
@@ -17,6 +18,7 @@ import NuevoAutoDialog from './NuevoAutoDialog'
 import VehicleDialog from './VehicleDialog'
 import { COMISION_PCT_DEFAULT } from '@/lib/venta'
 import { money, fmtN } from '@/lib/money'
+import type { DocumentoMeta } from '@/lib/documentos'
 
 // Mapeo del flag del vehículo → tipo de tarea que se debe completar
 // cuando se tilda el check en la tabla.
@@ -274,7 +276,7 @@ const ESTADO_ORDER = [
 export default function StockClient({
   vehicles, tareas, clientes, movimientos = [], prestamos = [], defAssignee = DEFAULT_ASSIGNEE,
   comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false, ia = false,
-  verificaciones = [],
+  verificaciones = [], documentos = [],
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos?: any[]; prestamos?: any[]
   // Filas crudas de verificaciones_mecanicas: de acá sale el "Verificación
@@ -292,10 +294,21 @@ export default function StockClient({
   documentosHabilitado?: boolean
   /** ¿Hay backend de IA? Enciende los dropzones de Nuevo auto y de la ficha. */
   ia?: boolean
+  /** Filas de documentos_meta (archivos por auto) para la tab Documentación de la ficha. */
+  documentos?: DocumentoMeta[]
 }) {
   // Auto abierto en el modal de detalle (null = cerrado). Reemplaza a la fila
   // expandible: el detalle vive en VehicleDialog, full-screen con tabs.
   const [openId, setOpenId] = useState<number | null>(null)
+  // `?id=<auto>` (desde el panel de faltantes de /documentos: "cargalo en la
+  // ficha del auto") abre el detalle directo. Se compara por Number: en Kapso
+  // los ids pueden venir como string.
+  const deepId = useDeepLinkId()
+  useEffect(() => {
+    if (deepId == null) return
+    const v = vehicles.find((x: any) => Number(x.id) === deepId)
+    if (v) setOpenId(v.id)
+  }, [deepId, vehicles])
   const [showNew, setShowNew] = useState(false)
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos')
   // Default to ownership, not estado: "is this car mine or on consignment?" is
@@ -510,6 +523,7 @@ export default function StockClient({
         comisionPct={comisionPct}
         documentosHabilitado={documentosHabilitado}
         ia={ia}
+        documentos={documentos}
       />
     </div>
   )

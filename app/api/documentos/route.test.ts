@@ -63,6 +63,22 @@ describe('POST /api/documentos', () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([0x25, 0x50, 0x44, 0x46]))
   })
 
+  it('`guardar` viaja tal cual y el X-Documento-Id del archivo guardado vuelve', async () => {
+    const calls = mockBackend({
+      headers: { 'content-type': 'application/pdf', 'x-documento-id': '41' },
+    })
+    const res = await POST(pedido({ ...BODY, guardar: true }))
+    expect(JSON.parse(calls[0].init.body).guardar).toBe(true)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-documento-id')).toBe('41')
+  })
+
+  it('sin guardar no hay X-Documento-Id', async () => {
+    mockBackend({ headers: { 'content-type': 'application/pdf' } })
+    const res = await POST(pedido())
+    expect(res.headers.get('x-documento-id')).toBeNull()
+  })
+
   it('la barra final de BACKEND_URL no duplica la barra de la ruta', async () => {
     process.env.BACKEND_URL = 'https://backend.test/'
     const calls = mockBackend({})

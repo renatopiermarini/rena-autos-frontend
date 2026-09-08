@@ -10,9 +10,12 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  DOCUMENTO_FORM_VACIO, filenameDeDisposition, filenameFallback, pideValorEstimado,
-  planDocumento, traducirDetalles, traducirErrorBackend, traducirFaltantes, valorDeVehiculo,
-  type DocumentoForm,
+  DOCUMENTO_FORM_VACIO, TIPOS_DOC, TIPO_DOCUMENTO_LABEL, TIPOS_SUBIBLES, TIPO_A_COLUMNA_DOC,
+  ORIGEN_LABEL, autosParaDocumentos, documentosDeVehiculo, documentosGenerados,
+  filenameDeDisposition, filenameFallback, filtrarAutos, filtrarClientes, idDocumentoValido, origenLabel,
+  pidePrecioTotal, pideValorEstimado, planDocumento, tamanioLegible, tipoDocumentoLabel,
+  traducirDetalles, traducirErrorBackend, traducirFaltantes, traducirPreparar, valorDeVehiculo,
+  type DocumentoForm, type DocumentoMeta,
 } from './documentos'
 
 const AUTO = { id: 7, marca: 'VW', modelo: 'Amarok', dominio: 'AB123CD', precio_venta_objetivo: 25000 }
@@ -90,6 +93,49 @@ describe('planDocumento', () => {
     expect((r as any).body.campos_extra.valor_usd).toBe(18000)
   })
 
+  it('recibo de pago con precio en la ficha: manda monto_pagado, pagos_previos (0 por defecto) y moneda', () => {
+    const r = planDocumento(form({ tipo: 'recibo_pago', monto_pagado: '5000' }), AUTO)
+    expect(r).toEqual({
+      ok: true,
+      body: {
+        tipo: 'recibo_pago',
+        vehicle_id: 7,
+        cliente_id: 3,
+        campos_extra: { fecha: '2026-08-25', monto_pagado: 5000, pagos_previos: 0, moneda: 'USD' },
+        formato: 'pdf',
+      },
+    })
+  })
+
+  it('recibo de pago: pagos previos y concepto viajan cuando se cargan', () => {
+    const r = planDocumento(
+      form({ tipo: 'recibo_pago', monto_pagado: '20000', pagos_previos: '5000', concepto: 'saldo total' }),
+      AUTO,
+    )
+    expect((r as any).body.campos_extra).toEqual({
+      fecha: '2026-08-25', monto_pagado: 20000, pagos_previos: 5000, concepto: 'saldo total', moneda: 'USD',
+    })
+  })
+
+  it('recibo de pago sin precio en la ficha: exige el precio total y lo manda', () => {
+    const sinPrecio = { id: 7, dominio: 'AB123CD' }
+    expect(pidePrecioTotal('recibo_pago', sinPrecio)).toBe(true)
+    expect(pidePrecioTotal('recibo_pago', AUTO)).toBe(false)
+    expect(pidePrecioTotal('boleto', AUTO)).toBe(true)
+    expect(planDocumento(form({ tipo: 'recibo_pago', monto_pagado: '100' }), sinPrecio)).toEqual({
+      ok: false, error: 'El auto no tiene precio cargado: poné el precio total de la venta.',
+    })
+    const r = planDocumento(form({ tipo: 'recibo_pago', monto_pagado: '100', precio_total: '18000' }), sinPrecio)
+    expect((r as any).body.campos_extra.precio_total).toBe(18000)
+  })
+
+  it('recibo de pago: el pago no puede superar el saldo (misma regla que el backend)', () => {
+    const r = planDocumento(form({ tipo: 'recibo_pago', monto_pagado: '21000', pagos_previos: '5000' }), AUTO)
+    expect(r.ok).toBe(false)
+    expect((r as any).error).toContain('supera el saldo')
+    expect(planDocumento(form({ tipo: 'recibo_pago', monto_pagado: '0' }), AUTO).ok).toBe(false)
+  })
+
   it('pide tipo y cliente, con el rol del tipo elegido', () => {
     expect(planDocumento(form({ tipo: '' }), AUTO)).toEqual({
       ok: false, error: 'Elegí qué documento querés generar.',
@@ -144,6 +190,36 @@ describe('traducirFaltantes', () => {
     expect(r.linkClientes).toBe(false)
     expect(r.items[0]).toContain('El auto no tiene precio cargado')
   })
+
+  it('un dato del auto que falta prende el link a la ficha del auto', () => {
+    const r = traducirFaltantes(['vehiculo.dominio'])
+    expect(r.linkAuto).toBe(true)
+    expect(r.linkClientes).toBe(false)
+    expect(traducirFaltantes(['comprador.dni']).linkAuto).toBe(false)
+  })
+
+  it('los campos del recibo de pago tienen nombre en criollo', () => {
+    expect(traducirFaltantes(['monto_pagado']).items).toEqual(['Falta el monto pagado.'])
+  })
+})
+
+describe('traducirPreparar', () => {
+  it('ok: true → null (no hay nada que mostrar)', () => {
+    expect(traducirPreparar({ ok: true, faltantes: [], detalles: [] })).toBeNull()
+  })
+
+  it('faltantes y detalles se traducen igual que el 422', () => {
+    const r = traducirPreparar({ ok: false, faltantes: ['comprador.dni'], detalles: [] })
+    expect(r?.items).toEqual(['Comprador: falta DNI.'])
+    expect(r?.linkClientes).toBe(true)
+    const d = traducirPreparar({ ok: false, faltantes: [], detalles: ['vehiculo.dominio: Input should be a valid string'] })
+    expect(d?.items).toEqual(['El auto: falta la patente.'])
+    expect(d?.linkAuto).toBe(true)
+  })
+
+  it('un body sin ok no habilita Generar a ciegas', () => {
+    expect(traducirPreparar({})?.titulo).toContain('no pudo verificar')
+  })
 })
 
 describe('traducirDetalles', () => {
@@ -190,6 +266,11 @@ describe('traducirDetalles', () => {
   it('un mensaje desconocido se muestra igual, no se traga', () => {
     const r = traducirDetalles(['algo.raro: Value error, se rompió todo'])
     expect(r.items).toEqual(['Se rompió todo'])
+  })
+
+  it('el pago que supera el saldo (recibo de pago) se dice en criollo', () => {
+    const r = traducirDetalles(['documento: Value error, El pago supera el saldo pendiente (USD 20000)'])
+    expect(r.items[0]).toContain('supera el saldo')
   })
 })
 
@@ -256,5 +337,88 @@ describe('filenameDeDisposition', () => {
   it('el fallback se arma con la patente y no trae caracteres raros', () => {
     expect(filenameFallback('mandato', AUTO, 'docx')).toBe('mandato-AB123CD.docx')
     expect(filenameFallback('boleto', { id: 4 }, 'pdf')).toBe('boleto-4.pdf')
+  })
+})
+
+describe('archivos guardados (documentos_meta)', () => {
+  const DOCS: DocumentoMeta[] = [
+    { id: 1, vehicle_id: 7, cliente_id: null, tipo: 'titulo', nombre: 'titulo.pdf', mime: 'application/pdf', tamanio: 2048, origen: 'whatsapp', created_at: '2026-08-01T10:00:00' },
+    { id: 2, vehicle_id: 7, cliente_id: 3, tipo: 'contrato_boleto', nombre: 'Boleto.pdf', mime: 'application/pdf', tamanio: 900, origen: 'generado', created_at: '2026-08-20T10:00:00' },
+    { id: 3, vehicle_id: 8, cliente_id: null, tipo: 'otro', nombre: 'x.jpg', mime: 'image/jpeg', tamanio: 3 * 1024 * 1024, origen: 'dashboard', created_at: '2026-08-15T10:00:00' },
+  ]
+
+  it('las 4 plantillas tienen "cuándo se usa" y rol; el recibo de pago es del comprador', () => {
+    expect(TIPOS_DOC.map(t => t.tipo)).toEqual(['recibo_sena', 'recibo_pago', 'mandato', 'boleto'])
+    expect(TIPOS_DOC.every(t => t.descripcion && t.rolCliente)).toBe(true)
+    expect(TIPOS_DOC.find(t => t.tipo === 'recibo_pago')?.rolCliente).toBe('Comprador')
+  })
+
+  it('todos los tipos de la tabla tienen etiqueta; los 6 papeles mapean a su columna doc_*', () => {
+    expect(Object.keys(TIPO_DOCUMENTO_LABEL)).toHaveLength(12)
+    expect(Object.keys(TIPO_A_COLUMNA_DOC)).toEqual([
+      'formulario_08', 'cedulas', 'titulo', 'informe_dominio', 'verificacion_policial', 'libre_deudas',
+    ])
+    expect(TIPOS_SUBIBLES).not.toContain('contrato_boleto')
+    expect(tipoDocumentoLabel('contrato_recibo_pago')).toBe('Recibo de pago')
+    expect(tipoDocumentoLabel('algo_nuevo')).toBe('algo nuevo')
+    expect(tipoDocumentoLabel(null)).toBe('Otro')
+  })
+
+  it('el origen se nombra; uno desconocido se muestra crudo', () => {
+    expect(Object.keys(ORIGEN_LABEL)).toEqual(['dashboard', 'whatsapp', 'generado', 'claude'])
+    expect(origenLabel('whatsapp')).toBe('WhatsApp')
+    expect(origenLabel('bot')).toBe('bot')
+    expect(origenLabel(null)).toBe('—')
+  })
+
+  it('tamanioLegible: B / KB / MB con coma decimal', () => {
+    expect(tamanioLegible(900)).toBe('900 B')
+    expect(tamanioLegible(2048)).toBe('2 KB')
+    expect(tamanioLegible(3 * 1024 * 1024)).toBe('3,0 MB')
+    expect(tamanioLegible(1.25 * 1024 * 1024)).toBe('1,3 MB')
+    expect(tamanioLegible(null)).toBe('—')
+    expect(tamanioLegible('x')).toBe('—')
+  })
+
+  it('documentosDeVehiculo filtra por auto (FK como string también) y ordena más nuevo primero', () => {
+    expect(documentosDeVehiculo(DOCS, '7').map(d => d.id)).toEqual([2, 1])
+    expect(documentosDeVehiculo(DOCS, 99)).toEqual([])
+  })
+
+  it('idDocumentoValido: sólo enteros positivos de dígitos', () => {
+    expect(idDocumentoValido('12')).toBe(12)
+    expect(idDocumentoValido(' 7 ')).toBe(7)
+    for (const malo of ['0', '-1', '7abc', '../3', '', null, '1.5']) expect(idDocumentoValido(malo)).toBeNull()
+  })
+
+  it('documentosGenerados: sólo origen=generado', () => {
+    expect(documentosGenerados(DOCS).map(d => d.id)).toEqual([2])
+  })
+})
+
+describe('buscador de autos y clientes de /documentos', () => {
+  const AUTOS = [
+    { id: 1, marca: 'VW', modelo: 'Golf', dominio: 'AB123CD', estado: 'publicado' },
+    { id: 2, marca: 'Audi', modelo: 'A3', dominio: 'AF494FL', estado: 'reservado' },
+    { id: 3, marca: 'Ford', modelo: 'Ka', dominio: 'AC111DD', estado: 'vendido', fecha_venta: '2026-08-20' },
+    { id: 4, marca: 'Fiat', modelo: 'Uno', dominio: 'AD222EE', estado: 'vendido', fecha_venta: '2026-03-01' },
+    { id: 5, marca: 'Citroën', modelo: 'C4', dominio: 'AE333FF', estado: 'a_ingresar' },
+  ]
+
+  it('no vendidos primero (por nombre), después los vendidos de los últimos 90 días', () => {
+    expect(autosParaDocumentos(AUTOS, '2026-09-08').map(v => v.id)).toEqual([2, 5, 1, 3])
+  })
+
+  it('filtrarAutos busca por marca/modelo sin acentos y por patente sin guiones', () => {
+    expect(filtrarAutos(AUTOS, 'citroen').map(v => v.id)).toEqual([5])
+    expect(filtrarAutos(AUTOS, 'af 494-fl').map(v => v.id)).toEqual([2])
+    expect(filtrarAutos(AUTOS, '').length).toBe(5)
+  })
+
+  it('filtrarClientes busca por nombre o DNI', () => {
+    const CL = [{ id: 1, nombre: 'Juan Pérez', dni: '30.123.456' }, { id: 2, nombre: 'Ana', dni: '' }]
+    expect(filtrarClientes(CL, 'perez').map(c => c.id)).toEqual([1])
+    expect(filtrarClientes(CL, '30123').map(c => c.id)).toEqual([1])
+    expect(filtrarClientes(CL, 'ana').map(c => c.id)).toEqual([2])
   })
 })
