@@ -433,6 +433,7 @@ const MENSAJE_DOCUMENTO: [prefijo: string, criollo: string][] = [
   ['El mandato requiere el valor estimado de venta',
     'El mandato necesita el valor estimado de venta del auto: cargalo acá abajo o poné el precio en la ficha.'],
   ['El pago supera el saldo', 'El pago supera el saldo: lo pagado antes más este pago no puede pasar el precio total.'],
+  ['Los pagos previos ya cubren el precio total', 'Los pagos previos ya cubren el precio total: no queda saldo que recibir.'],
   ['El monto pagado debe ser mayor a cero', 'El monto pagado tiene que ser mayor a cero.'],
   ['El recibo de pago requiere el precio total', 'El recibo de pago necesita el precio total: cargalo acá abajo o poné el precio en la ficha.'],
 ]
