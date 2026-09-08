@@ -11,7 +11,7 @@ import { dbGet, dbPost, dbPatch, dbDelete, dbCount, DbError, matches } from '@/l
 // es solo consulta en el dashboard y la plata (ledger, préstamos, ajustes) la
 // carga Claude por SQL sobre la base. Un POST crudo de un movimiento dejaría la
 // fila sin afecta_balance=1, invisible para el saldo.
-const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'cotizaciones'])
+const ALLOWED = new Set(['vehicles', 'clientes', 'tareas', 'interesados', 'ofertas', 'visitas', 'notas', 'kb_entries', 'verificaciones_mecanicas', 'config_negocio', 'cuentas', 'equipo', 'cotizaciones', 'seguimientos'])
 
 // Live-verified enum sets — mirrors the bot (rena-autos-api tools/kapso_tools.py
 // ENUMS, prod survey 2026-07-07). "equipo" in asignado is real (broadcast bucket).
@@ -36,6 +36,13 @@ const ENUMS: Record<string, Record<string, string[]>> = {
   // El ciclo lo escribe el bot (esperando → pendiente); el dashboard sólo
   // cierra (enviada = ya se le pasó el precio al cliente final, o descartada).
   cotizaciones: { estado: ['esperando', 'pendiente', 'enviada', 'descartada'] },
+  // Seguimientos (Postgres, migración 0006): el dashboard cierra (hecho /
+  // descartado), pospone y da de alta a mano o desde un chat pegado; el CRM
+  // y los reactores escriben con fuente crm/bot.
+  seguimientos: {
+    estado: ['pendiente', 'hecho', 'descartado'],
+    fuente: ['crm', 'manual', 'ia', 'bot'],
+  },
 }
 
 // `tareas.asignado` es el ÚNICO enum que dejó de ser fijo: con la tabla `equipo`
@@ -119,7 +126,32 @@ function configShapeError(table: string, body: any, creating: boolean): NextResp
       return bad('`clave` es obligatoria.')
     }
   }
+  if (table === 'seguimientos') {
+    // TEXT YYYY-MM-DD por convención de 0001 y de lib/date.ts: cualquier otra
+    // forma (un ISO con hora, un DD/MM) rompería el orden por fecha y el
+    // "vencido/hoy" del reactor de las 10:00.
+    const fecha = body.fecha_proximo
+    if (fecha != null && fecha !== '' && !FECHA_DIA_RE.test(String(fecha))) {
+      return bad(`\`fecha_proximo\` inválida: ${JSON.stringify(fecha)}. Debe ser YYYY-MM-DD.`)
+    }
+  }
   return null
+}
+
+const FECHA_DIA_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Campos que el proxy completa solo en un PATCH de `seguimientos`: `updated_at`
+ * siempre, y `hecho_at` cuando se cierra como hecho (si el cliente no lo mandó).
+ * Así los tres botones de la pantalla (Hecho, Posponer, Descartar) mandan el
+ * cambio pelado y el sello lo pone un solo lugar.
+ */
+function completarSeguimientoPatch(table: string, body: any): any {
+  if (table !== 'seguimientos' || !body || typeof body !== 'object') return body
+  const now = new Date().toISOString()
+  const out = { ...body, updated_at: body.updated_at ?? now }
+  if (out.estado === 'hecho' && out.hecho_at === undefined) out.hecho_at = now
+  return out
 }
 
 // Deleting these would orphan child rows. Policy (same as the bot): reject with
@@ -135,6 +167,12 @@ const DELETE_LINKS: Record<string, Array<[table: string, col: string, label: str
   interesados: [
     ['visitas', 'interesado_id', 'visita(s)'],
     ['ofertas', 'interesado_id', 'oferta(s)'],
+    ['seguimientos', 'interesado_id', 'seguimiento(s)'],
+  ],
+  // En modo Kapso la tabla no existe: el count falla → null → fail-open, igual
+  // que el resto de los guards.
+  clientes: [
+    ['seguimientos', 'cliente_id', 'seguimiento(s)'],
   ],
 }
 
@@ -290,6 +328,9 @@ const RUTAS_POR_TABLA: Record<string, string[]> = {
   verificaciones_mecanicas: ['/', '/verificaciones'],
   kb_entries:               ['/mensajes'],
   cotizaciones:             ['/cotizaciones'],
+  // Tablero (tile "para hoy"), la sección, y las fichas donde se listan los
+  // pendientes de cada persona.
+  seguimientos:             ['/', '/seguimientos', '/clientes', '/interesados'],
 }
 
 function bustCache(table?: string) {
@@ -362,7 +403,7 @@ export async function PATCH(
   if (missing) return missing
 
   try {
-    const row = await dbPatch(table, filter.value, body, filter.key)
+    const row = await dbPatch(table, filter.value, completarSeguimientoPatch(table, body), filter.key)
     bustCache(table)
     return writeResponse(row)
   } catch (e) {

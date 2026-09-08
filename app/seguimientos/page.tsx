@@ -1,26 +1,27 @@
-import { MessagesSquareIcon } from 'lucide-react'
-import { EmptyState } from '@/components/empty-state'
+import { getInteresados, getClientes, getVehicles } from '@/lib/kapso'
+import { getSeguimientos } from '@/lib/seguimientos'
+import { backendHabilitado } from '@/lib/backend'
+import SeguimientosClient from './SeguimientosClient'
 
 /**
  * Seguimientos: cada charla abierta con un interesado o un cliente, con su
  * resumen y su próximo paso. Reemplaza a las tareas tipo `seguimiento` que el
  * Tablero escondía porque eran cientos.
  *
- * La pantalla llega en la fase 5 del plan de IA distribuida (tabla
- * `seguimientos` en Postgres + jobs del CRM). El ítem del nav ya está para
- * que el orden nuevo se vea completo; hasta entonces, esto es el placeholder.
+ * `seguimientos === null` ⇒ la tabla no existe en esta instancia (modo Kapso):
+ * el cliente muestra el aviso en vez de una lista vacía.
  */
-export default function SeguimientosPage() {
+export default async function SeguimientosPage() {
+  const [seguimientos, interesados, clientes, vehicles] = await Promise.all([
+    getSeguimientos(), getInteresados(), getClientes(), getVehicles(),
+  ])
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Seguimientos</h1>
-      <div className="rounded-lg border border-border bg-card">
-        <EmptyState
-          icon={MessagesSquareIcon}
-          title="Próximamente"
-          hint="Acá van a vivir los seguimientos: cada charla abierta con su resumen y su próximo paso. Por ahora siguen en Tareas."
-        />
-      </div>
-    </div>
+    <SeguimientosClient
+      seguimientos={seguimientos}
+      interesados={interesados}
+      clientes={clientes}
+      vehicles={vehicles}
+      ia={backendHabilitado()}
+    />
   )
 }

@@ -539,7 +539,8 @@ function NuevaTareaDialog({
               <option value="fotos">Fotos</option>
               <option value="publicacion">Publicación</option>
               <option value="tramite">Trámite</option>
-              <option value="seguimiento">Seguimiento</option>
+              {/* Sin `seguimiento`: los seguimientos son entidad propia (/seguimientos).
+                  TIPO_LABEL lo conserva para las tareas viejas que ya lo tienen. */}
               <option value="otro">Otro</option>
             </select>
           </FField>

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { CheckIcon, CircleAlertIcon } from 'lucide-react'
+import { CheckIcon, CircleAlertIcon, MessagesSquareIcon } from 'lucide-react'
 import { patchRecordDetailed } from '@/lib/kapso'
 import { MonthBoard, type BoardItem } from '@/components/calendar/MonthBoard'
 import { localDayKey } from '@/lib/date'
@@ -32,6 +32,7 @@ export type NumeroResumen = {
 
 export default function TableroClient({
   items, alertas, sinFecha, datosFaltantes = [], verificacionesSinAuto = [], secciones = [], resumen = [],
+  seguimientosHoy = 0,
 }: {
   items: BoardItem[]
   alertas: string[]
@@ -40,6 +41,8 @@ export default function TableroClient({
   verificacionesSinAuto?: { mecanico: string | null; fecha: string | null; resumen: string | null }[]
   secciones?: SeccionEquipo[]
   resumen?: NumeroResumen[]
+  /** Seguimientos vencidos + para hoy. 0 = no se dibuja el tile. */
+  seguimientosHoy?: number
 }) {
   const router = useRouter()
   const [done, setDone] = useState<Record<string, boolean>>({})
@@ -107,6 +110,23 @@ export default function TableroClient({
             </Link>
           ))}
         </section>
+      )}
+
+      {/* Seguimientos para hoy — un tile chico debajo de los cuatro números, no
+          un quinto en la grilla (4-up es 4-up). Sólo cuando hay algo que
+          atender: con 0 no hay nada que mirar y el tile sería ruido. */}
+      {seguimientosHoy > 0 && (
+        <Link
+          href="/seguimientos"
+          className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 transition-colors hover:bg-muted/40"
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            <MessagesSquareIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="text-2xs uppercase tracking-wide text-muted-foreground">Seguimientos para hoy</span>
+            <span className="text-base font-semibold font-mono tabular-nums leading-none text-warning">{seguimientosHoy}</span>
+          </span>
+          <span className="text-xs text-muted-foreground shrink-0">Ver seguimientos →</span>
+        </Link>
       )}
 
       {/* Tareas destacadas — arriba del todo, pedido del usuario 2026-08-13 (era

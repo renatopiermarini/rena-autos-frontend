@@ -12,6 +12,7 @@ import { NextRequest } from 'next/server'
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
+import { revalidatePath } from 'next/cache'
 import { POST, PATCH, DELETE } from './route'
 import { __setSqlClient } from '@/lib/db'
 
@@ -229,5 +230,98 @@ describe('proxy /api/db/[table]', () => {
     )
     expect(bad.status).toBe(400)
     expect((await bad.json()).message).toContain('`asignado` inválido')
+  })
+
+  // ── seguimientos (Fase 5) ──────────────────────────────────────────────────
+
+  it('seguimientos: está en ALLOWED y valida estado/fuente', async () => {
+    const calls = mockKapso(() => ({ body: { data: { id: 1 } } }))
+    const ok = await POST(
+      req('http://x/api/db/seguimientos', 'POST', { interesado_id: 3, resumen: 'x', fuente: 'manual', estado: 'pendiente' }),
+      ctx('seguimientos'),
+    )
+    expect(ok.status).toBe(200)
+    expect(calls.find(c => c.method === 'POST')!.url).toBe('https://api.test/db/seguimientos')
+
+    const badEstado = await POST(
+      req('http://x/api/db/seguimientos', 'POST', { estado: 'cerrado', fuente: 'manual' }),
+      ctx('seguimientos'),
+    )
+    expect(badEstado.status).toBe(400)
+    expect((await badEstado.json()).message).toContain('`estado` inválido')
+
+    const badFuente = await POST(
+      req('http://x/api/db/seguimientos', 'POST', { fuente: 'whatsapp' }),
+      ctx('seguimientos'),
+    )
+    expect(badFuente.status).toBe(400)
+    expect((await badFuente.json()).message).toContain('`fuente` inválido')
+  })
+
+  it('seguimientos: fecha_proximo tiene que ser YYYY-MM-DD (null se acepta)', async () => {
+    const calls = mockKapso(() => ({ body: { data: { id: 1 } } }))
+    const bad = await POST(
+      req('http://x/api/db/seguimientos', 'POST', { fuente: 'manual', fecha_proximo: '2026-09-08T10:00:00Z' }),
+      ctx('seguimientos'),
+    )
+    expect(bad.status).toBe(400)
+    expect((await bad.json()).message).toContain('`fecha_proximo` inválida')
+    expect(calls.some(c => c.method === 'POST')).toBe(false)
+
+    const ok = await POST(
+      req('http://x/api/db/seguimientos', 'POST', { fuente: 'manual', fecha_proximo: null }),
+      ctx('seguimientos'),
+    )
+    expect(ok.status).toBe(200)
+  })
+
+  it('seguimientos: PATCH a hecho sella hecho_at y updated_at; otro PATCH sólo updated_at', async () => {
+    const calls = mockKapso(u => ({ body: { data: u.searchParams.has('id') ? [{ id: 9 }] : [] } }))
+    const antes = Date.now()
+    const hecho = await PATCH(
+      req('http://x/api/db/seguimientos?id=9', 'PATCH', { estado: 'hecho' }),
+      ctx('seguimientos'),
+    )
+    expect(hecho.status).toBe(200)
+    const w1 = calls.find(c => c.method === 'PATCH')!
+    expect(w1.body.estado).toBe('hecho')
+    expect(Date.parse(w1.body.hecho_at)).toBeGreaterThanOrEqual(antes)
+    expect(Date.parse(w1.body.updated_at)).toBeGreaterThanOrEqual(antes)
+
+    const pospuesto = await PATCH(
+      req('http://x/api/db/seguimientos?id=9', 'PATCH', { fecha_proximo: '2026-09-15' }),
+      ctx('seguimientos'),
+    )
+    expect(pospuesto.status).toBe(200)
+    const w2 = calls.filter(c => c.method === 'PATCH')[1]
+    expect(w2.body).not.toHaveProperty('hecho_at')
+    expect(typeof w2.body.updated_at).toBe('string')
+
+    // Un hecho_at explícito (reabrir manda null) se respeta.
+    await PATCH(
+      req('http://x/api/db/seguimientos?id=9', 'PATCH', { estado: 'pendiente', hecho_at: null }),
+      ctx('seguimientos'),
+    )
+    const w3 = calls.filter(c => c.method === 'PATCH')[2]
+    expect(w3.body.hecho_at).toBeNull()
+  })
+
+  it('seguimientos: un write invalida tablero, sección y fichas de personas', async () => {
+    mockKapso(() => ({ body: { data: { id: 1 } } }))
+    vi.mocked(revalidatePath).mockClear()
+    await POST(req('http://x/api/db/seguimientos', 'POST', { fuente: 'bot' }), ctx('seguimientos'))
+    const rutas = vi.mocked(revalidatePath).mock.calls.map(c => c[0])
+    expect(rutas).toEqual(['/', '/seguimientos', '/clientes', '/interesados'])
+  })
+
+  it('DELETE de un interesado con seguimientos: 409', async () => {
+    mockKapso(u => {
+      if (u.pathname.endsWith('/interesados')) return { body: { data: [{ id: 5 }] } }
+      if (u.pathname.endsWith('/seguimientos')) return { body: { data: [{ interesado_id: 5 }] } }
+      return { body: { data: [] } }
+    })
+    const res = await DELETE(req('http://x/api/db/interesados?id=5', 'DELETE'), ctx('interesados'))
+    expect(res.status).toBe(409)
+    expect((await res.json()).message).toContain('1 seguimiento(s)')
   })
 })

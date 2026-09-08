@@ -5,6 +5,7 @@ import {
   cuentasInfo, umbralAlertaCaja, capFirst, computePatrimonio,
 } from '@/lib/kapso'
 import { sinAuto } from '@/lib/verificaciones'
+import { getSeguimientos, resumenPendientes } from '@/lib/seguimientos'
 import { destacadosClaves, equipoFromRows, resolveDefaultAssignee, seccionesEquipo, miembroPorClave } from '@/lib/equipo'
 import { diasEnStock, DIAS_STOCK_ALERTA } from '@/lib/stock'
 import TableroClient from './TableroClient'
@@ -17,11 +18,11 @@ const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.g
 export default async function Tablero() {
   const [
     tareas, vehicles, prestamos, visitas, interesados, movimientos, clientes,
-    cuentasRows, equipoRows, config, verificaciones,
+    cuentasRows, equipoRows, config, verificaciones, seguimientos,
   ] = await Promise.all([
     getTareas(), getVehicles(), getPrestamos(), getVisitas(), getInteresados(),
     getMovimientos(), getClientes(),
-    getCuentas(), getEquipo(), getConfigNegocio(), getVerificaciones(),
+    getCuentas(), getEquipo(), getConfigNegocio(), getVerificaciones(), getSeguimientos(),
   ])
 
   // Perfil de la instancia. Sin las tablas de config esto es exactamente lo que
@@ -73,6 +74,9 @@ export default async function Tablero() {
   // and the agent still messages about them; this screen is for what a human has to
   // look at. `tipo` is the real field, the title check catches rows the bot wrote
   // before it started setting it.
+  // TODO: quitar tras scripts/migrate_tareas_seguimiento.py (post cut-over) — las
+  // tareas tipo seguimiento pasan a la tabla `seguimientos` y este filtro queda
+  // sin filas que atrapar.
   const esSeguimiento = (t: any) =>
     String(t?.tipo ?? '').toLowerCase() === 'seguimiento' ||
     /^\s*seguimiento\b/i.test(String(t?.titulo ?? ''))
@@ -129,6 +133,11 @@ export default async function Tablero() {
 
   const hoy = new Date()
   const alertas: string[] = []
+
+  // Seguimientos vencidos + para hoy: el número que la sección /seguimientos
+  // contesta en detalle. Con la tabla ausente (modo Kapso) es 0 y el tile no
+  // se dibuja.
+  const seguimientosHoy = seguimientos ? resumenPendientes(seguimientos, localDayKey(hoy)).paraHoy : 0
   // La caja principal del perfil (la primera por `orden`) y su umbral. Sin las
   // tablas de config: cash y 500, la alerta de siempre.
   const cajaPrincipal = cuentas[0]
@@ -223,6 +232,7 @@ export default async function Tablero() {
       verificacionesSinAuto={verificacionesSinAuto}
       secciones={secciones}
       resumen={resumen}
+      seguimientosHoy={seguimientosHoy}
     />
   )
 }

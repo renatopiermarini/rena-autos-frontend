@@ -8,7 +8,8 @@ import {
   aplicarSugerenciaConDefaults, notasConSeguimiento, sugerenciaInteresado, textoSeguimiento,
   type InteresadoExtraido, type InteresadoForm, type SeguimientoPropuesto,
 } from '@/lib/ia-formularios'
-import { todayKey } from '@/lib/date'
+import { fmtDM, todayKey } from '@/lib/date'
+import { clasificarVencimiento, ordenarPendientes, type Seguimiento } from '@/lib/seguimientos'
 import { CAMPO_IA_CLS, IaChip, IaSugerenciasBar } from '@/components/ia-hint'
 import { FCheckbox } from '@/components/form-fields'
 import { cn } from '@/lib/utils'
@@ -23,6 +24,7 @@ import { ChevronDownIcon, ChevronUpIcon, Loader2Icon, PlusIcon, SparklesIcon, Us
 import { EmptyState } from '@/components/empty-state'
 import NuevaOfertaDialog from './NuevaOfertaDialog'
 import { money, fmtN } from '@/lib/money'
+import Link from 'next/link'
 
 const ESTADO_VARIANT: Record<string, 'default' | 'secondary' | 'outline' | 'destructive' | 'success' | 'warning' | 'info'> = {
   activo: 'info',
@@ -53,8 +55,8 @@ function Field({ label, value }: { label: string; value: any }) {
 }
 
 function InteresadoRow({
-  i, vehicleLabel, ofertas, vehicles,
-}: { i: any; vehicleLabel: (id: any) => string; ofertas: any[]; vehicles: any[] }) {
+  i, vehicleLabel, ofertas, vehicles, seguimientos,
+}: { i: any; vehicleLabel: (id: any) => string; ofertas: any[]; vehicles: any[]; seguimientos: Seguimiento[] }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -115,6 +117,12 @@ function InteresadoRow({
   }
 
   const ofertasDeEste = ofertas.filter(o => o.interesado_id === i.id)
+  // Sus charlas abiertas, en el orden en que hay que atenderlas. Number() en
+  // ambos lados: en Kapso la FK puede venir como string.
+  const pendientes = ordenarPendientes(
+    seguimientos.filter(s => s.estado === 'pendiente' && Number(s.interesado_id) === Number(i.id)),
+  )
+  const hoy = todayKey()
 
   return (
     <div className="border-b border-border last:border-0">
@@ -171,6 +179,42 @@ function InteresadoRow({
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {pendientes.length > 0 && (
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                Seguimientos pendientes ({pendientes.length})
+              </p>
+              <ul className="space-y-1">
+                {pendientes.map(s => {
+                  const v = clasificarVencimiento(s.fecha_proximo, hoy)
+                  return (
+                    <li key={s.id} className="flex items-start gap-3 text-sm">
+                      <span className="shrink-0 pt-px">
+                        {v === 'vencido'
+                          ? <Badge variant="destructive" className="font-mono tabular-nums">Venció {fmtDM(s.fecha_proximo)}</Badge>
+                          : v === 'hoy'
+                            ? <Badge variant="warning">Hoy</Badge>
+                            : v === 'proximo'
+                              ? <span className="text-xs font-mono tabular-nums text-muted-foreground">{fmtDM(s.fecha_proximo)}</span>
+                              : <span className="text-xs italic text-muted-foreground">sin fecha</span>}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="line-clamp-2">{s.resumen || <span className="italic text-muted-foreground">Sin resumen</span>}</span>
+                        {s.proximo_paso && <span className="block text-xs text-muted-foreground">Próximo paso: {s.proximo_paso}</span>}
+                      </span>
+                      <Link
+                        href={`/seguimientos?id=${s.id}`}
+                        className="shrink-0 text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
+                      >
+                        Ver →
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
             </div>
           )}
 
@@ -279,6 +323,24 @@ function Campo({ label, ia, children, className }: {
   )
 }
 
+/** La fila de `seguimientos` que sale del chat pegado: fuente='ia', pendiente. */
+function seguimientoPayload(s: SeguimientoPropuesto, interesadoId: number, vehicleId: number | null) {
+  const ahora = new Date().toISOString()
+  return {
+    interesado_id: interesadoId,
+    cliente_id: null,
+    vehicle_id: vehicleId,
+    resumen: s.resumen || s.proximo_paso,
+    proximo_paso: s.proximo_paso || null,
+    fecha_proximo: /^\d{4}-\d{2}-\d{2}$/.test(s.fecha_sugerida) ? s.fecha_sugerida : null,
+    estado: 'pendiente',
+    fuente: 'ia',
+    nudges: 0,
+    created_at: ahora,
+    updated_at: ahora,
+  }
+}
+
 const INTERESADO_VACIO: InteresadoForm = {
   nombre: '', telefono: '', email: '', instagram: '',
   fuente: 'otro', vehicle_id: '', marca_buscada: '', modelo_buscado: '',
@@ -289,8 +351,12 @@ const INTERESADO_VACIO: InteresadoForm = {
 const DEFAULTS: Partial<InteresadoForm> = { fuente: 'otro', forma_pago: 'contado' }
 
 function NuevoInteresadoForm({
-  vehicles, onClose, ia = false,
-}: { vehicles: any[]; onClose: () => void; ia?: boolean }) {
+  vehicles, onClose, ia = false, seguimientosDisponibles = false,
+}: {
+  vehicles: any[]; onClose: () => void; ia?: boolean
+  /** ¿Existe la tabla `seguimientos`? Sin ella (modo Kapso) el propuesto va a las notas, como antes. */
+  seguimientosDisponibles?: boolean
+}) {
   const router = useRouter()
   const [form, setForm] = useState<InteresadoForm>(INTERESADO_VACIO)
   const [camposIa, setCamposIa] = useState<CamposIa<InteresadoForm>>(new Set())
@@ -303,12 +369,12 @@ function NuevoInteresadoForm({
   const [chat, setChat] = useState('')
   const [leyendo, setLeyendo] = useState(false)
   const [errorIa, setErrorIa] = useState('')
-  // El seguimiento propuesto (resumen + próximo paso + fecha). Por ahora sólo se
-  // muestra y, si se deja tildado, va al final de las notas.
-  // TODO(Fase 5): crear la fila en `seguimientos` junto con el interesado
-  // (fuente='ia') en vez de pegarlo a las notas.
+  // El seguimiento propuesto (resumen + próximo paso + fecha). Con la tabla
+  // `seguimientos` se crea como fila propia (fuente='ia') junto con el
+  // interesado; en la instancia que todavía no la tiene va al final de las
+  // notas, que es lo que hacía antes.
   const [seguimiento, setSeguimiento] = useState<SeguimientoPropuesto | null>(null)
-  const [agregarANotas, setAgregarANotas] = useState(true)
+  const [crearSeguimiento, setCrearSeguimiento] = useState(true)
 
   function set(field: keyof InteresadoForm) {
     return (e: any) => {
@@ -350,7 +416,8 @@ function NuevoInteresadoForm({
   async function save() {
     if (!form.nombre.trim()) { toast.error('El nombre es requerido'); return }
     setSaving(true)
-    const notas = agregarANotas ? notasConSeguimiento(form.notas, seguimiento) : form.notas.trim()
+    const aNotas = crearSeguimiento && !seguimientosDisponibles
+    const notas = aNotas ? notasConSeguimiento(form.notas, seguimiento) : form.notas.trim()
     const payload: any = {
       nombre: form.nombre.trim(),
       telefono: form.telefono || null,
@@ -370,9 +437,27 @@ function NuevoInteresadoForm({
     if (form.km_max) payload.km_max = Number(form.km_max)
     if (notas) payload.notas = notas
     const r = await postRecord('interesados', payload)
+    if (!r.ok) { setSaving(false); toast.error(r.error || 'Error al guardar'); return }
+
+    // El seguimiento va en una segunda escritura porque necesita el id del
+    // interesado. Si falla, el interesado YA existe: toast parcial, no error.
+    if (crearSeguimiento && seguimientosDisponibles && seguimiento) {
+      const nuevoId = Number(r.data?.data?.id ?? r.data?.id)
+      const rs = Number.isFinite(nuevoId) && nuevoId > 0
+        ? await postRecord('seguimientos', seguimientoPayload(seguimiento, nuevoId, payload.vehicle_id ?? null))
+        : { ok: false, error: 'no volvió el id del interesado' }
+      setSaving(false)
+      if (!rs.ok) {
+        toast.warning(`Interesado creado, pero el seguimiento no se guardó: ${rs.error || 'error desconocido'}. Cargalo desde Seguimientos.`)
+        onClose(); router.refresh()
+        return
+      }
+      toast.success('Interesado y seguimiento creados')
+      onClose(); router.refresh()
+      return
+    }
     setSaving(false)
-    if (r.ok) { toast.success('Interesado creado'); onClose(); router.refresh() }
-    else toast.error(r.error || 'Error al guardar')
+    toast.success('Interesado creado'); onClose(); router.refresh()
   }
 
   const inputIa = (field: keyof InteresadoForm) => cn(esIa(field) && CAMPO_IA_CLS)
@@ -463,13 +548,25 @@ function NuevoInteresadoForm({
                 )}
               </p>
             )}
-            <FCheckbox
-              id="seguimiento-a-notas"
-              label="Agregar a notas"
-              checked={agregarANotas}
-              onChange={setAgregarANotas}
-              hint={agregarANotas ? `Se guarda como: "${textoSeguimiento(seguimiento)}"` : 'Sólo se muestra acá; no se guarda.'}
-            />
+            {seguimientosDisponibles ? (
+              <FCheckbox
+                id="crear-seguimiento"
+                label="Crear seguimiento"
+                checked={crearSeguimiento}
+                onChange={setCrearSeguimiento}
+                hint={crearSeguimiento
+                  ? `Queda pendiente en Seguimientos${seguimiento.fecha_sugerida ? ` para el ${fmtDM(seguimiento.fecha_sugerida)}` : ''}.`
+                  : 'Sólo se muestra acá; no se guarda.'}
+              />
+            ) : (
+              <FCheckbox
+                id="seguimiento-a-notas"
+                label="Agregar a notas"
+                checked={crearSeguimiento}
+                onChange={setCrearSeguimiento}
+                hint={crearSeguimiento ? `Se guarda como: "${textoSeguimiento(seguimiento)}"` : 'Sólo se muestra acá; no se guarda.'}
+              />
+            )}
           </div>
         )}
 
@@ -483,9 +580,11 @@ function NuevoInteresadoForm({
 }
 
 export default function InteresadosClient({
-  interesados, vehicles, ofertas, ia = false,
+  interesados, vehicles, ofertas, seguimientos = null, ia = false,
 }: {
   interesados: any[]; vehicles: any[]; ofertas: any[]
+  /** `null` = la tabla no existe en esta instancia (modo Kapso). */
+  seguimientos?: Seguimiento[] | null
   /** ¿Hay backend de IA? Enciende "Pegá la conversación" en el alta. */
   ia?: boolean
 }) {
@@ -516,7 +615,12 @@ export default function InteresadosClient({
       </div>
 
       {showNuevo && (
-        <NuevoInteresadoForm vehicles={vehicles} onClose={() => setShowNuevo(false)} ia={ia} />
+        <NuevoInteresadoForm
+          vehicles={vehicles}
+          onClose={() => setShowNuevo(false)}
+          ia={ia}
+          seguimientosDisponibles={seguimientos !== null}
+        />
       )}
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -537,7 +641,7 @@ export default function InteresadosClient({
       <Card size="sm">
         <CardContent className="p-0">
           {sorted.map(i => (
-            <InteresadoRow key={i.id} i={i} vehicleLabel={vehicleLabel} ofertas={ofertas} vehicles={vehicles} />
+            <InteresadoRow key={i.id} i={i} vehicleLabel={vehicleLabel} ofertas={ofertas} vehicles={vehicles} seguimientos={seguimientos ?? []} />
           ))}
           {sorted.length === 0 && (
             <EmptyState icon={UsersIcon} title="Sin interesados" hint="Sumá uno con “Nuevo interesado”." />

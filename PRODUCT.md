@@ -30,6 +30,7 @@ The design consequence is load-bearing: **every screen is read by someone who is
 | Agenda | Calendar: tareas, visitas, transferencias, turnos |
 | Stock | Vehicles and their `estado` in the pipeline |
 | Interesados | Leads |
+| Seguimientos | Open conversations with a lead or client: summary, next step, due date. Fed by the CRM, the bot and pasted chats; Hecho / Posponer / Descartar in one click. Needs the Postgres table (`seguimientos`); the Kapso instance shows a notice |
 | Ofertas | Offers made/received, pending responses |
 | Visitas | Scheduled vehicle viewings |
 | Clientes | People, incl. deudor/acreedor standing |
