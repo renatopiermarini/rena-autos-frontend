@@ -1,7 +1,13 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useDeepLinkId, useScrollToDeepLink } from '@/lib/deep-link'
+import { useDeepLinkId, useDeepLinkParam, useScrollToDeepLink } from '@/lib/deep-link'
+import { marcarTocado, type CamposIa } from '@/lib/ia'
+import { sugerenciaVisita, type AgendaParseada, type VisitaForm } from '@/lib/ia-formularios'
+import { catalogoInteresados, catalogoVehiculos } from '@/lib/ia-match'
+import { AgregarRapido } from '@/components/agregar-rapido'
+import { CAMPO_IA_CLS, IaAdvertencias, IaChip, IaSugerenciasBar } from '@/components/ia-hint'
+import { cn } from '@/lib/utils'
 import { patchRecordDetailed, postRecord, deleteRecordDetailed } from '@/lib/kapso'
 import { fmtDateTime, fmtDM, toARInputValue, fromARInputValue } from '@/lib/date'
 import { Card, CardContent } from '@/components/ui/card'
@@ -147,14 +153,55 @@ function VisitaRow({
   )
 }
 
+const VISITA_VACIA: VisitaForm = { vehicle_id: '', interesado_id: '', fecha: '', notas: '' }
+
+/** Un campo del alta; `ia` = lo puso la IA y nadie lo tocó (chip + borde info). */
+function Campo({ label, ia, children, className }: {
+  label: string; ia?: boolean; children: React.ReactNode; className?: string
+}) {
+  return (
+    <div className={cn('space-y-1.5', className)}>
+      <span className="flex items-center gap-2">
+        <Label>{label}</Label>
+        {ia && <IaChip />}
+      </span>
+      {children}
+    </div>
+  )
+}
+
 function NuevaVisitaForm({
-  vehicles, interesados, onClose,
-}: { vehicles: any[]; interesados: any[]; onClose: () => void }) {
+  vehicles, interesados, onClose, inicial, advertencias = [],
+}: {
+  vehicles: any[]; interesados: any[]; onClose: () => void
+  /** Lo que "Agregar rápido" entendió: se siembra como sugerido (borde info + chip). */
+  inicial?: Partial<VisitaForm>
+  /** Lo que la IA no pudo resolver ("no encontré a Juan"). */
+  advertencias?: string[]
+}) {
   const router = useRouter()
-  const [form, setForm] = useState({
-    vehicle_id: '', interesado_id: '', fecha: '', notas: '',
-  })
+  // El padre remonta este form (key) cada vez que hay una semilla nueva, así
+  // que alcanza con leer `inicial` una vez.
+  const [form, setForm] = useState<VisitaForm>({ ...VISITA_VACIA, ...inicial })
+  const [camposIa, setCamposIa] = useState<CamposIa<VisitaForm>>(
+    new Set(Object.keys(inicial ?? {}) as (keyof VisitaForm)[]),
+  )
   const [saving, setSaving] = useState(false)
+
+  function set(field: keyof VisitaForm, value: string) {
+    setForm(f => ({ ...f, [field]: value }))
+    setCamposIa(c => marcarTocado(c, field))
+  }
+  const esIa = (field: keyof VisitaForm) => camposIa.has(field)
+
+  function limpiarIa() {
+    setForm(f => {
+      const next = { ...f }
+      camposIa.forEach(k => { next[k] = VISITA_VACIA[k] })
+      return next
+    })
+    setCamposIa(new Set())
+  }
 
   async function save() {
     if (!form.vehicle_id || !form.interesado_id || !form.fecha) {
@@ -174,20 +221,21 @@ function NuevaVisitaForm({
     const r = await postRecord('visitas', payload)
     setSaving(false)
     if (r.ok) { toast.success('Visita creada'); onClose(); router.refresh() }
-    else toast.error('Error al guardar')
+    else toast.error(r.error || 'Error al guardar')
   }
 
   return (
     <Card size="sm" className="bg-muted/30">
       <CardContent className="space-y-4">
         <p className="text-sm font-medium">Nueva visita</p>
+        <IaSugerenciasBar cantidad={camposIa.size} onLimpiar={limpiarIa} />
+        <IaAdvertencias items={advertencias} />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
-          <div className="col-span-2 space-y-1.5">
-            <Label>Vehículo *</Label>
+          <Campo label="Vehículo *" ia={esIa('vehicle_id')} className="col-span-2">
             <select
               value={form.vehicle_id}
-              onChange={e => setForm(f => ({ ...f, vehicle_id: e.target.value }))}
-              className={nativeSelectCls}
+              onChange={e => set('vehicle_id', e.target.value)}
+              className={cn(nativeSelectCls, esIa('vehicle_id') && CAMPO_IA_CLS)}
             >
               <option value="">—</option>
               {vehicles.filter(v => v.estado !== 'vendido').map(v => (
@@ -196,13 +244,12 @@ function NuevaVisitaForm({
                 </option>
               ))}
             </select>
-          </div>
-          <div className="col-span-2 space-y-1.5">
-            <Label>Interesado *</Label>
+          </Campo>
+          <Campo label="Interesado *" ia={esIa('interesado_id')} className="col-span-2">
             <select
               value={form.interesado_id}
-              onChange={e => setForm(f => ({ ...f, interesado_id: e.target.value }))}
-              className={nativeSelectCls}
+              onChange={e => set('interesado_id', e.target.value)}
+              className={cn(nativeSelectCls, esIa('interesado_id') && CAMPO_IA_CLS)}
             >
               <option value="">—</option>
               {interesados.map(i => (
@@ -211,19 +258,22 @@ function NuevaVisitaForm({
                 </option>
               ))}
             </select>
-          </div>
-          <div className="col-span-2 space-y-1.5">
-            <Label>Fecha y hora *</Label>
+          </Campo>
+          <Campo label="Fecha y hora *" ia={esIa('fecha')} className="col-span-2">
             <Input
               type="datetime-local"
               value={form.fecha}
-              onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))}
+              onChange={e => set('fecha', e.target.value)}
+              className={cn(esIa('fecha') && CAMPO_IA_CLS)}
             />
-          </div>
-          <div className="col-span-2 sm:col-span-4 space-y-1.5">
-            <Label>Notas</Label>
-            <Input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} />
-          </div>
+          </Campo>
+          <Campo label="Notas" ia={esIa('notas')} className="col-span-2 sm:col-span-4">
+            <Input
+              value={form.notas}
+              onChange={e => set('notas', e.target.value)}
+              className={cn(esIa('notas') && CAMPO_IA_CLS)}
+            />
+          </Campo>
         </div>
         <div className="flex gap-2">
           <Button onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Button>
@@ -237,9 +287,35 @@ function NuevaVisitaForm({
 type Filtro = 'todas' | 'proximas' | 'pasadas' | typeof RESULTADOS[number]
 
 export default function VisitasClient({
-  visitas, vehicles, interesados,
-}: { visitas: any[]; vehicles: any[]; interesados: any[] }) {
+  visitas, vehicles, interesados, ia = false,
+}: {
+  visitas: any[]; vehicles: any[]; interesados: any[]
+  /** ¿Hay backend de IA? Enciende "Agregar rápido" arriba de la lista. */
+  ia?: boolean
+}) {
   const [showNueva, setShowNueva] = useState(false)
+  // La semilla de "Agregar rápido": cada una remonta el form (key) para que
+  // arranque con lo sugerido. Cancelar y volver a abrir a mano arranca vacío.
+  const [semilla, setSemilla] = useState<{ key: number; campos: Partial<VisitaForm>; advertencias: string[] } | null>(null)
+  const catalogos = useMemo(() => ({
+    vehicles: catalogoVehiculos(vehicles),
+    interesados: catalogoInteresados(interesados),
+    // Esta pantalla no carga el equipo; con la lista vacía el backend no valida `asignado`.
+    equipo: [] as string[],
+  }), [vehicles, interesados])
+  // `?rapido=<texto>` desde Tareas ("eso parece una visita"): se ejecuta al montar.
+  const rapidoInicial = useDeepLinkParam('rapido')
+
+  function onRapido(data: AgendaParseada) {
+    const { campos, advertencias } = sugerenciaVisita(data)
+    setSemilla(s => ({ key: (s?.key ?? 0) + 1, campos, advertencias }))
+    setShowNueva(true)
+  }
+
+  function cerrarNueva() {
+    setShowNueva(false)
+    setSemilla(null)
+  }
   // "proximas" es el default útil… salvo cuando no hay ninguna: abrir la
   // pantalla en "Sin visitas" con 47 visitas cargadas lee como pantalla rota.
   const [filter, setFilter] = useState<Filtro>(() => {
@@ -294,13 +370,30 @@ export default function VisitasClient({
           <h1 className="text-2xl font-semibold tracking-tight">Visitas</h1>
           <span className="text-sm text-muted-foreground">{visitas.length} totales · {proximasCount} próximas</span>
         </div>
-        <Button size="sm" variant={showNueva ? 'default' : 'outline'} aria-expanded={showNueva} onClick={() => setShowNueva(v => !v)}>
+        <Button size="sm" variant={showNueva ? 'default' : 'outline'} aria-expanded={showNueva} onClick={() => (showNueva ? cerrarNueva() : setShowNueva(true))}>
           <PlusIcon /> Nueva visita
         </Button>
       </div>
 
+      {ia && (
+        <AgregarRapido
+          pantalla="visita"
+          catalogos={catalogos}
+          onResultado={onRapido}
+          textoInicial={rapidoInicial}
+          placeholder="Agregar rápido: “visita de Juan mañana 15hs por el Golf”"
+        />
+      )}
+
       {showNueva && (
-        <NuevaVisitaForm vehicles={vehicles} interesados={interesados} onClose={() => setShowNueva(false)} />
+        <NuevaVisitaForm
+          key={semilla?.key ?? 0}
+          vehicles={vehicles}
+          interesados={interesados}
+          onClose={cerrarNueva}
+          inicial={semilla?.campos}
+          advertencias={semilla?.advertencias}
+        />
       )}
 
       <div className="flex items-center gap-2 flex-wrap">

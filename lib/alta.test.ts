@@ -34,6 +34,15 @@ describe('validarAltaVehiculo', () => {
     })
   })
 
+  it('lleva número de motor y chasis (la cédula los trae) y los omite si están vacíos', () => {
+    const r = row(validarAltaVehiculo(veh({ numero_motor: ' 2GD123 ', numero_chasis: '8AJ0001' }), NOW))
+    expect(r.numero_motor).toBe('2GD123')
+    expect(r.numero_chasis).toBe('8AJ0001')
+    const sin = row(validarAltaVehiculo(veh({ numero_motor: '  ', numero_chasis: '' }), NOW))
+    expect(Object.keys(sin)).not.toContain('numero_motor')
+    expect(Object.keys(sin)).not.toContain('numero_chasis')
+  })
+
   it('exige marca y modelo', () => {
     expect(validarAltaVehiculo(veh({ marca: '  ' }), NOW)).toMatchObject({ ok: false })
     expect(validarAltaVehiculo(veh({ modelo: '' }), NOW)).toMatchObject({ ok: false })
@@ -152,6 +161,13 @@ describe('fallback de la columna `version`', () => {
 })
 
 describe('validarAltaCliente', () => {
+  it('lleva la fecha de nacimiento (texto, como la trae el DNI) y la omite si está vacía', () => {
+    const r = validarAltaCliente(cli({ fecha_nacimiento: ' 12/05/1985 ' }), NOW)
+    expect(r.ok && r.row.fecha_nacimiento).toBe('12/05/1985')
+    const sin = validarAltaCliente(cli(), NOW)
+    expect(sin.ok && Object.keys(sin.row)).not.toContain('fecha_nacimiento')
+  })
+
   it('arma la fila mínima', () => {
     const r = validarAltaCliente(cli(), NOW)
     expect(r).toEqual({

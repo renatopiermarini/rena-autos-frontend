@@ -1,6 +1,7 @@
 import { getTareas, getVehicles, getEquipo, getConfigNegocio } from '@/lib/kapso'
 import { destacadosClaves, equipoFromRows, resolveDefaultAssignee } from '@/lib/equipo'
 import TareasClient from './TareasClient'
+import { backendHabilitado } from '@/lib/backend'
 
 export default async function Tareas() {
   const [tareas, vehicles, equipoRows, config] = await Promise.all([
@@ -17,6 +18,7 @@ export default async function Tareas() {
       equipo={equipo}
       defAssignee={defAssignee}
       destacados={destacadosClaves(config, equipo, defAssignee)}
+      ia={backendHabilitado()}
     />
   )
 }

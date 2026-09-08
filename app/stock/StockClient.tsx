@@ -274,7 +274,7 @@ const ESTADO_ORDER = [
 
 export default function StockClient({
   vehicles, tareas, clientes, movimientos = [], prestamos = [], defAssignee = DEFAULT_ASSIGNEE,
-  cuentas = [], comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false,
+  cuentas = [], comisionPct = COMISION_PCT_DEFAULT, documentosHabilitado = false, ia = false,
   verificaciones = [],
 }: {
   vehicles: any[]; tareas: any[]; clientes: any[]; movimientos?: any[]; prestamos?: any[]
@@ -294,6 +294,8 @@ export default function StockClient({
   // Lo resuelve el server component: sin las dos env el botón "Generar
   // documento" no se dibuja. Ver app/stock/page.tsx.
   documentosHabilitado?: boolean
+  /** ¿Hay backend de IA? Enciende los dropzones de Nuevo auto y de la ficha. */
+  ia?: boolean
 }) {
   // Auto abierto en el modal de detalle (null = cerrado). Reemplaza a la fila
   // expandible: el detalle vive en VehicleDialog, full-screen con tabs.
@@ -364,6 +366,7 @@ export default function StockClient({
         onOpenChange={setShowNew}
         clientes={clientes}
         cuentas={cuentas}
+        ia={ia}
       />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -512,6 +515,7 @@ export default function StockClient({
         cuentas={cuentas}
         comisionPct={comisionPct}
         documentosHabilitado={documentosHabilitado}
+        ia={ia}
       />
     </div>
   )

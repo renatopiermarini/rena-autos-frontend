@@ -1,6 +1,7 @@
 import { getInteresados, getVehicles, getOfertas } from '@/lib/kapso'
 import InteresadosClient from './InteresadosClient'
 import { SectionNav, CLIENTES_NAV } from '@/components/section-nav'
+import { backendHabilitado } from '@/lib/backend'
 
 export default async function Interesados() {
   const [interesados, vehicles, ofertas] = await Promise.all([
@@ -9,7 +10,7 @@ export default async function Interesados() {
   return (
     <>
       <SectionNav items={CLIENTES_NAV} />
-      <InteresadosClient interesados={interesados} vehicles={vehicles} ofertas={ofertas} />
+      <InteresadosClient interesados={interesados} vehicles={vehicles} ofertas={ofertas} ia={backendHabilitado()} />
     </>
   )
 }

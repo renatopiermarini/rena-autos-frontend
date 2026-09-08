@@ -5,6 +5,7 @@ import {
 import { equipoFromRows, resolveDefaultAssignee } from '@/lib/equipo'
 import { comisionConsignacionPct } from '@/lib/venta'
 import StockClient from './StockClient'
+import { backendHabilitado } from '@/lib/backend'
 
 export default async function Stock() {
   // `cuentas` es para el alta y para la venta: hay que elegir de qué caja sale
@@ -38,6 +39,9 @@ export default async function Stock() {
       // server component, porque BACKEND_API_KEY no puede cruzar al browser
       // (ver app/api/documentos/route.ts).
       documentosHabilitado={Boolean(process.env.BACKEND_URL && process.env.BACKEND_API_KEY)}
+      // Mismo gate para la IA (tarjeta verde → Nuevo auto / ficha): se decide
+      // acá porque backendHabilitado() lee env que no cruza al browser.
+      ia={backendHabilitado()}
     />
   )
 }
