@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { InfoTip } from '@/components/ui/tooltip'
 import { Th, tdCls } from '@/components/table-cells'
-import { LineaCapital, ColumnasApiladas } from '@/components/charts/charts'
+import { LineaCapital, ColumnasApiladas, ColumnasMes, TipRow } from '@/components/charts/charts'
 import { money, moneyDelta } from '@/lib/money'
 import { fmtDMY } from '@/lib/date'
 import { cn } from '@/lib/utils'
@@ -49,7 +49,7 @@ export function VistaResumen({ report, sel, onSel, irA }: {
         </div>
       </Seccion>
       <div className="grid gap-5 lg:grid-cols-2">
-        <Seccion titulo="Resultado por mes" ayuda="Lo que queda en el negocio cada mes: margen de autos vendidos + comisiones − gastos − intereses − retiros."
+        <Seccion titulo="Ganancia por mes" ayuda="Margen de autos vendidos + comisiones − gastos − intereses, mes por mes. En el detalle de cada barra están los retiros y lo que quedó después."
           accion={<button type="button" onClick={() => irA('mensual')} className="text-xs font-normal text-primary hover:underline">Ver mes a mes →</button>}>
           <GraficoResultado report={report} meses={ultimos} sel={sel} onSel={onSel} />
         </Seccion>
@@ -70,92 +70,188 @@ export function VistaResumen({ report, sel, onSel, irA }: {
 }
 
 // ── Mes a mes ────────────────────────────────────────────────────────────────
+//
+// Lo simple primero: cuánto se ganó con autos y comisiones, cuánto se gastó y
+// la ganancia, mes por mes. El detalle línea por línea queda plegado abajo.
 
-type Metrica = { label: string; v: (m: string) => number; tipo?: 'plata' | 'cuenta' | 'saldo'; fuerte?: boolean; alReves?: boolean }
+type MesSimple = { bruta: number; gastos: number; ganancia: number; retiros: number; despues: number; vendidos: number; consig: number }
+
+function mesSimple(r: ResultadoMes): MesSimple {
+  return {
+    bruta: r.margenAutos + r.comisiones,
+    gastos: -(r.gastosGenerales + r.gastosSinAuto + r.intereses),
+    ganancia: r.operativo,
+    retiros: -r.retiros,
+    despues: r.neto,
+    vendidos: r.autosVendidos.length,
+    consig: r.consignacionesVendidas,
+  }
+}
+
+function VsAnterior({ v, antes, alReves = false }: { v: number; antes: number | null; alReves?: boolean }) {
+  if (antes === null) return null
+  const d = v - antes
+  if (Math.abs(d) < 0.005) return <>igual que el mes anterior</>
+  const bueno = alReves ? d < 0 : d > 0
+  return <><span className={bueno ? 'text-success' : 'text-destructive'}>{d > 0 ? '▲' : '▼'} {money(r2(Math.abs(d)))}</span> vs. mes anterior</>
+}
 
 export function VistaMensual({ report, sel, onSel }: { report: CashflowReport; sel: Sel; onSel: (s: Sel) => void }) {
+  const [detalle, setDetalle] = useState(false)
   const mes = report.meses.includes(sel) ? sel : report.mesActual
   const i = report.meses.indexOf(mes)
   const anterior = i > 0 ? report.meses[i - 1] : null
-  const previos = report.meses.slice(Math.max(0, i - 3), i)
-  const R = (m: string) => report.resultado[m]
-  const C = (m: string) => report.caja[m]
-  const P = (m: string) => report.puentes[m]
-
-  const metricas: Metrica[] = [
-    { label: 'Autos propios vendidos', v: m => R(m).autosVendidos.length, tipo: 'cuenta' },
-    { label: 'Margen de esos autos', v: m => R(m).margenAutos },
-    { label: 'Consignaciones vendidas', v: m => R(m).consignacionesVendidas, tipo: 'cuenta' },
-    { label: 'Comisiones', v: m => R(m).comisiones },
-    { label: 'Gastos generales', v: m => R(m).gastosGenerales + R(m).gastosSinAuto },
-    { label: 'Intereses', v: m => R(m).intereses },
-    { label: 'Resultado operativo', v: m => R(m).operativo, fuerte: true },
-    { label: 'Retiros personales', v: m => R(m).retiros },
-    { label: 'Queda en el negocio', v: m => R(m).neto, fuerte: true },
-    { label: 'Entradas de caja', v: m => C(m).entradas, tipo: 'saldo' },
-    { label: 'Salidas de caja', v: m => C(m).salidas, tipo: 'saldo', alReves: true },
-    { label: 'Flujo neto de caja', v: m => C(m).neto },
-    { label: 'Caja al cierre', v: m => C(m).cajaCierre, tipo: 'saldo' },
-    { label: 'Capital propio al cierre', v: m => P(m).capitalFin, tipo: 'saldo', fuerte: true },
-    { label: 'Variación del capital', v: m => P(m).capitalFin - P(m).capitalInicio },
-  ]
-  const fmt = (t: Metrica['tipo'], v: number) =>
-    t === 'cuenta' ? num(v, 0) : t === 'saldo' ? money(r2(v)) : Math.abs(v) < 0.005 ? '—' : moneyDelta(r2(v))
-
+  const S = (m: string) => mesSimple(report.resultado[m])
+  const a = S(mes)
+  const b = anterior ? S(anterior) : null
+  const r = report.resultado[mes]
   const consig = report.consignaciones.filter(c => c.dia.startsWith(mes))
+  const filas = [...report.meses].reverse()
+  const tot = report.meses.reduce((acc, m) => {
+    const x = S(m)
+    return { bruta: acc.bruta + x.bruta, gastos: acc.gastos + x.gastos, ganancia: acc.ganancia + x.ganancia, retiros: acc.retiros + x.retiros, despues: acc.despues + x.despues, vendidos: acc.vendidos + x.vendidos, consig: acc.consig + x.consig }
+  }, { bruta: 0, gastos: 0, ganancia: 0, retiros: 0, despues: 0, vendidos: 0, consig: 0 })
 
   return (
     <div className="space-y-5">
       <SelectorMes report={report} sel={mes} onSel={onSel} conTotal={false} />
-      <div className="grid gap-5 lg:grid-cols-5">
-        <Seccion
-          className="lg:col-span-3"
-          titulo={`${mesLargo(mes).charAt(0).toUpperCase() + mesLargo(mes).slice(1)} ${mes.slice(0, 4)} contra el mes anterior`}
-          ayuda="El mes elegido al lado del anterior y del promedio de los tres meses previos. La flecha dice si el cambio es bueno o malo para la plata."
-          contentClassName="p-0 overflow-x-auto"
-        >
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Kpi label={`Ganancia bruta ${mesCorto(mes)}`} value={money(r2(a.bruta))}
+          sub={<>{a.vendidos} autos + {a.consig} consignaciones · <VsAnterior v={a.bruta} antes={b?.bruta ?? null} /></>}
+          tip="Lo que dejaron los autos propios vendidos en el mes (cobrado − compra − arreglos) más las comisiones de consignaciones." />
+        <Kpi label={`Gastos ${mesCorto(mes)}`} value={money(r2(a.gastos))} tone={a.gastos > 0 ? 'negative' : 'default'}
+          sub={<VsAnterior v={a.gastos} antes={b?.gastos ?? null} alReves />}
+          tip="Gastos generales del negocio (cochera, sueldos, papelería, publicidad…) + intereses de los préstamos. Los arreglos de cada auto ya están descontados de su ganancia." />
+        <Kpi tone="hero" label={`Ganancia ${mesCorto(mes)}`} value={moneyDelta(r2(a.ganancia))} signo={a.ganancia}
+          sub={<VsAnterior v={a.ganancia} antes={b?.ganancia ?? null} />}
+          tip="Ganancia bruta − gastos." />
+        <Kpi label="Después de retiros" value={moneyDelta(r2(a.despues))} signo={a.despues}
+          sub={<>retiraste {money(r2(a.retiros))}</>}
+          tip="La ganancia menos lo que sacaste para vos. Es lo que suma (o resta) al capital del negocio." />
+      </div>
+
+      <Seccion
+        titulo="Ganancia y gastos por mes"
+        ayuda="Verde: lo que dejaron autos y comisiones. Rojo: gastos generales e intereses. La raya es la ganancia. Tocá un mes para ver su detalle."
+        contentClassName="space-y-4"
+      >
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5"><span className="inline-block size-2.5 rounded-sm bg-success" />Ganancia bruta</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block size-2.5 rounded-sm bg-destructive" />Gastos</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-3 rounded bg-foreground" />Ganancia</span>
+        </div>
+        <ColumnasMes
+          items={report.meses.map(m => { const x = S(m); return { mes: m, pos: Math.max(0, x.bruta), neg: Math.max(0, x.gastos), neto: x.ganancia } })}
+          seleccionado={mes} onSelect={onSel} height={220}
+          tooltip={it => {
+            const x = S(it.mes)
+            return (
+              <>
+                <p className="font-medium mb-1">{mesCorto(it.mes)}</p>
+                <TipRow label="Ganancia bruta" value={money(r2(x.bruta))} swatch="var(--success)" />
+                <TipRow label="Gastos" value={money(r2(x.gastos))} swatch="var(--destructive)" />
+                <TipRow label="Ganancia" value={moneyDelta(r2(x.ganancia))} strong />
+                <TipRow label="Retiros" value={money(r2(x.retiros))} />
+              </>
+            )
+          }}
+        />
+        <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-border">
-                <Th />
-                <Th right>{mesCorto(mes)}</Th>
-                <Th right>{anterior ? mesCorto(anterior) : '—'}</Th>
-                <Th right>Cambio</Th>
-                <Th right>Prom. 3 previos</Th>
+                <Th>Mes</Th><Th right>Vendidos</Th><Th right>Ganancia bruta</Th><Th right>Gastos</Th><Th right>Ganancia</Th>
+                <Th right>Retiros</Th><Th right>Después de retiros</Th>
               </tr>
             </thead>
             <tbody>
-              {metricas.map(mt => {
-                const v = mt.v(mes)
-                const a = anterior ? mt.v(anterior) : null
-                const d = a === null ? null : v - a
-                const prom = previos.length ? previos.reduce((s, m) => s + mt.v(m), 0) / previos.length : null
-                const bueno = d === null ? null : (mt.alReves ? -d : d)
+              {filas.map(m => {
+                const x = S(m)
                 return (
-                  <tr key={mt.label} className={cn('border-b border-border/60', mt.fuerte && 'font-medium bg-muted/30')}>
-                    <td className={tdCls}>{mt.label}</td>
-                    <td className={cn(tdMoneyCls, mt.tipo ? undefined : signoCls(v))}>{fmt(mt.tipo, v)}</td>
-                    <td className={cn(tdMoneyCls, 'text-muted-foreground')}>{a === null ? '—' : fmt(mt.tipo, a)}</td>
-                    <td className={cn(tdMoneyCls, bueno === null || Math.abs(bueno) < 0.005 ? 'text-muted-foreground' : bueno > 0 ? 'text-success' : 'text-destructive')}>
-                      {d === null || Math.abs(d) < 0.005 ? '—' : `${d > 0 ? '▲' : '▼'} ${mt.tipo === 'cuenta' ? num(Math.abs(d), 0) : money(r2(Math.abs(d)))}`}
-                    </td>
-                    <td className={cn(tdMoneyCls, 'text-muted-foreground')}>{prom === null ? '—' : mt.tipo === 'cuenta' ? num(prom) : fmt(mt.tipo, prom)}</td>
+                  <tr key={m} onClick={() => onSel(m)}
+                    className={cn('border-b border-border/60 cursor-pointer hover:bg-muted/40', m === mes && 'bg-primary/5')}>
+                    <td className={cn(tdCls, m === mes && 'text-primary font-medium')}>{mesLargo(m).charAt(0).toUpperCase() + mesLargo(m).slice(1)} {m.slice(2, 4)}</td>
+                    <td className={cn(tdMoneyCls, 'text-muted-foreground')}>{x.vendidos + x.consig || '—'}</td>
+                    <td className={tdMoneyCls}>{x.bruta ? money(r2(x.bruta)) : '—'}</td>
+                    <td className={cn(tdMoneyCls, x.gastos > 0 && 'text-destructive')}>{x.gastos ? money(r2(x.gastos)) : '—'}</td>
+                    <td className={cn(tdMoneyCls, 'font-medium', signoCls(x.ganancia))}>{moneyDelta(r2(x.ganancia))}</td>
+                    <td className={cn(tdMoneyCls, 'text-muted-foreground')}>{x.retiros ? money(r2(x.retiros)) : '—'}</td>
+                    <td className={cn(tdMoneyCls, signoCls(x.despues))}>{moneyDelta(r2(x.despues))}</td>
                   </tr>
                 )
               })}
+              <tr className="font-medium bg-muted/30">
+                <td className={tdCls}>Total</td>
+                <td className={tdMoneyCls}>{tot.vendidos + tot.consig}</td>
+                <td className={tdMoneyCls}>{money(r2(tot.bruta))}</td>
+                <td className={cn(tdMoneyCls, 'text-destructive')}>{money(r2(tot.gastos))}</td>
+                <td className={cn(tdMoneyCls, signoCls(tot.ganancia))}>{moneyDelta(r2(tot.ganancia))}</td>
+                <td className={tdMoneyCls}>{money(r2(tot.retiros))}</td>
+                <td className={cn(tdMoneyCls, signoCls(tot.despues))}>{moneyDelta(r2(tot.despues))}</td>
+              </tr>
             </tbody>
           </table>
+        </div>
+      </Seccion>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Seccion titulo={`Qué se vendió en ${mesLargo(mes)}`} contentClassName="space-y-4">
+          <div>
+            <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-2">Autos propios ({r.autosVendidos.length})</p>
+            {r.autosVendidos.length === 0 ? <p className="text-sm text-muted-foreground">Ninguno.</p> : (
+              <ul className="divide-y divide-border text-[13px]">
+                {r.autosVendidos.map(v => (
+                  <li key={v.vehicle_id} className="flex items-baseline justify-between gap-3 py-1.5">
+                    <span className="min-w-0">
+                      <span className="block truncate">{v.label}</span>
+                      <span className="block text-2xs text-muted-foreground">{fmtDMY(v.dia)} · vendido en {money(v.ingresos)} · costó {money(v.costo)}</span>
+                    </span>
+                    <span className={cn('font-mono tabular-nums shrink-0', signoCls(v.margen))}>{moneyDelta(v.margen)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-2">Consignaciones ({consig.length})</p>
+            {consig.length === 0 ? <p className="text-sm text-muted-foreground">Ninguna.</p> : (
+              <ul className="divide-y divide-border text-[13px]">
+                {consig.map(c => (
+                  <li key={c.vehicle_id} className="flex items-baseline justify-between gap-3 py-1.5">
+                    <span className="min-w-0">
+                      <span className="block truncate">{c.label}</span>
+                      <span className="block text-2xs text-muted-foreground">{fmtDMY(c.dia)}</span>
+                    </span>
+                    <span className={cn('font-mono tabular-nums shrink-0', signoCls(c.cobrado))}>{moneyDelta(c.cobrado)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </Seccion>
-        <Seccion className="lg:col-span-2" titulo="Qué movió el capital">
-          <PuenteLista p={P(mes)} titulo={periodoLabel(mes, report)} />
+
+        <Seccion titulo={`En qué se gastó en ${mesLargo(mes)}`} contentClassName="space-y-4">
+          <div className="text-[13px]">
+            <div className="flex justify-between py-1"><span>Gastos generales</span><span className="font-mono tabular-nums">{money(r2(-(r.gastosGenerales + r.gastosSinAuto)))}</span></div>
+            <div className="flex justify-between py-1"><span>Intereses de préstamos</span><span className="font-mono tabular-nums">{money(r2(-r.intereses))}</span></div>
+            <div className="flex justify-between py-1 border-t border-border mt-1 font-medium"><span>Gastos</span><span className="font-mono tabular-nums text-destructive">{money(r2(a.gastos))}</span></div>
+            <div className="flex justify-between py-1 text-muted-foreground"><span>Retiros personales (aparte)</span><span className="font-mono tabular-nums">{money(r2(a.retiros))}</span></div>
+          </div>
+          <div>
+            <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-2">Los gastos generales más grandes</p>
+            <TopGastos report={report} sel={mes} soloGenerales />
+          </div>
         </Seccion>
       </div>
 
-      <ResultadoCard report={report} sel={mes} onSel={onSel} />
-
-      <Seccion titulo={`Consignaciones vendidas en ${mesLargo(mes)} (${consig.length})`} contentClassName={consig.length ? 'p-0 overflow-x-auto' : undefined}>
-        {consig.length === 0 ? <p className="text-sm text-muted-foreground">Ninguna en el mes.</p> : <ConsignacionesTabla filas={consig} />}
-      </Seccion>
+      <div className="print:hidden">
+        <button type="button" onClick={() => setDetalle(d => !d)} aria-expanded={detalle}
+          className="text-sm text-primary hover:underline">
+          {detalle ? 'Ocultar el detalle línea por línea' : 'Ver el detalle línea por línea de todos los meses →'}
+        </button>
+      </div>
+      {detalle && <ResultadoCard report={report} sel={mes} onSel={onSel} />}
     </div>
   )
 }
@@ -202,9 +298,9 @@ export function VistaAnual({ report, anio, onAnio, onSel }: {
     <div className="space-y-5">
       <Chips label="Año" opciones={report.anios.map(a => ({ key: a, label: a }))} valor={anio} onCambio={onAnio} />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi tone="hero" label={`Resultado ${anio}`} value={moneyDelta(r2(tot.neto))}
-          sub={<>operativo {moneyDelta(r2(tot.operativo))} · {meses.length} meses{enCurso ? ' (en curso)' : ''}</>}
-          tip="Lo que quedó en el negocio en el año: margen de autos vendidos + comisiones − gastos − intereses − retiros." />
+        <Kpi tone="hero" label={`Ganancia ${anio}`} value={moneyDelta(r2(tot.operativo))} signo={tot.operativo}
+          sub={<>después de retiros {moneyDelta(r2(tot.neto))} · {meses.length} meses{enCurso ? ' (en curso)' : ''}</>}
+          tip="Margen de autos vendidos + comisiones − gastos − intereses del año. Abajo, lo que quedó después de los retiros." />
         <Kpi label="Ventas" value={`${tot.autosVendidos.length} + ${tot.consignacionesVendidas}`}
           sub={<>propios (margen {money(r2(tot.margenAutos))}) + consignaciones ({money(r2(tot.comisiones))})</>}
           tip="Autos propios vendidos y consignaciones cobradas en el año." />
@@ -217,7 +313,7 @@ export function VistaAnual({ report, anio, onAnio, onSel }: {
       </div>
 
       <div className="grid gap-5 lg:grid-cols-5">
-        <Seccion className="lg:col-span-3" titulo={`Resultado de ${anio}, mes a mes`} ayuda="Click en un mes para verlo en la pestaña Mes a mes.">
+        <Seccion className="lg:col-span-3" titulo={`Ganancia de ${anio}, mes a mes`} ayuda="Click en un mes para verlo en la pestaña Mes a mes.">
           <GraficoResultado report={report} meses={meses} sel="" onSel={onSel} height={220} />
         </Seccion>
         <Seccion className="lg:col-span-2" titulo={`Qué movió el capital en ${anio}`}>
@@ -225,7 +321,7 @@ export function VistaAnual({ report, anio, onAnio, onSel }: {
         </Seccion>
       </div>
 
-      <Seccion titulo={`Estado de resultados ${anio} por trimestre`} contentClassName="space-y-2">
+      <Seccion titulo={`Ganancia de ${anio} por trimestre`} contentClassName="space-y-2">
         <TablaColumnas
           columnas={trimestres} etiqueta={t => t} filas={filasResultado(rT, trimestres)}
           extra={{
@@ -383,13 +479,14 @@ export function VistaEstadisticas({ report, alcance, onAlcance }: {
           <Stat label="Cobrado neto" value={money(r2(consig.reduce((s, c) => s + c.cobrado, 0)))} ayuda="Comisión + seña − gastos hechos en el auto." />
           <Stat label="Comisión promedio" value={consig.length ? money(r2(consig.reduce((s, c) => s + c.cobrado, 0) / consig.length)) : '—'} />
           <Stat label="Días promedio hasta vender" value={prom(consig.map(c => c.dias)) === null ? '—' : num(prom(consig.map(c => c.dias))!, 0)} />
-          <Stat label="Comisiones del período" value={money(r2(res.comisiones))} ayuda="Criterio del resultado: todo lo cobrado por consignaciones en el período, vendidas o no." />
+          <Stat label="Comisiones del período" value={money(r2(res.comisiones))} ayuda="Como en la ganancia: todo lo cobrado por consignaciones en el período, vendidas o no." />
         </Seccion>
         <Seccion titulo="Estructura">
           <Stat label="Gastos generales / mes" value={ggProm === null ? '—' : money(r2(ggProm))} ayuda="Promedio de los meses cerrados del período." />
           <Stat label="Retiros / mes" value={retProm === null ? '—' : money(r2(retProm))} />
           <Stat label="Intereses del período" value={money(r2(-res.intereses))} />
-          <Stat label="Resultado / mes" value={<span className={signoCls(res.neto)}>{moneyDelta(r2(res.neto / Math.max(1, meses.length)))}</span>} />
+          <Stat label="Ganancia / mes" value={<span className={signoCls(res.operativo)}>{moneyDelta(r2(res.operativo / Math.max(1, meses.length)))}</span>} />
+          <Stat label="Después de retiros / mes" value={<span className={signoCls(res.neto)}>{moneyDelta(r2(res.neto / Math.max(1, meses.length)))}</span>} />
           <Stat label="Punto de equilibrio" value={report.equilibrio.autosNecesarios === null ? '—' : `${num(report.equilibrio.autosNecesarios)} autos/mes`} ayuda="Autos propios por mes que hacen falta para cubrir el gasto fijo con el margen promedio de los últimos meses." />
         </Seccion>
         <Seccion titulo="Hoy">
@@ -502,8 +599,8 @@ export function VistaReporte({ report, sel, onSel, anio, onAnio, titulo }: {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {[
-              { l: 'Queda en el negocio', v: moneyDelta(r2(res.neto)), c: signoCls(res.neto) },
-              { l: 'Resultado operativo', v: moneyDelta(r2(res.operativo)), c: signoCls(res.operativo) },
+              { l: 'Ganancia', v: moneyDelta(r2(res.operativo)), c: signoCls(res.operativo) },
+              { l: 'Ganancia después de retiros', v: moneyDelta(r2(res.neto)), c: signoCls(res.neto) },
               { l: 'Capital propio al cierre', v: money(p.capitalFin), c: '' },
               { l: 'Variación del capital', v: moneyDelta(r2(delta)), c: signoCls(delta) },
               { l: 'Caja al cierre', v: money(caja.cajaCierre), c: '' },
@@ -521,19 +618,19 @@ export function VistaReporte({ report, sel, onSel, anio, onAnio, titulo }: {
               El capital propio {delta >= 0 ? 'subió' : 'bajó'} <b>{money(Math.abs(r2(delta)))}</b> (de {money(p.capitalInicio)} a {money(p.capitalFin)}).
               {bajan.length > 0 && <> Lo bajaron {bajan.map(l => `${l.label.toLowerCase()} (${moneyDelta(l.v)})`).join(', ')}.</>}
               {suben.length > 0 && <> Lo subieron {suben.map(l => `${l.label.toLowerCase()} (${moneyDelta(l.v)})`).join(', ')}.</>}
-              {' '}El resultado realizado fue {moneyDelta(r2(res.neto))} después de {money(r2(-res.retiros))} de retiros.
+              {' '}La ganancia fue {moneyDelta(r2(res.operativo))}; después de {money(r2(-res.retiros))} de retiros quedaron {moneyDelta(r2(res.neto))}.
             </p>
           </Bloque>
 
           <div className="grid gap-6 sm:grid-cols-2">
-            <Bloque t="Resultado">
+            <Bloque t="Ganancia">
               <Linea l={`Margen de ${res.autosVendidos.length} autos propios vendidos`} v={res.margenAutos} />
               <Linea l={`Comisiones (${res.consignacionesVendidas} consignaciones)`} v={res.comisiones} />
               <Linea l="Gastos generales" v={res.gastosGenerales + res.gastosSinAuto} />
               <Linea l="Intereses devengados" v={res.intereses} />
-              <Linea l="Resultado operativo" v={res.operativo} fuerte />
+              <Linea l="Ganancia" v={res.operativo} fuerte />
               <Linea l="Retiros personales" v={res.retiros} />
-              <Linea l="Queda en el negocio" v={res.neto} fuerte />
+              <Linea l="Ganancia después de retiros" v={res.neto} fuerte />
             </Bloque>
             <Bloque t="Qué movió el capital">
               <Linea l="Capital al inicio" v={p.capitalInicio} sinSigno />

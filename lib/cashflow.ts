@@ -965,7 +965,7 @@ export function buildCashflowReport(input: CashflowInput): CashflowReport {
       const parte = round2(a.margen * a.socioPct / 100)
       anomalias.push({
         titulo: `${a.label}: vendido en sociedad (${a.socioPct}% del socio)`,
-        detalle: `El margen fue ${money(a.margen)} y ${money(parte)} son del socio. El resultado y el capital lo cuentan entero como nuestro: si esa parte ya se le pagó, cargala como egreso; si todavía se le debe, el capital está sobreestimado en eso.`,
+        detalle: `El margen fue ${money(a.margen)} y ${money(parte)} son del socio. La ganancia y el capital lo cuentan entero como nuestro: si esa parte ya se le pagó, cargala como egreso; si todavía se le debe, el capital está sobreestimado en eso.`,
         monto: -parte,
       })
     }
@@ -1049,7 +1049,7 @@ export function buildCashflowReport(input: CashflowInput): CashflowReport {
     const egr = otrosSinClasificar.filter(m => m._s < 0).reduce((s, m) => s - m._s, 0)
     anomalias.push({
       titulo: `${otrosSinClasificar.length} movimientos con categoría "otro"`,
-      detalle: `Entraron ${money(round2(ing))} y salieron ${money(round2(egr))} sin categoría. No entran al resultado: si alguno es una venta, comisión o aporte, recategorizarlo cambia los números del mes.`,
+      detalle: `Entraron ${money(round2(ing))} y salieron ${money(round2(egr))} sin categoría. No cuentan como ganancia: si alguno es una venta, comisión o aporte, recategorizarlo cambia los números del mes.`,
       monto: null,
     })
   }

@@ -96,8 +96,10 @@ export function Seccion({ titulo, ayuda, accion, children, className, contentCla
   )
 }
 
-export function Kpi({ label, value, sub, tip, tone = 'default' }: {
+export function Kpi({ label, value, sub, tip, tone = 'default', signo }: {
   label: string; value: string; sub?: ReactNode; tip?: ReactNode; tone?: 'default' | 'hero' | 'negative' | 'positive'
+  /** Si viene, el valor se pinta por signo: verde si gana, rojo si pierde. */
+  signo?: number
 }) {
   return (
     <Card size="sm" className={tone === 'hero' ? 'bg-muted/40' : undefined}>
@@ -109,7 +111,8 @@ export function Kpi({ label, value, sub, tip, tone = 'default' }: {
             en media pantalla de 375px, así que ahí baja de tamaño. */}
         <p className={cn('text-base min-[400px]:text-lg sm:text-2xl font-mono tabular-nums whitespace-nowrap',
           tone === 'hero' ? 'font-semibold' : 'font-medium',
-          tone === 'negative' && 'text-destructive', tone === 'positive' && 'text-success')}>{value}</p>
+          tone === 'negative' && 'text-destructive', tone === 'positive' && 'text-success',
+          signo !== undefined && signoCls(signo))}>{value}</p>
         {sub && <div className="text-xs text-muted-foreground mt-1">{sub}</div>}
       </CardContent>
     </Card>
@@ -175,9 +178,9 @@ export function Kpis({ report }: { report: CashflowReport }) {
         tip={<>Lo que es tuyo si hoy vendés el stock al precio esperado, cobrás y pagás todo. Mismo número que Finanzas → Patrimonio. Máximo: {money(c.maximo.v)} el {fmtDMY(c.maximo.d)}.</>}
       />
       <Kpi
-        label={`Resultado ${mesCorto(report.mesActual)}`} value={moneyDelta(rm?.neto ?? 0)}
-        sub={<>operativo {moneyDelta(rm?.operativo ?? 0)} · retiros {money(Math.abs(rm?.retiros ?? 0))}</>}
-        tip={<>Criterio realizado: margen de los autos propios vendidos este mes + comisiones cobradas − gastos generales − intereses devengados − retiros. Lo que todavía está en el stock no cuenta hasta que se vende.</>}
+        label={`Ganancia ${mesCorto(report.mesActual)}`} value={moneyDelta(rm?.operativo ?? 0)} signo={rm?.operativo ?? 0}
+        sub={<>retiros {money(Math.abs(rm?.retiros ?? 0))} · después de retiros {moneyDelta(rm?.neto ?? 0)}</>}
+        tip={<>Margen de los autos propios vendidos este mes + comisiones cobradas − gastos generales − intereses devengados. Los retiros no son gasto del negocio: van aparte. Un auto que sigue en el stock no suma ganancia hasta que se vende.</>}
       />
       <Kpi
         label="Gasto fijo mensual" value={money(eq.gastoFijoProm)}
@@ -440,12 +443,12 @@ export function filasResultado(get: (c: string) => ResultadoMes, columnas: strin
     { key: 'gg', label: 'Gastos generales', valores: c => get(c).gastosGenerales },
     ...(hayGastosSinAuto ? [{ key: 'gsa', label: 'Gastos de autos sin auto asignado', valores: (c: string) => get(c).gastosSinAuto }] : []),
     { key: 'int', label: 'Intereses (devengados)', valores: c => get(c).intereses },
-    { key: 'op', label: 'Resultado operativo', valores: c => get(c).operativo, tipo: 'total' },
+    { key: 'op', label: 'Ganancia', valores: c => get(c).operativo, tipo: 'total' },
     { key: 'ret', label: 'Retiros personales', valores: c => get(c).retiros },
-    { key: 'neto', label: 'Queda en el negocio', valores: c => get(c).neto, tipo: 'total' },
+    { key: 'neto', label: 'Ganancia después de retiros', valores: c => get(c).neto, tipo: 'total' },
     {
       key: 'fuera',
-      label: <span className="flex items-center gap-1.5">Fuera del resultado <InfoTip>Aportes, ajustes de saldo y movimientos con categoría &quot;otro&quot;. Mueven la caja y el capital pero no son ganancia ni gasto del negocio (o no se sabe qué son: ver &quot;A revisar&quot;).</InfoTip></span>,
+      label: <span className="flex items-center gap-1.5">Fuera de la ganancia <InfoTip>Aportes, ajustes de saldo y movimientos con categoría &quot;otro&quot;. Mueven la caja y el capital pero no son ganancia ni gasto del negocio (o no se sabe qué son: ver &quot;A revisar&quot;).</InfoTip></span>,
       valores: c => get(c).fueraDeResultado, tipo: 'tenue',
     },
   ]
@@ -480,8 +483,9 @@ export function tooltipResultado(r: ResultadoMes, titulo: string) {
       <TipRow label={`Comisiones (${r.consignacionesVendidas})`} value={moneyDelta(r.comisiones)} />
       <TipRow label="Gastos generales" value={moneyDelta(r.gastosGenerales + r.gastosSinAuto)} />
       <TipRow label="Intereses" value={moneyDelta(r.intereses)} />
+      <TipRow label="Ganancia" value={moneyDelta(r.operativo)} strong />
       <TipRow label="Retiros" value={moneyDelta(r.retiros)} />
-      <TipRow label="Queda en el negocio" value={moneyDelta(r.neto)} strong />
+      <TipRow label="Después de retiros" value={moneyDelta(r.neto)} />
     </>
   )
 }
@@ -489,7 +493,7 @@ export function tooltipResultado(r: ResultadoMes, titulo: string) {
 export function GraficoResultado({ report, meses, sel, onSel, height = 200 }: {
   report: CashflowReport; meses: string[]; sel: Sel; onSel: (s: Sel) => void; height?: number
 }) {
-  const items: ColumnaMes[] = meses.map(m => ({ mes: m, pos: 0, neg: 0, neto: report.resultado[m].neto }))
+  const items: ColumnaMes[] = meses.map(m => ({ mes: m, pos: 0, neg: 0, neto: report.resultado[m].operativo }))
   return (
     <ColumnasMes
       items={items} soloNeto seleccionado={meses.includes(sel) ? sel : null} onSelect={onSel} height={height}
@@ -540,8 +544,8 @@ export function ResultadoCard({ report, sel, onSel }: { report: CashflowReport; 
 
   return (
     <Seccion
-      titulo="Estado de resultados, mes a mes"
-      ayuda={<>Criterio realizado. El margen de un auto propio (todo lo cobrado − compra − gastos, igual que el P&amp;L por auto) se reconoce el mes en que se vende. Las comisiones de consignación, cuando se cobran (la seña de una consignación es comisión). Los intereses, cuando se devengan. No incluye la ganancia esperada del stock: esa está en el capital.</>}
+      titulo="Ganancia mes a mes"
+      ayuda={<>Ganancia realizada. El margen de un auto propio (todo lo cobrado − compra − gastos, igual que el P&amp;L por auto) se reconoce el mes en que se vende. Las comisiones de consignación, cuando se cobran (la seña de una consignación es comisión). Los intereses, cuando se devengan. No incluye la ganancia esperada del stock: esa está en el capital.</>}
       contentClassName="space-y-4"
     >
       <GraficoResultado report={report} meses={meses} sel={sel} onSel={onSel} />
@@ -591,7 +595,7 @@ export function CajaCard({ report, sel, onSel }: { report: CashflowReport; sel: 
   return (
     <Seccion
       titulo="Flujo de caja: cuánto entra y cuánto sale"
-      ayuda={<>Criterio caja: sólo movimientos que pasan por las cajas. Las transferencias entre cuentas propias (nexo ↔ cash) no se cuentan: no es plata nueva. Comprar un auto es una salida enorme de caja aunque no sea un gasto — por eso el flujo y el resultado cuentan historias distintas.</>}
+      ayuda={<>Criterio caja: sólo movimientos que pasan por las cajas. Las transferencias entre cuentas propias (nexo ↔ cash) no se cuentan: no es plata nueva. Comprar un auto es una salida enorme de caja aunque no sea un gasto — por eso el flujo de caja y la ganancia cuentan historias distintas.</>}
       contentClassName="space-y-4"
     >
       <GraficoCaja report={report} meses={meses} sel={sel} onSel={onSel} />
@@ -611,9 +615,11 @@ export const GASTO_SERIES = [
 
 const CAT_GASTO: Record<string, string> = { general_expense: 'General', marketing: 'Marketing', vehicle_expense: 'Auto' }
 
-export function TopGastos({ report, sel }: { report: CashflowReport; sel: Sel }) {
+export function TopGastos({ report, sel, soloGenerales = false }: { report: CashflowReport; sel: Sel; soloGenerales?: boolean }) {
   const meses = /^\d{4}$/.test(sel) ? report.meses.filter(m => m.startsWith(sel)) : sel === 'total' ? report.meses : [sel]
-  const top = meses.flatMap(m => report.topGastos[m] ?? []).sort((a, b) => b.monto - a.monto).slice(0, 8)
+  const top = meses.flatMap(m => report.topGastos[m] ?? [])
+    .filter(g => !soloGenerales || g.categoria !== 'vehicle_expense')
+    .sort((a, b) => b.monto - a.monto).slice(0, 8)
   if (!top.length) return <p className="text-sm text-muted-foreground">Sin gastos en el período.</p>
   return (
     <ul className="divide-y divide-border text-[13px]">

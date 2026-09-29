@@ -2,7 +2,8 @@
 /**
  * Tablero de cashflow y finanzas (/cashflow): una pantalla aparte, sin el nav
  * del dashboard, con pestañas arriba (mismo esqueleto que el tablero de Kavos:
- * barra de pestañas fija, KPIs siempre a la vista, una sección por pestaña).
+ * barra de pestañas fija arriba, una sección por pestaña; los KPIs generales
+ * van en el Resumen).
  * La pestaña y el período viajan en la URL (?tab=anual&p=2026) para poder
  * mandar el link de una vista puntual.
  */
@@ -121,7 +122,9 @@ export default function CashflowClient({ report, tabInicial, periodoInicial, tit
           </div>
         </nav>
 
-        <Kpis report={report} />
+        {/* Los números grandes sólo en el Resumen: cada pestaña trae los suyos y
+            dos filas de tarjetas repetían lo mismo (pedido del usuario: simplificar). */}
+        {tab === 'resumen' && <Kpis report={report} />}
 
         <div ref={contenido} className="scroll-mt-16">
           {tab === 'resumen' && <VistaResumen report={report} sel={sel} onSel={setSel} irA={irA} />}
