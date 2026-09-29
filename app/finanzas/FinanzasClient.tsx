@@ -106,7 +106,12 @@ export default function FinanzasClient({
   return (
     <TooltipProvider>
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Finanzas</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Finanzas</h1>
+        <Link href="/cashflow" className="text-sm text-primary hover:underline">
+          Cashflow, resultado mensual y evolución del capital →
+        </Link>
+      </div>
 
       {/* Esta pantalla no escribe: el ledger, los préstamos y los ajustes de
           saldo los carga Claude por SQL sobre la base (ver PRODUCT.md). */}

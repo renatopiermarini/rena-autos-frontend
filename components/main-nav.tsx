@@ -98,7 +98,9 @@ export function MainNav({
     }
   }, [medir, pathname])
 
-  if (pathname === '/login') return null
+  // /cashflow es un tablero aparte, con su propio encabezado (vuelve al Tablero
+  // con un link): se comparte por link y se mira solo, sin el menú del día a día.
+  if (pathname === '/login' || pathname.startsWith('/cashflow')) return null
 
   return (
     <header className="border-b border-border sticky top-0 z-30 bg-background/90 backdrop-blur-sm">

@@ -78,6 +78,18 @@ export async function getCotizaciones() { return getSafe('cotizaciones', 15) }
 // la vista no existe → [] (getSafe), y las pantallas muestran "sin archivos".
 export async function getDocumentosMeta() { return getSafe('documentos_meta', 15) }
 
+// Cambios de fichas de autos del audit_log (sólo los PATCH): el tablero de
+// cashflow los usa para fechar cuándo un auto pasó a `vendido` si la ficha no
+// tiene fecha_venta. La tabla puede no existir (modo Kapso) → [].
+export async function getAuditVehiculos() {
+  try {
+    return await dbGet('audit_log', { tabla: 'vehicles', operacion: 'patch' }, { revalidate: 60 })
+  } catch (e) {
+    console.warn('[kapso] no se pudo leer audit_log:', e)
+    return []
+  }
+}
+
 // D1 devuelve los booleanos como 1/0, "1"/"0" o true/false según el driver.
 // Boolean('0') es true, así que se coerce siempre. Sin valor = activo (una fila
 // vieja sin la columna no debería desaparecer de la UI).

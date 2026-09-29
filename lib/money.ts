@@ -30,3 +30,28 @@ export function fmtN(n: unknown): string {
   if (!Number.isFinite(v)) return '—'
   return v.toLocaleString('es-AR')
 }
+
+/**
+ * Plata compacta para ejes y etiquetas de gráficos, donde "USD 12.500" no
+ * entra: "12,5k", "−3k", "850". Signo menos tipográfico. Fuera de un gráfico,
+ * siempre money().
+ */
+export function moneyK(n: unknown): string {
+  if (n == null || n === '') return '—'
+  const v = Number(n)
+  if (!Number.isFinite(v)) return '—'
+  const abs = Math.abs(v)
+  const sign = v < 0 ? '−' : ''
+  if (abs < 1000) return `${sign}${Math.round(abs).toLocaleString('es-AR')}`
+  const k = abs / 1000
+  const txt = k >= 100 ? Math.round(k).toLocaleString('es-AR') : k.toLocaleString('es-AR', { maximumFractionDigits: 1 })
+  return `${sign}${txt}k`
+}
+
+/** money() con signo explícito para variaciones: "+USD 1.200" / "−USD 800". */
+export function moneyDelta(n: unknown): string {
+  const v = Number(n)
+  if (n == null || n === '' || !Number.isFinite(v)) return '—'
+  if (Math.abs(v) < 0.005) return money(0)
+  return `${v > 0 ? '+' : '−'}${money(Math.abs(v))}`
+}
