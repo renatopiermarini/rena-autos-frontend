@@ -105,6 +105,7 @@ export function VistaMensual({ report, sel, onSel }: { report: CashflowReport; s
   const a = S(mes)
   const b = anterior ? S(anterior) : null
   const r = report.resultado[mes]
+  const g = report.gastos[mes]
   const consig = report.consignaciones.filter(c => c.dia.startsWith(mes))
   const filas = [...report.meses].reverse()
   const tot = report.meses.reduce((acc, m) => {
@@ -122,7 +123,7 @@ export function VistaMensual({ report, sel, onSel }: { report: CashflowReport; s
           tip="Lo que dejaron los autos propios vendidos en el mes (cobrado − compra − arreglos) más las comisiones de consignaciones." />
         <Kpi label={`Gastos ${mesCorto(mes)}`} value={money(r2(a.gastos))} tone={a.gastos > 0 ? 'negative' : 'default'}
           sub={<VsAnterior v={a.gastos} antes={b?.gastos ?? null} alReves />}
-          tip="Gastos generales del negocio (cochera, sueldos, papelería, publicidad…) + intereses de los préstamos. Los arreglos de cada auto ya están descontados de su ganancia." />
+          tip={`Gastos generales del negocio (${report.conceptosFijos.join(', ')} y el resto) + intereses de los préstamos. Los arreglos de cada auto ya están descontados de su ganancia; los retiros van aparte.`} />
         <Kpi tone="hero" label={`Ganancia ${mesCorto(mes)}`} value={moneyDelta(r2(a.ganancia))} signo={a.ganancia}
           sub={<VsAnterior v={a.ganancia} antes={b?.ganancia ?? null} />}
           tip="Ganancia bruta − gastos." />
@@ -233,13 +234,23 @@ export function VistaMensual({ report, sel, onSel }: { report: CashflowReport; s
 
         <Seccion titulo={`En qué se gastó en ${mesLargo(mes)}`} contentClassName="space-y-4">
           <div className="text-[13px]">
-            <div className="flex justify-between py-1"><span>Gastos generales</span><span className="font-mono tabular-nums">{money(r2(-(r.gastosGenerales + r.gastosSinAuto)))}</span></div>
+            {report.conceptosFijos.map(c => (
+              <div key={c} className="flex justify-between py-1">
+                <span>{c} <span className="text-2xs text-muted-foreground">fijo</span></span>
+                <span className="font-mono tabular-nums">{money(g.fijoDetalle[c] ?? 0)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between py-1"><span>Otros gastos generales</span><span className="font-mono tabular-nums">{money(r2(Math.max(0, -(r.gastosGenerales + r.gastosSinAuto) - g.fijos)))}</span></div>
             <div className="flex justify-between py-1"><span>Intereses de préstamos</span><span className="font-mono tabular-nums">{money(r2(-r.intereses))}</span></div>
             <div className="flex justify-between py-1 border-t border-border mt-1 font-medium"><span>Gastos</span><span className="font-mono tabular-nums text-destructive">{money(r2(a.gastos))}</span></div>
-            <div className="flex justify-between py-1 text-muted-foreground"><span>Retiros personales (aparte)</span><span className="font-mono tabular-nums">{money(r2(a.retiros))}</span></div>
+            <div className="flex justify-between py-1 text-muted-foreground"><span>Retiros personales (aparte de la ganancia)</span><span className="font-mono tabular-nums">{money(r2(a.retiros))}</span></div>
+            <div className="flex justify-between py-1 mt-1 rounded-md bg-muted/40 px-2">
+              <span className="flex items-center gap-1.5">Gasto fijo del mes <InfoTip>Retiros + {report.conceptosFijos.join(' + ')}.</InfoTip></span>
+              <span className="font-mono tabular-nums font-medium">{money(r2(g.retiros + g.fijos))}</span>
+            </div>
           </div>
           <div>
-            <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-2">Los gastos generales más grandes</p>
+            <p className="text-2xs uppercase tracking-wide text-muted-foreground mb-2">Otros gastos generales más grandes</p>
             <TopGastos report={report} sel={mes} soloGenerales />
           </div>
         </Seccion>
@@ -482,12 +493,13 @@ export function VistaEstadisticas({ report, alcance, onAlcance }: {
           <Stat label="Comisiones del período" value={money(r2(res.comisiones))} ayuda="Como en la ganancia: todo lo cobrado por consignaciones en el período, vendidas o no." />
         </Seccion>
         <Seccion titulo="Estructura">
-          <Stat label="Gastos generales / mes" value={ggProm === null ? '—' : money(r2(ggProm))} ayuda="Promedio de los meses cerrados del período." />
+          <Stat label="Gasto fijo / mes" value={money(report.equilibrio.gastoFijoProm)} ayuda={`Retiros + ${report.conceptosFijos.join(' + ')}, promedio de los últimos meses cerrados.`} />
+          <Stat label="Gastos generales / mes" value={ggProm === null ? '—' : money(r2(ggProm))} ayuda="Todos los gastos generales (incluye los fijos), promedio de los meses cerrados del período." />
           <Stat label="Retiros / mes" value={retProm === null ? '—' : money(r2(retProm))} />
           <Stat label="Intereses del período" value={money(r2(-res.intereses))} />
           <Stat label="Ganancia / mes" value={<span className={signoCls(res.operativo)}>{moneyDelta(r2(res.operativo / Math.max(1, meses.length)))}</span>} />
           <Stat label="Después de retiros / mes" value={<span className={signoCls(res.neto)}>{moneyDelta(r2(res.neto / Math.max(1, meses.length)))}</span>} />
-          <Stat label="Punto de equilibrio" value={report.equilibrio.autosNecesarios === null ? '—' : `${num(report.equilibrio.autosNecesarios)} autos/mes`} ayuda="Autos propios por mes que hacen falta para cubrir el gasto fijo con el margen promedio de los últimos meses." />
+          <Stat label="Punto de equilibrio" value={report.equilibrio.autosNecesarios === null ? '—' : `${num(report.equilibrio.autosNecesarios)} autos/mes`} ayuda={`Autos propios por mes que hacen falta para cubrir todo lo que sale por mes (gasto fijo + otros gastos + intereses ≈ ${money(report.equilibrio.gastoTotalProm)}) con el margen promedio de los últimos meses.`} />
         </Seccion>
         <Seccion titulo="Hoy">
           <Stat label="Autos en stock" value={stock.length} />

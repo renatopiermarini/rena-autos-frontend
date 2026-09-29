@@ -611,13 +611,55 @@ export type ResultadoMes = {
 }
 
 export type GastoMes = {
-  gastos_generales: number
+  fijos: number                          // gastos generales que son gasto fijo (Fran, Marshiot, cocheras…)
+  fijoDetalle: Record<string, number>    // lo mismo, por concepto
+  gastos_generales: number               // el resto de los gastos generales
   gastos_autos: number
   intereses: number
   retiros: number
 }
 
-export type GastoItem = { dia: string; categoria: string; nota: string; monto: number; auto: string | null }
+export type GastoItem = { dia: string; categoria: string; nota: string; monto: number; auto: string | null; concepto?: string }
+
+// ── Gasto fijo ───────────────────────────────────────────────────────────────
+//
+// Definición del usuario (2026-09-29): gasto fijo = retiros + Fran + Marshiot +
+// cocheras. En el ledger los tres últimos son `general_expense` y se reconocen
+// por la nota ("Gastos Fran Junio", "Sueldo Marshiot", "Pago cochera -
+// Septiembre"). Se puede cambiar sin tocar código con la clave
+// `gastos_fijos` de config_negocio: "Fran, Marshiot, Cocheras:cochera"
+// (etiqueta, y después de ":" las palabras a buscar separadas por "|").
+
+export type ConceptoFijo = { label: string; palabras: string[] }
+
+export const GASTOS_FIJOS_DEFAULT: ConceptoFijo[] = [
+  { label: 'Fran', palabras: ['fran'] },
+  { label: 'Marshiot', palabras: ['marshiot'] },
+  { label: 'Cocheras', palabras: ['cochera'] },
+]
+
+const normalizar = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+
+export function parseGastosFijos(raw: string | undefined | null): ConceptoFijo[] {
+  const txt = (raw ?? '').trim()
+  if (!txt) return GASTOS_FIJOS_DEFAULT
+  const out = txt.split(',').map(parte => {
+    const [label, palabras] = parte.split(':').map(x => x.trim())
+    const lista = (palabras || label).split('|').map(x => normalizar(x.trim())).filter(Boolean)
+    return { label, palabras: lista }
+  }).filter(c => c.label && c.palabras.length)
+  return out.length ? out : GASTOS_FIJOS_DEFAULT
+}
+
+/** ¿A qué concepto de gasto fijo corresponde esta nota? Palabra al inicio de una
+ *  palabra de la nota: "cochera" agarra "cocheras", "fran" no agarra "transferencia". */
+export function conceptoFijo(nota: string, conceptos: ConceptoFijo[]): string | null {
+  const n = normalizar(nota)
+  for (const c of conceptos) {
+    if (c.palabras.some(p => new RegExp(`(^|[^a-z0-9])${p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(n))) return c.label
+  }
+  return null
+}
 
 // ── Reporte completo ─────────────────────────────────────────────────────────
 
@@ -630,6 +672,8 @@ export type CashflowInput = {
   hoy?: string
   /** Filas PATCH de vehicles del audit_log: fechan el paso a `vendido`. */
   auditVehiculos?: any[]
+  /** Qué gastos generales son gasto fijo (ver parseGastosFijos). */
+  gastosFijos?: ConceptoFijo[]
 }
 
 export type Anomalia = { titulo: string; detalle: string; monto: number | null }
@@ -662,11 +706,16 @@ export type CashflowReport = {
   resultado: Record<string, ResultadoMes>
   gastos: Record<string, GastoMes>
   topGastos: Record<string, GastoItem[]>
+  gastoFijoItems: Record<string, GastoItem[]>
+  conceptosFijos: string[]
   equilibrio: {
     mesesBase: string[]
-    estructuraProm: number
-    retirosProm: number
+    /** Gasto fijo = retiros + conceptos fijos (Fran, Marshiot, cocheras). */
     gastoFijoProm: number
+    fijoDetalleProm: { label: string; prom: number }[]
+    otrosGastosProm: number        // el resto de los gastos generales
+    interesesProm: number
+    gastoTotalProm: number         // fijo + otros + intereses: lo que hay que ganar por mes
     margenPromAuto: number | null
     autosPorMes: number
     comisionProm: number | null
@@ -682,7 +731,7 @@ export type CashflowReport = {
   anomalias: Anomalia[]
 }
 
-const GASTO_CATS: Record<string, keyof GastoMes> = {
+const GASTO_CATS: Record<string, 'gastos_generales' | 'gastos_autos' | 'intereses' | 'retiros'> = {
   general_expense: 'gastos_generales',
   marketing: 'gastos_generales',
   vehicle_expense: 'gastos_autos',
@@ -867,47 +916,69 @@ export function buildCashflowReport(input: CashflowInput): CashflowReport {
   }
 
   // ── Gastos (lo que salió de la caja, por tipo) y los más grandes de cada mes
+  const conceptos = input.gastosFijos?.length ? input.gastosFijos : GASTOS_FIJOS_DEFAULT
   const gastos: Record<string, GastoMes> = {}
   const topGastos: Record<string, GastoItem[]> = {}
+  const gastoFijoItems: Record<string, GastoItem[]> = {}
   for (const mes of meses) {
-    const g: GastoMes = { gastos_generales: 0, gastos_autos: 0, intereses: 0, retiros: 0 }
+    const g = { fijos: 0, gastos_generales: 0, gastos_autos: 0, intereses: 0, retiros: 0 }
+    const detalle: Record<string, number> = Object.fromEntries(conceptos.map(c => [c.label, 0]))
     const items: GastoItem[] = []
+    const fijos: GastoItem[] = []
     for (const m of ctx.movs) {
       if (m._day.slice(0, 7) !== mes || !affectsBalance(m) || m.tipo !== 'egreso') continue
       const k = GASTO_CATS[m.categoria]
       if (!k) continue
-      g[k] += Number(m.monto ?? 0)
-      if (k === 'gastos_generales' || k === 'gastos_autos') {
-        const vid = coerceId(m.vehicle_id)
-        items.push({
-          dia: m._day, categoria: m.categoria, nota: String(m.nota ?? '').trim(),
-          monto: round2(Number(m.monto ?? 0)),
-          auto: vid !== null ? (ctx.vt.get(vid)?.label ?? null) : null,
-        })
+      const monto = Number(m.monto ?? 0)
+      const vid = coerceId(m.vehicle_id)
+      const item: GastoItem = {
+        dia: m._day, categoria: m.categoria, nota: String(m.nota ?? '').trim(),
+        monto: round2(monto), auto: vid !== null ? (ctx.vt.get(vid)?.label ?? null) : null,
       }
+      const concepto = k === 'gastos_generales' ? conceptoFijo(item.nota, conceptos) : null
+      if (concepto) {
+        g.fijos += monto
+        detalle[concepto] += monto
+        fijos.push({ ...item, concepto })
+        continue
+      }
+      g[k] += monto
+      if (k === 'gastos_generales' || k === 'gastos_autos') items.push(item)
     }
     gastos[mes] = {
+      fijos: round2(g.fijos),
+      fijoDetalle: Object.fromEntries(Object.entries(detalle).map(([c, v]) => [c, round2(v)])),
       gastos_generales: round2(g.gastos_generales), gastos_autos: round2(g.gastos_autos),
       intereses: round2(g.intereses), retiros: round2(g.retiros),
     }
     topGastos[mes] = items.sort((a, b) => b.monto - a.monto).slice(0, 8)
+    gastoFijoItems[mes] = fijos.sort((a, b) => a.dia.localeCompare(b.dia))
   }
 
   // ── Punto de equilibrio: promedio de los últimos 3 meses CERRADOS
   const cerrados = meses.filter(m => m < mesActual)
   const base = cerrados.slice(-3)
   const prom = (f: (m: string) => number) => base.length ? round2(base.reduce((s, m) => s + f(m), 0) / base.length) : 0
-  const estructuraProm = prom(m => -(resultado[m].gastosGenerales + resultado[m].gastosSinAuto + resultado[m].intereses))
+  // Gasto fijo = retiros + conceptos fijos. Otros gastos = el resto de los
+  // gastos generales (con el criterio de la ganancia). Intereses, aparte.
   const retirosProm = prom(m => -resultado[m].retiros)
-  const gastoFijoProm = round2(estructuraProm + retirosProm)
+  const fijoDetalleProm = [
+    { label: 'Retiros', prom: retirosProm },
+    ...conceptos.map(c => ({ label: c.label, prom: prom(m => gastos[m].fijoDetalle[c.label] ?? 0) })),
+  ]
+  const gastoFijoProm = round2(fijoDetalleProm.reduce((s, x) => s + x.prom, 0))
+  const otrosGastosProm = prom(m => Math.max(0, -(resultado[m].gastosGenerales + resultado[m].gastosSinAuto) - gastos[m].fijos))
+  const interesesProm = prom(m => -resultado[m].intereses)
+  const gastoTotalProm = round2(gastoFijoProm + otrosGastosProm + interesesProm)
   const ultimos6 = meses.slice(-6)
   const vendidos6 = ultimos6.flatMap(m => resultado[m].autosVendidos)
   const margenPromAuto = vendidos6.length ? round2(vendidos6.reduce((s, a) => s + a.margen, 0) / vendidos6.length) : null
   const consig6 = ultimos6.reduce((s, m) => s + resultado[m].consignacionesVendidas, 0)
   const comis6 = ultimos6.reduce((s, m) => s + resultado[m].comisiones, 0)
   const comisionProm = consig6 ? round2(comis6 / consig6) : null
-  const autosNecesarios = margenPromAuto && margenPromAuto > 0 ? round2(gastoFijoProm / margenPromAuto) : null
-  const mesesDeCaja = gastoFijoProm > 0 ? round2(fHoy.cajas / gastoFijoProm) : null
+  // Para no perder plata hay que cubrir TODO: fijo + otros gastos + intereses.
+  const autosNecesarios = margenPromAuto && margenPromAuto > 0 ? round2(gastoTotalProm / margenPromAuto) : null
+  const mesesDeCaja = gastoTotalProm > 0 ? round2(fHoy.cajas / gastoTotalProm) : null
 
   // ── Stock inmovilizado
   const stock: StockItem[] = []
@@ -1081,9 +1152,10 @@ export function buildCashflowReport(input: CashflowInput): CashflowReport {
       maximo,
     },
     fotoHoy,
-    puentes, caja, resultado, gastos, topGastos,
+    puentes, caja, resultado, gastos, topGastos, gastoFijoItems,
+    conceptosFijos: conceptos.map(c => c.label),
     equilibrio: {
-      mesesBase: base, estructuraProm, retirosProm, gastoFijoProm,
+      mesesBase: base, gastoFijoProm, fijoDetalleProm, otrosGastosProm, interesesProm, gastoTotalProm,
       margenPromAuto, autosPorMes: round2(vendidos6.length / Math.max(1, ultimos6.length)),
       comisionProm, consignacionesPorMes: round2(consig6 / Math.max(1, ultimos6.length)),
       resultadoProm: prom(m => resultado[m].neto),

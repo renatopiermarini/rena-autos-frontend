@@ -184,13 +184,13 @@ export function Kpis({ report }: { report: CashflowReport }) {
       />
       <Kpi
         label="Gasto fijo mensual" value={money(eq.gastoFijoProm)}
-        sub={<>estructura {money(eq.estructuraProm)} + retiros {money(eq.retirosProm)}</>}
-        tip={<>Promedio de los últimos meses cerrados ({eq.mesesBase.map(mesCorto).join(', ') || 'sin meses cerrados'}): gastos generales + intereses devengados + gastos de autos sin auto asignado, más los retiros personales. Es lo que el negocio tiene que ganar cada mes para que el capital no baje.</>}
+        sub={eq.fijoDetalleProm.filter(d => d.prom > 0).map(d => `${d.label} ${money(d.prom)}`).join(' · ')}
+        tip={<>Retiros + {report.conceptosFijos.join(' + ')}, promedio de los últimos meses cerrados ({eq.mesesBase.map(mesCorto).join(', ') || 'sin meses cerrados'}). Aparte, y no incluidos acá: otros gastos generales ≈ {money(eq.otrosGastosProm)}/mes e intereses ≈ {money(eq.interesesProm)}/mes.</>}
       />
       <Kpi
         label="En caja" value={money(f.cajas)}
-        sub={eq.mesesDeCaja !== null ? <>cubre {num(eq.mesesDeCaja)} meses de gasto fijo</> : undefined}
-        tip={<>Suma de las cajas, derivada del ledger. Incluye plata prestada: no es plata libre. Los meses de cobertura suponen que no se vende nada y no se paga capital de deuda.</>}
+        sub={eq.mesesDeCaja !== null ? <>cubre {num(eq.mesesDeCaja)} meses de gastos</> : undefined}
+        tip={<>Suma de las cajas, derivada del ledger. Incluye plata prestada: no es plata libre. Los meses de cobertura son contra todo lo que sale por mes (gasto fijo + otros gastos + intereses ≈ {money(eq.gastoTotalProm)}), suponiendo que no se vende nada y no se devuelve capital de deuda.</>}
       />
       <Kpi
         tone="negative" label="Deudas" value={money(f.deuda)}
@@ -237,9 +237,10 @@ export function Diagnostico({ report, sel }: { report: CashflowReport; sel: Sel 
         </p>
         {eq.mesesBase.length > 0 && (
           <p className="text-muted-foreground">
-            El negocio gasta en promedio <b className="text-foreground">{money(eq.gastoFijoProm)}/mes</b> fijos
-            ({money(eq.estructuraProm)} de estructura e intereses + {money(eq.retirosProm)} de retiros,
-            promedio de {eq.mesesBase.map(mesCorto).join(', ')}).
+            Gasto fijo <b className="text-foreground">{money(eq.gastoFijoProm)}/mes</b>
+            ({eq.fijoDetalleProm.filter(d => d.prom > 0).map(d => `${d.label} ${money(d.prom)}`).join(', ')})
+            {' '}+ otros gastos {money(eq.otrosGastosProm)} + intereses {money(eq.interesesProm)}
+            {' '}= <b className="text-foreground">{money(eq.gastoTotalProm)} por mes</b> (promedio de {eq.mesesBase.map(mesCorto).join(', ')}).
             {eq.margenPromAuto !== null && eq.autosNecesarios !== null && (
               <> Con un margen promedio de {money(eq.margenPromAuto)} por auto propio vendido, cubrirlo pide{' '}
                 <b className="text-foreground">{num(eq.autosNecesarios)} autos por mes</b>;
@@ -606,12 +607,43 @@ export function CajaCard({ report, sel, onSel }: { report: CashflowReport; sel: 
 
 // ── Gastos ───────────────────────────────────────────────────────────────────
 
+// "Gasto fijo" es la definición del usuario: retiros + Fran + Marshiot +
+// cocheras (la serie junta los retiros y los conceptos fijos).
 export const GASTO_SERIES = [
-  { key: 'gastos_generales', label: 'Gastos generales',     color: 'var(--cat-1)' },
-  { key: 'gastos_autos',     label: 'Preparación de autos', color: 'var(--cat-2)' },
-  { key: 'intereses',        label: 'Intereses pagados',    color: 'var(--cat-3)' },
-  { key: 'retiros',          label: 'Retiros personales',   color: 'var(--cat-4)' },
+  { key: 'gasto_fijo',       label: 'Gasto fijo',              color: 'var(--cat-1)' },
+  { key: 'gastos_generales', label: 'Otros gastos generales',  color: 'var(--cat-2)' },
+  { key: 'gastos_autos',     label: 'Preparación de autos',    color: 'var(--cat-3)' },
+  { key: 'intereses',        label: 'Intereses pagados',       color: 'var(--cat-4)' },
 ]
+
+/** Las partes de un mes para el gráfico de gastos (gasto fijo = retiros + fijos). */
+export function partesGasto(g: CashflowReport['gastos'][string]): Record<string, number> {
+  return {
+    gasto_fijo: g.retiros + g.fijos,
+    gastos_generales: g.gastos_generales,
+    gastos_autos: g.gastos_autos,
+    intereses: g.intereses,
+  }
+}
+
+export function GastoFijoItems({ report, sel }: { report: CashflowReport; sel: Sel }) {
+  const meses = /^\d{4}$/.test(sel) ? report.meses.filter(m => m.startsWith(sel)) : sel === 'total' ? report.meses : [sel]
+  const items = meses.flatMap(m => report.gastoFijoItems[m] ?? [])
+  if (!items.length) return <p className="text-sm text-muted-foreground">Sin pagos de {report.conceptosFijos.join(', ')} en el período.</p>
+  return (
+    <ul className="divide-y divide-border text-[13px]">
+      {items.map((g, i) => (
+        <li key={i} className="flex items-baseline justify-between gap-3 py-1.5">
+          <span className="min-w-0">
+            <span className="block truncate">{g.nota || '(sin nota)'}</span>
+            <span className="block text-2xs text-muted-foreground">{fmtDMY(g.dia)} · {g.concepto}</span>
+          </span>
+          <span className="font-mono tabular-nums shrink-0">{money(g.monto)}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 const CAT_GASTO: Record<string, string> = { general_expense: 'General', marketing: 'Marketing', vehicle_expense: 'Auto' }
 
@@ -641,33 +673,48 @@ export function TopGastos({ report, sel, soloGenerales = false }: { report: Cash
 export function GastosCard({ report, sel, onSel }: { report: CashflowReport; sel: Sel; onSel: (s: Sel) => void }) {
   const G = report.gastos
   const meses = report.meses
-  const items = meses.map(m => ({ mes: m, partes: G[m] as unknown as Record<string, number> }))
-  const totalDe = (ms: string[]) => ms.reduce((s, m) => s + GASTO_SERIES.reduce((t, se) => t + (G[m] as any)[se.key], 0), 0)
+  const items = meses.map(m => ({ mes: m, partes: partesGasto(G[m]) }))
+  const totalDe = (ms: string[]) => ms.reduce((s, m) => s + Object.values(partesGasto(G[m])).reduce((a, b) => a + b, 0), 0)
   const totalSel = totalDe(sel === 'total' ? meses : [sel])
+  const swatch = (color: string, label: string) => (
+    <span className="flex items-center gap-1.5"><span className="inline-block size-2 rounded-sm" style={{ background: color }} />{label}</span>
+  )
   const filas: Fila[] = [
-    ...GASTO_SERIES.map(se => ({ key: se.key, label: <span className="flex items-center gap-1.5"><span className="inline-block size-2 rounded-sm" style={{ background: se.color }} />{se.label}</span>, valores: (m: string) => (G[m] as any)[se.key] as number, sinSigno: true })),
-    { key: 'tot', label: 'Total', valores: (m: string) => totalDe([m]), sinSigno: true, tipo: 'total' as const },
+    { key: 'g-fijo', label: 'Gasto fijo', valores: () => 0, tipo: 'grupo' },
+    { key: 'retiros', label: <span className="pl-3.5">Retiros</span>, valores: m => G[m].retiros, sinSigno: true },
+    ...report.conceptosFijos.map(c => ({ key: `fijo-${c}`, label: <span className="pl-3.5">{c}</span>, valores: (m: string) => G[m].fijoDetalle[c] ?? 0, sinSigno: true })),
+    { key: 'fijo', label: swatch(GASTO_SERIES[0].color, 'Gasto fijo'), valores: m => G[m].retiros + G[m].fijos, sinSigno: true, tipo: 'total' },
+    { key: 'g-otros', label: 'Otros', valores: () => 0, tipo: 'grupo' },
+    ...GASTO_SERIES.slice(1).map(se => ({ key: se.key, label: swatch(se.color, se.label), valores: (m: string) => partesGasto(G[m])[se.key], sinSigno: true })),
+    { key: 'tot', label: 'Total que salió', valores: (m: string) => totalDe([m]), sinSigno: true, tipo: 'total' as const },
   ]
   const cerrados = report.equilibrio.mesesBase
+  const periodo = sel === 'total' ? 'desde el inicio' : `de ${mesLargo(sel)}`
 
   return (
     <Seccion
       titulo="¿En qué se va la plata?"
-      ayuda={<>Lo que salió de la caja cada mes que NO es comprar autos ni devolver préstamos: gastos generales, preparación de autos (arreglos, papeles, lavado), intereses pagados y retiros personales.</>}
+      ayuda={<>Lo que salió de la caja cada mes que NO es comprar autos ni devolver préstamos. <b>Gasto fijo</b> = retiros + {report.conceptosFijos.join(' + ')} (se reconocen por la nota del gasto). El resto de los gastos generales va en &quot;otros&quot;; la preparación de autos (arreglos, papeles, lavado) y los intereses, aparte.</>}
       contentClassName="space-y-5"
     >
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3 min-w-0">
           <ColumnasApiladas items={items} series={GASTO_SERIES} seleccionado={sel === 'total' ? null : sel} onSelect={onSel} fmtValor={money} />
         </div>
-        <div className="lg:col-span-2 min-w-0">
-          <div className="flex items-baseline justify-between mb-2">
-            <p className="text-2xs uppercase tracking-wide text-muted-foreground">
-              Gastos más grandes {sel === 'total' ? 'desde el inicio' : `de ${mesLargo(sel)}`}
-            </p>
-            <span className="text-xs text-muted-foreground">total {money(r2(totalSel))}</span>
+        <div className="lg:col-span-2 min-w-0 space-y-4">
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <p className="text-2xs uppercase tracking-wide text-muted-foreground">Gasto fijo {periodo} (sin retiros)</p>
+            </div>
+            <GastoFijoItems report={report} sel={sel} />
           </div>
-          <TopGastos report={report} sel={sel} />
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <p className="text-2xs uppercase tracking-wide text-muted-foreground">Otros gastos más grandes {periodo}</p>
+              <span className="text-xs text-muted-foreground">total que salió {money(r2(totalSel))}</span>
+            </div>
+            <TopGastos report={report} sel={sel} />
+          </div>
         </div>
       </div>
       <TablaColumnas

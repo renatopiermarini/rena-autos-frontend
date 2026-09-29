@@ -4,7 +4,7 @@ import {
   getConfigNegocio,
 } from '@/lib/kapso'
 import { brandingFrom } from '@/lib/branding'
-import { buildCashflowReport } from '@/lib/cashflow'
+import { buildCashflowReport, parseGastosFijos } from '@/lib/cashflow'
 import CashflowClient from './CashflowClient'
 
 export const metadata: Metadata = { title: 'Cashflow y finanzas' }
@@ -26,6 +26,9 @@ export default async function Cashflow({
   ])
   const report = buildCashflowReport({
     movimientos, vehicles, prestamos, clientes, cuentas: cuentaKeys(cuentasRows), auditVehiculos,
+    // Qué es gasto fijo: retiros + Fran + Marshiot + cocheras, salvo que
+    // config_negocio.gastos_fijos diga otra cosa.
+    gastosFijos: parseGastosFijos(config.gastos_fijos),
   })
   // ?tab=anual&p=2026 → cada vista tiene su link, para mandarlo por WhatsApp.
   return (

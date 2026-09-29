@@ -4,7 +4,7 @@
  * números esperados calculados en papel (ver comentarios).
  */
 import { describe, expect, it } from 'vitest'
-import { buildCashflowReport, detectarTransferencias, mesesEntre, mesCorto, LINEAS_PUENTE } from './cashflow'
+import { buildCashflowReport, detectarTransferencias, mesesEntre, mesCorto, LINEAS_PUENTE, conceptoFijo, parseGastosFijos, GASTOS_FIJOS_DEFAULT } from './cashflow'
 import { computePatrimonio } from './kapso'
 
 const HOY = '2026-09-15'
@@ -151,17 +151,19 @@ describe('buildCashflowReport · escenario completo', () => {
   })
 
   it('gastos: lo que salió de la caja, por tipo', () => {
-    expect(r.gastos['2026-07']).toEqual({ gastos_generales: 500, gastos_autos: 1000, intereses: 0, retiros: 0 })
-    expect(r.gastos['2026-08']).toEqual({ gastos_generales: 0, gastos_autos: 0, intereses: 200, retiros: 800 })
+    expect(r.gastos['2026-07']).toMatchObject({ fijos: 0, gastos_generales: 500, gastos_autos: 1000, intereses: 0, retiros: 0 })
+    expect(r.gastos['2026-08']).toMatchObject({ fijos: 0, gastos_generales: 0, gastos_autos: 0, intereses: 200, retiros: 800 })
     expect(r.topGastos['2026-07'].map(g => g.monto)).toEqual([1000, 500])
   })
 
   it('punto de equilibrio con los meses cerrados', () => {
     expect(r.equilibrio.mesesBase).toEqual(['2026-07', '2026-08'])
-    // estructura: jul 500 · ago 200 → 350; retiros: 0 · 800 → 400
-    expect(r.equilibrio.estructuraProm).toBe(350)
-    expect(r.equilibrio.retirosProm).toBe(400)
-    expect(r.equilibrio.gastoFijoProm).toBe(750)
+    // Gasto fijo = retiros (0 · 800 → 400); el gasto general de julio no es
+    // ni Fran ni Marshiot ni cochera → otros (500 · 0 → 250); intereses 0 · 200 → 100.
+    expect(r.equilibrio.gastoFijoProm).toBe(400)
+    expect(r.equilibrio.otrosGastosProm).toBe(250)
+    expect(r.equilibrio.interesesProm).toBe(100)
+    expect(r.equilibrio.gastoTotalProm).toBe(750)
     expect(r.equilibrio.margenPromAuto).toBe(3000)
     expect(r.equilibrio.autosNecesarios).toBe(0.25)
   })
@@ -272,5 +274,51 @@ describe('buildCashflowReport · fechas de entrada y salida del stock', () => {
     })
     const a = r.anomalias.find(x => x.titulo.startsWith('Movimiento sin caja que no cierra'))
     expect(a?.monto).toBe(-16500)
+  })
+})
+
+describe('gasto fijo = retiros + Fran + Marshiot + cocheras', () => {
+  it('reconoce los conceptos por la nota, sin falsos positivos', () => {
+    const c = GASTOS_FIJOS_DEFAULT
+    expect(conceptoFijo('Gastos Fran Junio', c)).toBe('Fran')
+    expect(conceptoFijo('gastos fran', c)).toBe('Fran')
+    expect(conceptoFijo('Sueldo Marshiot', c)).toBe('Marshiot')
+    expect(conceptoFijo('Pago cochera - Septiembre', c)).toBe('Cocheras')
+    expect(conceptoFijo('Cocheras mensual', c)).toBe('Cocheras')
+    expect(conceptoFijo('Transferencia a Maxi', c)).toBeNull()
+    expect(conceptoFijo('Uber', c)).toBeNull()
+  })
+
+  it('config_negocio puede redefinirlos', () => {
+    expect(parseGastosFijos('')).toBe(GASTOS_FIJOS_DEFAULT)
+    expect(parseGastosFijos('Fran, Alquiler:alquiler|galpon')).toEqual([
+      { label: 'Fran', palabras: ['fran'] },
+      { label: 'Alquiler', palabras: ['alquiler', 'galpon'] },
+    ])
+  })
+
+  it('separa el gasto fijo del resto y lo promedia con los retiros', () => {
+    const mov = (id: number, dia: string, categoria: string, monto: number, nota: string) =>
+      ({ id, cuenta: 'cash', tipo: 'egreso', categoria, monto, nota, created_at: `${dia}T15:00:00Z`, afecta_balance: 1 })
+    const r = buildCashflowReport({
+      movimientos: [
+        { id: 1, cuenta: 'cash', tipo: 'ingreso', categoria: 'apertura', monto: 20000, created_at: '1999-12-31T12:00:00Z', afecta_balance: 1 },
+        mov(2, '2026-07-05', 'general_expense', 1500, 'Gastos Fran Julio'),
+        mov(3, '2026-07-10', 'general_expense', 700, 'Cocheras mensual'),
+        mov(4, '2026-07-11', 'general_expense', 150, 'Sueldo Marshiot'),
+        mov(5, '2026-07-12', 'general_expense', 745, 'Viaje a Tucumán'),
+        mov(6, '2026-07-20', 'personal_withdrawal', 1000, 'Retiro Rena'),
+      ],
+      vehicles: [], prestamos: [], clientes: [], hoy: '2026-08-05',
+    })
+    const g = r.gastos['2026-07']
+    expect(g.fijos).toBe(2350)
+    expect(g.fijoDetalle).toEqual({ Fran: 1500, Marshiot: 150, Cocheras: 700 })
+    expect(g.gastos_generales).toBe(745)
+    expect(r.gastoFijoItems['2026-07'].map(x => x.concepto)).toEqual(['Fran', 'Cocheras', 'Marshiot'])
+    expect(r.equilibrio.mesesBase).toEqual(['2026-07'])
+    expect(r.equilibrio.gastoFijoProm).toBe(3350)        // 1000 retiros + 2350
+    expect(r.equilibrio.otrosGastosProm).toBe(745)
+    expect(r.equilibrio.gastoTotalProm).toBe(4095)
   })
 })
