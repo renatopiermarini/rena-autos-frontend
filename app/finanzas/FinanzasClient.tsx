@@ -4,7 +4,7 @@ import Link from 'next/link'
 import {
   computeVehicleFinancials, computeLoanPosition, computePatrimonio,
   computeLiquidacionConsignacion, affectsBalance, capFirst,
-  type CuentaInfo,
+  MODALIDAD_PRESTAMO_LABEL, type CuentaInfo,
 } from '@/lib/kapso'
 import { fmtDMY as fmtFecha } from '@/lib/date'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -496,7 +496,9 @@ function PatrimonioTab({
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     {p.modalidad === 'mensual'
                       ? `mensual · ${fmt(p.interes_mensual)}/mes (${p.tasa_pct}%)`
-                      : `al final (${p.tasa_pct}% por día)`}
+                      : p.modalidad === 'capitaliza'
+                        ? `reinvierte · ${fmt(p.interes_mensual)}/mes (${p.tasa_pct}%)`
+                        : `al final (${p.tasa_pct}% por día)`}
                   </td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(p.capital_vivo)}</td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums text-muted-foreground">{fmt(p.interes_adeudado)}</td>
@@ -529,6 +531,7 @@ function PrestamosTab({
   const acreedoresUnicos = new Set(pendientes.map((p: any) => p.acreedor_id)).size
   const mensuales = patrimonio.posiciones.filter(p => p.modalidad === 'mensual' && p.interes_mensual > 0)
   const alFinal = patrimonio.posiciones.filter(p => p.modalidad === 'al_final')
+  const reinvierten = patrimonio.posiciones.filter(p => p.modalidad === 'capitaliza' && p.interes_mensual > 0)
 
   return (
     <div className="space-y-4">
@@ -543,8 +546,10 @@ function PrestamosTab({
         <StatCard
           label="Interés mensual"
           value={`${fmt(patrimonio.interes_mensual_total)}/mes`}
-          sub="vence el 1 de cada mes"
-          tip={<>Suma de las cuotas de interés de los préstamos con pago mensual: <b>capital × tasa anual ÷ 12</b>. El capital no baja con estas cuotas — solo se paga el interés del mes; el capital se devuelve aparte. El bot avisa por WhatsApp cada día 1.</>}
+          sub={reinvierten.length > 0
+            ? `vence el 1 · aparte, ${fmt(round0(reinvierten.reduce((s, p) => s + p.interes_mensual, 0)))}/mes se reinvierte`
+            : 'vence el 1 de cada mes'}
+          tip={<>Suma de las cuotas de interés de los préstamos con pago mensual: <b>capital × tasa anual ÷ 12</b>. El capital no baja con estas cuotas — solo se paga el interés del mes; el capital se devuelve aparte. El bot avisa por WhatsApp cada día 1. Los préstamos que <b>reinvierten</b> no entran acá: su cuota se suma sola al capital y no se paga.</>}
         />
         <StatCard
           label="Se saldan al final"
@@ -637,14 +642,18 @@ function PrestamosTable({
             <p className="text-xs text-muted-foreground">
               {fmt(pos.capital_vivo)} de capital
               {pos.tasa_pct ? ` · ${pos.tasa_pct}%/año` : ''}
-              {' · '}{pos.modalidad === 'mensual' ? 'mensual' : 'al final'}
+              {' · '}{MODALIDAD_PRESTAMO_LABEL[pos.modalidad]}
               {' · '}
               {pos.modalidad === 'mensual'
                 ? (pos.interes_mensual > 0 ? `${fmt(pos.interes_mensual)}/mes` : 'sin interés')
-                : `${fmt(pos.interes_devengado)} acum.`}
+                : pos.modalidad === 'capitaliza'
+                  ? `${fmt(pos.interes_mensual)}/mes`
+                  : `${fmt(pos.interes_devengado)} acum.`}
             </p>
             <p className="text-xs">
-              {esPagado || pos.modalidad !== 'mensual' || pos.interes_mensual <= 0 ? null
+              {!esPagado && pos.modalidad === 'capitaliza' && pos.proximo_vencimiento
+                ? <span className="text-muted-foreground">se suma al capital el {fmtFecha(pos.proximo_vencimiento)}</span>
+                : esPagado || pos.modalidad !== 'mensual' || pos.interes_mensual <= 0 ? null
                 : pos.interes_mes_pagado ? <span className="text-success">mes pagado ✓</span>
                 : pos.interes_adeudado > 0 ? <span className="text-destructive font-medium">{fmt(pos.interes_adeudado)} impago</span>
                 : <span className="text-muted-foreground">vence {pos.proximo_vencimiento ? fmtFecha(pos.proximo_vencimiento) : 'el 1'}</span>}
@@ -664,10 +673,10 @@ function PrestamosTable({
         <thead className="bg-muted/40">
           <tr className="text-left">
             <Th>Acreedor</Th>
-            <Th right tip={<>Lo prestado menos lo ya devuelto (las devoluciones salen del ledger, vinculadas al préstamo). Las cuotas de interés NO bajan el capital.</>}>Capital vivo</Th>
+            <Th right tip={<>Lo prestado menos lo ya devuelto (las devoluciones salen del ledger, vinculadas al préstamo). Las cuotas de interés NO bajan el capital. En los que reinvierten, incluye el interés que se fue sumando.</>}>Capital vivo</Th>
             <Th right>Tasa</Th>
-            <Th tip={<><b>Mensual</b>: paga capital × tasa ÷ 12 el 1 de cada mes. <b>Al final</b>: el interés se acumula por día y se salda junto con el capital.</>}>Modalidad</Th>
-            <Th right tip={<>Para modalidad mensual, la cuota fija del mes. Para &quot;al final&quot;, el interés acumulado por día desde el desembolso (neto de repagos parciales).</>}>Interés</Th>
+            <Th tip={<><b>Mensual</b>: paga capital × tasa ÷ 12 el 1 de cada mes. <b>Al final</b>: el interés se acumula por día y se salda junto con el capital. <b>Reinvierte</b>: la cuota se suma sola al capital cada mes y no se paga.</>}>Modalidad</Th>
+            <Th right tip={<>Para modalidad mensual, la cuota fija del mes. Para &quot;al final&quot;, el interés acumulado por día desde el desembolso (neto de repagos parciales). Para los que reinvierten, la próxima cuota que se suma al capital.</>}>Interés</Th>
             <Th right tip={<>Interés devengado que todavía no se pagó. En modalidad mensual, cuotas vencidas (el 1 de cada mes) sin registrar.</>}>Adeudado</Th>
             <Th right tip={<>Capital vivo + interés adeudado: lo que costaría cancelar este préstamo hoy.</>}>Deuda hoy</Th>
             <Th tip={<>Solo modalidad mensual: si la cuota del mes corriente ya se registró. Venció el 1; a partir del 5 sin pagar, el bot lo reclama.</>}>Mes</Th>
@@ -688,10 +697,10 @@ function PrestamosTable({
                 <td className="px-3 py-2 text-right font-mono tabular-nums">{fmt(pos.capital_vivo)}</td>
                 <td className="px-3 py-2 text-right text-muted-foreground text-xs">{pos.tasa_pct ? `${pos.tasa_pct}%/año` : '—'}</td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {pos.modalidad === 'mensual' ? 'mensual' : 'al final'}
+                  {MODALIDAD_PRESTAMO_LABEL[pos.modalidad]}
                 </td>
                 <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">
-                  {pos.modalidad === 'mensual'
+                  {pos.modalidad === 'mensual' || pos.modalidad === 'capitaliza'
                     ? (pos.interes_mensual > 0 ? `${fmt(pos.interes_mensual)}/mes` : '—')
                     : `${fmt(pos.interes_devengado)} acum.`}
                 </td>
@@ -700,7 +709,9 @@ function PrestamosTable({
                 </td>
                 <td className="px-3 py-2 text-right font-medium font-mono tabular-nums">{fmt(pos.deuda_total)}</td>
                 <td className="px-3 py-2 text-xs">
-                  {esPagado || pos.modalidad !== 'mensual' || pos.interes_mensual <= 0 ? (
+                  {!esPagado && pos.modalidad === 'capitaliza' && pos.proximo_vencimiento ? (
+                    <span className="text-muted-foreground">se suma el {fmtFecha(pos.proximo_vencimiento)}</span>
+                  ) : esPagado || pos.modalidad !== 'mensual' || pos.interes_mensual <= 0 ? (
                     <span className="text-muted-foreground/60">—</span>
                   ) : pos.interes_mes_pagado ? (
                     <span className="text-success">pagado ✓</span>
@@ -987,7 +998,7 @@ function VehicleFinancialDetail({
                   <span className="text-sm">{acr}</span>
                   <div className="flex items-center gap-3 text-xs">
                     <span className="text-muted-foreground">
-                      deuda {fmt(pos.deuda_total)} ({pos.tasa_pct}% · {pos.modalidad === 'mensual' ? `${fmt(pos.interes_mensual)}/mes` : 'se salda al final'})
+                      deuda {fmt(pos.deuda_total)} ({pos.tasa_pct}% · {pos.modalidad === 'mensual' ? `${fmt(pos.interes_mensual)}/mes` : pos.modalidad === 'capitaliza' ? `reinvierte ${fmt(pos.interes_mensual)}/mes` : 'se salda al final'})
                     </span>
                     {pos.vencido && <span className="text-destructive">vencido</span>}
                   </div>

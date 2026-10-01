@@ -687,7 +687,7 @@ export function VistaReporte({ report, sel, onSel, anio, onAnio, titulo }: {
             <Bloque t="Deuda al día de hoy">
               {report.prestamos.map(d => (
                 <div key={d.id} className="flex justify-between py-0.5">
-                  <span>{d.acreedor} <span className="text-muted-foreground">· {pct(d.tasa)} {d.modalidad === 'mensual' ? 'cuota mensual' : 'al final'}</span></span>
+                  <span>{d.acreedor} <span className="text-muted-foreground">· {pct(d.tasa)} {d.modalidad === 'mensual' ? 'cuota mensual' : d.modalidad === 'capitaliza' ? 'reinvierte' : 'al final'}</span></span>
                   <span className="font-mono tabular-nums">{money(d.deuda)}</span>
                 </div>
               ))}

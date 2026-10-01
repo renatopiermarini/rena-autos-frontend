@@ -36,6 +36,7 @@ function fmtMonto(n: any) {
 const MODALIDAD_LABEL: Record<string, string> = {
   mensual: 'interés mensual',
   al_final: 'interés al final',
+  capitaliza: 'reinvierte el interés',
 }
 
 export default function InversoresClient({

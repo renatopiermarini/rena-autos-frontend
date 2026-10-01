@@ -353,7 +353,11 @@ function foto(ctx: Ctx, dia: string): Foto {
     interesMensual: pat.interes_mensual_total,
     valorAuto, comisionPendiente, parteSocio,
     porCobrarClientes: round2(pat.por_cobrar.clientes.reduce((s, c) => s + c.saldo, 0)),
-    capitalPrestado: round2(pat.posiciones.reduce((s, p) => s + p.capital_vivo, 0)),
+    // En los que reinvierten, capital_vivo trae adentro el interés que se fue
+    // sumando (neto de lo cobrado): eso es costo y va por la línea de
+    // intereses, no es capital nuevo prestado.
+    capitalPrestado: round2(pat.posiciones.reduce((s, p) => s + p.capital_vivo
+      - (p.modalidad === 'capitaliza' ? p.interes_devengado - p.interes_pagado_total : 0), 0)),
   }
 }
 

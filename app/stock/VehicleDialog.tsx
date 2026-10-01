@@ -618,7 +618,7 @@ function VehicleDialogBody({
                                 <span>{acr}</span>
                                 <div className="flex items-center gap-2 text-xs">
                                   <span className="text-muted-foreground">
-                                    deuda {fmt(pos.deuda_total)} · {pos.modalidad === 'mensual' ? `${fmt(pos.interes_mensual)}/mes` : 'se salda al final'}
+                                    deuda {fmt(pos.deuda_total)} · {pos.modalidad === 'mensual' ? `${fmt(pos.interes_mensual)}/mes` : pos.modalidad === 'capitaliza' ? `reinvierte ${fmt(pos.interes_mensual)}/mes` : 'se salda al final'}
                                   </span>
                                   {pos.vencido && <span className="text-destructive">vencido</span>}
                                 </div>

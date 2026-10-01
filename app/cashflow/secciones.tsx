@@ -787,7 +787,7 @@ export function DeudaCard({ report }: { report: CashflowReport }) {
           {p.map(x => (
             <tr key={x.id} className="border-b border-border/60">
               <td className={tdCls}>{x.acreedor}</td>
-              <td className={cn(tdCls, 'text-muted-foreground')}>{x.modalidad === 'mensual' ? 'cuota mensual' : 'al final'}</td>
+              <td className={cn(tdCls, 'text-muted-foreground')}>{x.modalidad === 'mensual' ? 'cuota mensual' : x.modalidad === 'capitaliza' ? 'reinvierte' : 'al final'}</td>
               <td className={tdMoneyCls}>{pct(x.tasa)}</td>
               <td className={tdMoneyCls}>{x.interesMensual > 0 ? money(x.interesMensual) : '—'}</td>
               <td className={tdMoneyCls}>{money(x.deuda)}</td>

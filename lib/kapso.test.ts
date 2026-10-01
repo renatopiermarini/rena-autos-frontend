@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 import {
   affectsBalance, arDay, coerceId, tasaPct,
   computeVehicleFinancials, computeLoanPosition, computePatrimonio, computeLiquidacionConsignacion,
-  DEFAULT_CUENTAS, cuentaKeys, cuentasInfo, capFirst, umbralAlertaCaja,
+  aniversarioMensual, DEFAULT_CUENTAS, cuentaKeys, cuentasInfo, capFirst, umbralAlertaCaja,
 } from './kapso'
 
 const HOY = '2026-08-10'
@@ -185,6 +185,59 @@ describe('computeVehicleFinancials', () => {
 })
 
 describe('computeLoanPosition', () => {
+  // Espejo de tests/test_loan_position.py (modalidad capitaliza): Seba, 18.000 al 18 %.
+  const SEBA = { id: 9, monto_original: 18000, tasa_interes_anual: 18, modalidad: 'capitaliza', fecha_inicio: '2026-08-26', estado: 'activo' }
+
+  it('capitaliza: la cuota se suma al capital y la próxima corre sobre el total', () => {
+    const pos = computeLoanPosition(SEBA, [], '2026-10-01')
+    expect(pos.modalidad).toBe('capitaliza')
+    expect(pos.capital_vivo).toBe(18270)
+    expect(pos.interes_devengado).toBe(270)
+    expect(pos.interes_mensual).toBe(274.05)
+    expect(pos.interes_adeudado).toBe(0)
+    expect(pos.deuda_total).toBe(18270)
+    expect(pos.interes_mes_pagado).toBeNull()
+    expect(pos.proximo_vencimiento).toBe('2026-10-26')
+  })
+
+  it('capitaliza: interés sobre interés, el día del aniversario ya cuenta', () => {
+    const pos = computeLoanPosition(SEBA, [], '2026-11-26')
+    expect(pos.capital_vivo).toBe(Math.round((18544.05 + 278.16) * 100) / 100)
+    expect(pos.interes_devengado).toBe(Math.round((270 + 274.05 + 278.16) * 100) / 100)
+    expect(pos.proximo_vencimiento).toBe('2026-12-26')
+    expect(computeLoanPosition(SEBA, [], '2026-11-25').capital_vivo).toBe(18544.05)
+  })
+
+  it('capitaliza: un mes cobrado el día del aniversario baja el saldo', () => {
+    const movs = [{ id: 30, prestamo_id: 9, categoria: 'loan_interest', tipo: 'egreso', monto: 270, created_at: '2026-09-26T15:00:00+00:00' }]
+    const pos = computeLoanPosition(SEBA, movs, '2026-11-01')
+    expect(pos.capital_vivo).toBe(18270)
+    expect(pos.interes_devengado).toBe(540)
+    expect(pos.interes_pagado_total).toBe(270)
+    expect(pos.interes_adeudado).toBe(0)
+  })
+
+  it('capitaliza: un repago antes del mes baja la base de la cuota', () => {
+    const movs = [{ id: 31, prestamo_id: 9, categoria: 'loan_repayment', tipo: 'egreso', monto: 8000, created_at: '2026-09-10T15:00:00+00:00' }]
+    const pos = computeLoanPosition(SEBA, movs, '2026-10-01')
+    expect(pos.capital_vivo).toBe(10150)
+    expect(pos.interes_mensual).toBe(Math.round(10150 * 0.015 * 100) / 100)
+  })
+
+  it('capitaliza: sin mes cumplido no suma nada', () => {
+    const pos = computeLoanPosition(SEBA, [], '2026-09-25')
+    expect(pos.capital_vivo).toBe(18000)
+    expect(pos.interes_devengado).toBe(0)
+    expect(pos.proximo_vencimiento).toBe('2026-09-26')
+  })
+
+  it('aniversarioMensual: un día que el mes no tiene se cumple el 1 del siguiente', () => {
+    expect(aniversarioMensual('2026-01-31', 1)).toBe('2026-03-01')
+    expect(aniversarioMensual('2026-01-31', 2)).toBe('2026-03-31')
+    expect(aniversarioMensual('2026-11-15', 2)).toBe('2027-01-15')
+    expect(aniversarioMensual('2026-12-31', 2)).toBe('2027-03-01')
+  })
+
   it('mensual: cuota fija capital × tasa/12, devengado por meses cumplidos', () => {
     const pos = computeLoanPosition(
       { id: 1, monto_original: 16000, tasa_interes_anual: 15, modalidad: 'mensual', fecha_inicio: '2026-04-17', estado: 'activo' },

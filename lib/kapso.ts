@@ -439,7 +439,7 @@ export function tasaPct(raw: any): number {
 export type LoanPosition = {
   id: number | null
   acreedor_id: number | null
-  modalidad: 'mensual' | 'al_final'
+  modalidad: 'mensual' | 'al_final' | 'capitaliza'
   estado: string | null
   tasa_pct: number
   fecha_inicio: string | null
@@ -461,8 +461,30 @@ function dayDiff(fromIso: string, toIso: string): number {
   return Math.max(0, Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86400000))
 }
 
+// El día en que se cumple el mes número k desde `inicio` (YYYY-MM-DD). Si ese
+// mes no tiene el día (31/01 → no hay 31/02) se cumple el 1 del siguiente: el
+// mismo criterio que el conteo de meses de la modalidad mensual. Espejo de
+// _aniversario_mensual del backend.
+export function aniversarioMensual(inicio: string, k: number): string {
+  const [iy, im, id] = inicio.split('-').map(Number)
+  const idx = im - 1 + k
+  const y = iy + Math.floor(idx / 12)
+  const m = (idx % 12) + 1
+  const ultimo = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  if (id <= ultimo) return `${y}-${String(m).padStart(2, '0')}-${String(id).padStart(2, '0')}`
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+}
+
+const MODALIDADES: readonly LoanPosition['modalidad'][] = ['mensual', 'al_final', 'capitaliza']
+
+export const MODALIDAD_PRESTAMO_LABEL: Record<LoanPosition['modalidad'], string> = {
+  mensual: 'mensual',
+  al_final: 'al final',
+  capitaliza: 'reinvierte',
+}
+
 // Mirror of the backend's _loan_position — a loan's COMPLETE position derived
-// from the ledger. Two modalidades:
+// from the ledger. Three modalidades:
 //   mensual  — fixed cuota capital_vivo × tasa/12 due the 1st of each month,
 //              never capitalises. Devengado = elapsed month-firsts since
 //              fecha_inicio × cuota.
@@ -472,6 +494,13 @@ function dayDiff(fromIso: string, toIso: string): number {
 // prestamo_id); interes_adeudado = devengado − Σ loan_interest (floor 0);
 // deuda_total = capital_vivo + interes_adeudado. prestamos.monto_pagado is a
 // CACHE — never an input here.
+//   capitaliza — the creditor reinvests: each completed month since
+//              fecha_inicio the cuota saldo × tasa/12 is ADDED to the capital,
+//              with no ledger row. Every loan_* payment lowers the balance (one
+//              on the anniversary day goes after capitalising). capital_vivo
+//              includes what was reinvested, devengado = Σ reinvested (the
+//              cost the cashflow counts), interes_mensual = the next cuota and
+//              interes_adeudado = 0.
 export function computeLoanPosition(
   prestamo: any,
   movimientos: any[],
@@ -480,7 +509,7 @@ export function computeLoanPosition(
   const pid = coerceId(prestamo.id)
   const capital_original = Number(prestamo.monto_original ?? 0)
   const tasa = tasaPct(prestamo.tasa_interes_anual)
-  const modalidad: LoanPosition['modalidad'] = prestamo.modalidad === 'al_final' ? 'al_final' : 'mensual'
+  const modalidad: LoanPosition['modalidad'] = MODALIDADES.includes(prestamo.modalidad) ? prestamo.modalidad : 'mensual'
   const inicio = arDay(prestamo.fecha_inicio || prestamo.created_at) || null
   const hoy = hoyIso ?? arDay(new Date().toISOString())
 
@@ -490,7 +519,7 @@ export function computeLoanPosition(
     .sort((a, b) => (arDay(a.created_at) || '').localeCompare(arDay(b.created_at) || ''))
   const interesesPagados = delPrestamo.filter(m => m.categoria === 'loan_interest' && m.tipo === 'egreso')
 
-  const capital_vivo = Math.max(0, round2(capital_original - repagos.reduce((s, m) => s + Number(m.monto ?? 0), 0)))
+  let capital_vivo = Math.max(0, round2(capital_original - repagos.reduce((s, m) => s + Number(m.monto ?? 0), 0)))
   const interes_pagado_total = round2(interesesPagados.reduce((s, m) => s + Number(m.monto ?? 0), 0))
 
   let interes_mensual = 0
@@ -515,6 +544,29 @@ export function computeLoanPosition(
     interes_mes_pagado = interesesPagados.some(m => (arDay(m.created_at) || '').slice(0, 7) === mesActual)
     const [hy, hm] = hoy.split('-').map(Number)
     proximo_vencimiento = hm === 12 ? `${hy + 1}-01-01` : `${hy}-${String(hm + 1).padStart(2, '0')}-01`
+  } else if (modalidad === 'capitaliza') {
+    const pagos = [...repagos, ...interesesPagados]
+      .map(m => ({ d: arDay(m.created_at) || inicio || hoy, monto: Number(m.monto ?? 0) }))
+      .sort((a, b) => a.d.localeCompare(b.d))
+    let saldo = capital_original
+    let capitalizado = 0
+    let i = 0
+    if (inicio) {
+      let k = 1
+      let aniv = aniversarioMensual(inicio, k)
+      while (aniv <= hoy) {
+        while (i < pagos.length && pagos[i].d < aniv) saldo -= pagos[i++].monto
+        const cuota = round2(Math.max(0, saldo) * tasa / 100 / 12)
+        saldo = round2(saldo + cuota)
+        capitalizado += cuota
+        aniv = aniversarioMensual(inicio, ++k)
+      }
+      proximo_vencimiento = aniv
+    }
+    for (; i < pagos.length; i++) saldo -= pagos[i].monto
+    capital_vivo = Math.max(0, round2(saldo))
+    interes_mensual = round2(capital_vivo * tasa / 100 / 12)
+    interes_devengado = round2(capitalizado)
   } else if (inicio) {
     let capital = capital_original
     let prev = inicio
@@ -529,7 +581,8 @@ export function computeLoanPosition(
     interes_devengado = round2(devengado)
   }
 
-  const interes_adeudado = round2(Math.max(0, interes_devengado - interes_pagado_total))
+  // capitaliza: lo devengado ya está adentro de capital_vivo.
+  const interes_adeudado = modalidad === 'capitaliza' ? 0 : round2(Math.max(0, interes_devengado - interes_pagado_total))
   return {
     id: pid,
     acreedor_id: coerceId(prestamo.acreedor_id),

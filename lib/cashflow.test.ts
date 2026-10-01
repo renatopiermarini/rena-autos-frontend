@@ -196,6 +196,48 @@ describe('buildCashflowReport · compra financiada sin pasar por caja', () => {
   })
 })
 
+describe('buildCashflowReport · préstamo que reinvierte (capitaliza)', () => {
+  it('el interés reinvertido es gasto del mes aunque no salga plata, y cuadra el puente', () => {
+    const r = buildCashflowReport({
+      movimientos: [
+        { id: 1, cuenta: 'cash', tipo: 'ingreso', categoria: 'apertura', monto: 1000, created_at: '1999-12-31T12:00:00Z', afecta_balance: 1 },
+        { id: 2, cuenta: 'cash', tipo: 'ingreso', categoria: 'loan_disbursement', monto: 18000, created_at: '2026-08-26T15:00:00Z', afecta_balance: 1, prestamo_id: 9 },
+      ],
+      vehicles: [],
+      prestamos: [{ id: 9, acreedor_id: 44, monto_original: 18000, tasa_interes_anual: 18, modalidad: 'capitaliza', fecha_inicio: '2026-08-26', estado: 'activo' }],
+      clientes: [{ id: 44, nombre: 'Seba' }],
+      hoy: '2026-10-01',
+    })
+    expect(r.resultado['2026-09'].intereses).toBe(-270)
+    const p = r.puentes['2026-09']
+    expect(p.lineas.intereses).toBe(-270)
+    expect(p.lineas.diferencias).toBe(0)
+    expect(p.capitalFin - p.capitalInicio).toBe(-270)
+    // No salió plata: el flujo de caja no lo ve.
+    expect(r.caja['2026-09'].lineas.intereses).toBe(0)
+    expect(r.prestamos[0]).toMatchObject({ modalidad: 'capitaliza', capital: 18270, interesAdeudado: 0, deuda: 18270, interesMensual: 274.05 })
+  })
+
+  it('un mes que el acreedor cobra no mueve el capital ni deja diferencias', () => {
+    const r = buildCashflowReport({
+      movimientos: [
+        { id: 1, cuenta: 'cash', tipo: 'ingreso', categoria: 'apertura', monto: 1000, created_at: '1999-12-31T12:00:00Z', afecta_balance: 1 },
+        { id: 2, cuenta: 'cash', tipo: 'ingreso', categoria: 'loan_disbursement', monto: 18000, created_at: '2026-08-26T15:00:00Z', afecta_balance: 1, prestamo_id: 9 },
+        { id: 3, cuenta: 'cash', tipo: 'egreso', categoria: 'loan_interest', monto: 270, created_at: '2026-10-05T15:00:00Z', afecta_balance: 1, prestamo_id: 9 },
+        { id: 4, cuenta: 'cash', tipo: 'egreso', categoria: 'loan_repayment', monto: 3000, created_at: '2026-10-10T15:00:00Z', afecta_balance: 1, prestamo_id: 9 },
+      ],
+      vehicles: [],
+      prestamos: [{ id: 9, acreedor_id: 44, monto_original: 18000, tasa_interes_anual: 18, modalidad: 'capitaliza', fecha_inicio: '2026-08-26', estado: 'activo' }],
+      clientes: [{ id: 44, nombre: 'Seba' }],
+      hoy: '2026-10-20',
+    })
+    const p = r.puentes['2026-10']
+    expect(p.lineas.diferencias).toBe(0)
+    expect(p.capitalFin - p.capitalInicio).toBe(0)
+    expect(r.caja['2026-10'].lineas.intereses).toBe(-270)
+  })
+})
+
 describe('buildCashflowReport · a revisar', () => {
   it('auto vendido sin ingreso y auto propio sin precio ni costo', () => {
     const r = buildCashflowReport({
